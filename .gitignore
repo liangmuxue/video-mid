@@ -1,0 +1,13 @@
+target/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/
+*.log
+sip_server.log
+sip_debug.log
+.DS_Store
+*.class
+.factorypath

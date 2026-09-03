@@ -1,0 +1,91 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: video-mid
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/video_mid?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 20
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# 国标 SIP 上级配置（本中台作为 GB/T 28181 上级）
+sip:
+  enabled: true
+  # 本机 SIP 监听
+  ip: 0.0.0.0
+  port: 5060
+  # 本级国标编码 / SIP 域 / 鉴权密码（供下级宇视注册）
+  server-id: "34020000002000000001"
+  domain: "3402000000"
+  password: "12345678"
+  # 对外通告的 SIP 主机地址（SDP 中使用，需填真实可达 IP）
+  public-ip: 127.0.0.1
+  transport: udp
+
+# ZLMediaKit 对接
+zlm:
+  # ZLM HTTP API 根地址
+  base-url: http://127.0.0.1:80
+  secret: "035c73f7-bb6b-4889-a715-d9eb2d1925cc"
+  # 对浏览器/业务返回的播放基址（可为公网域名）
+  play-host: http://127.0.0.1
+  # RTP 端口段（UDP）
+  rtp-port-range: "30000-30500"
+  # Vhost
+  vhost: "__defaultVhost__"
+  # 应用名
+  app: "rtp"
+
+# 业务运行参数
+video-mid:
+  # 预览默认子码流
+  default-stream-type: sub
+  # 回放地址短时过期（秒）
+  playback-url-ttl-seconds: 600
+  # 直播地址缓存 TTL（秒），有引用时刷新
+  live-url-ttl-seconds: 3600
+  # 等待 ZLM 流就绪超时（毫秒）
+  stream-ready-timeout-ms: 15000
+
+logging:
+  level:
+    root: INFO
+    com.jizhi.videomid: INFO
+    com.jizhi.videomid.sip: DEBUG
