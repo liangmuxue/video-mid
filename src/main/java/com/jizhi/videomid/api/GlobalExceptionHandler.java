@@ -1,6 +1,6 @@
 package com.jizhi.videomid.api;
 
-import com.jizhi.videomid.api.dto.ApiResponse;
+import com.jizhi.videomid.auth.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -19,7 +19,8 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> badRequest(Exception e) {
         String msg = e.getMessage();
-        if (e instanceof MethodArgumentNotValidException manv && manv.getBindingResult().getFieldError() != null) {
+        if (e instanceof MethodArgumentNotValidException manv
+                && manv.getBindingResult().getFieldError() != null) {
             msg = manv.getBindingResult().getFieldError().getDefaultMessage();
         }
         return ApiResponse.fail(msg);

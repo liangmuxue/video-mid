@@ -6,8 +6,7 @@ target/
 .settings/
 .vscode/
 *.log
-sip_server.log
-sip_debug.log
 .DS_Store
 *.class
-.factorypath
+web/node_modules/
+web/dist/
