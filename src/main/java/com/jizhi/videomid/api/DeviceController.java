@@ -68,15 +68,9 @@ public class DeviceController {
         return ApiResponse.ok(null);
     }
 
-    /** 开始预览：返回已注册地址，Redis 播放数 +1 */
+    /** 开始预览：只返回已注册播放地址，人数由 ZLM Hook 维护 */
     @PostMapping("/preview/start")
     public ApiResponse<Map<String, Object>> previewStart(@Valid @RequestBody PreviewRequest request) {
         return ApiResponse.ok(previewService.start(request.getDeviceId(), request.getStreamType()));
-    }
-
-    /** 停止预览：Redis 播放数 -1 */
-    @PostMapping("/preview/stop")
-    public ApiResponse<Map<String, Object>> previewStop(@Valid @RequestBody PreviewRequest request) {
-        return ApiResponse.ok(previewService.stop(request.getDeviceId(), request.getStreamType()));
     }
 }

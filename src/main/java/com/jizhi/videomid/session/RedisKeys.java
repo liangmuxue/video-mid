@@ -8,4 +8,9 @@ public final class RedisKeys {
         String type = streamType == null || streamType.isBlank() ? "sub" : streamType.toLowerCase();
         return "stream:ref:" + deviceId + ":" + type;
     }
+
+    public static String streamPlayers(String deviceId, String streamType) {
+        String type = streamType == null || streamType.isBlank() ? "sub" : streamType.toLowerCase();
+        return "stream:players:" + deviceId + ":" + type;
+    }
 }

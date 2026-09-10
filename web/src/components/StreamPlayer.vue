@@ -32,6 +32,8 @@ let flvPlayer = null
 
 function cleanup() {
   if (hls) {
+    hls.stopLoad()
+    hls.detachMedia()
     hls.destroy()
     hls = null
   }
@@ -48,7 +50,9 @@ function cleanup() {
   }
   const el = videoRef.value
   if (el) {
+    el.pause()
     el.removeAttribute('src')
+    el.src = ''
     el.load()
   }
 }

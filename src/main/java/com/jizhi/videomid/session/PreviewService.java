@@ -2,6 +2,7 @@ package com.jizhi.videomid.session;
 
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
+import com.jizhi.videomid.media.ZlmClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -13,10 +14,11 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
- * 预览地址从 MySQL 取；Redis 播放人数优先由 ZLM Hook（on_play / on_flow_report）维护。
- * /api/preview/start|stop 仍可手动加减，供未接 hook 时兜底。
+ * 预览地址从 MySQL 取；Redis 播放人数只由 ZLM Hook 维护
+ * （on_play / on_flow_report / on_stream_none_reader，以及按 ZLM 观看数纠偏）。
  */
 @Service
 public class PreviewService {
@@ -25,10 +27,12 @@ public class PreviewService {
 
     private final DeviceStreamRepository streamRepository;
     private final StringRedisTemplate redis;
+    private final ZlmClient zlmClient;
 
-    public PreviewService(DeviceStreamRepository streamRepository, StringRedisTemplate redis) {
+    public PreviewService(DeviceStreamRepository streamRepository, StringRedisTemplate redis, ZlmClient zlmClient) {
         this.streamRepository = streamRepository;
         this.redis = redis;
+        this.zlmClient = zlmClient;
     }
 
     public Map<String, Object> start(String deviceId, String streamType) {
@@ -39,8 +43,7 @@ public class PreviewService {
             throw new IllegalArgumentException("码流地址为空，请先注册 streamUrl");
         }
 
-        // 接上 ZLM on_play 后，实际拉流会再 +1；此处不再 +1，避免关页面前端未调 stop 时双计。
-        // 未配置 hook 时，人数可能不涨，可用 stop 对账或开启 hook。
+        // 人数只由 ZLM Hook 维护；此处只返回地址。
         Map<String, Object> data = new HashMap<>();
         data.put("deviceId", deviceId);
         data.put("streamType", type);
@@ -48,17 +51,6 @@ public class PreviewService {
         data.put("playUrl", stream.getStreamUrl());
         data.put("ref", getRef(deviceId, type));
         data.put("countBy", "zlm-hook");
-        return data;
-    }
-
-    public Map<String, Object> stop(String deviceId, String streamType) {
-        // 正常断开由 on_flow_report 减人；此接口保留作兜底手动校正
-        long ref = decrease(deviceId, normalize(streamType));
-        Map<String, Object> data = new HashMap<>();
-        data.put("deviceId", deviceId);
-        data.put("streamType", normalize(streamType));
-        data.put("ref", ref);
-        data.put("stopped", ref <= 0);
         return data;
     }
 
@@ -71,25 +63,36 @@ public class PreviewService {
         }
     }
 
-    /** ZLM on_play：有人开始拉流 */
-    public long onPlayerStart(String app, String stream) {
+    /** ZLM on_play：同一连接 id 只计一次，避免 HTTP-FLV 重试把人数刷高。 */
+    public long onPlayerStart(String app, String stream, String sessionId) {
         Optional<DeviceStream> found = findByAppStream(app, stream);
         if (found.isEmpty()) {
-            log.debug("hook on_play 未匹配码流 app={} stream={}", app, stream);
+            log.info("hook on_play 未匹配码流 app={} stream={}", app, stream);
             return -1L;
         }
         DeviceStream s = found.get();
+        if (sessionId != null && !sessionId.isBlank()) {
+            return addPlayerSession(s.getDeviceId(), s.getStreamType(), sessionId);
+        }
         return increase(s.getDeviceId(), s.getStreamType());
     }
 
-    /** ZLM on_flow_report 且 player=true：播放器断开 */
-    public long onPlayerStop(String app, String stream) {
+    /** 播放断开：优先按 ZLM 当前观看人数回写，否则按连接 id 从集合移除。 */
+    public long onPlayerStop(String app, String stream, String sessionId) {
         Optional<DeviceStream> found = findByAppStream(app, stream);
         if (found.isEmpty()) {
-            log.debug("hook on_flow_report 未匹配码流 app={} stream={}", app, stream);
+            log.info("hook on_flow_report 未匹配码流 app={} stream={}", app, stream);
             return -1L;
         }
         DeviceStream s = found.get();
+        String streamId = stripPlaySuffix(stream);
+        OptionalInt readers = zlmClient.getTotalReaderCount(app, streamId);
+        if (readers.isPresent()) {
+            return setRef(s.getDeviceId(), s.getStreamType(), readers.getAsInt());
+        }
+        if (sessionId != null && !sessionId.isBlank()) {
+            return removePlayerSession(s.getDeviceId(), s.getStreamType(), sessionId);
+        }
         return decrease(s.getDeviceId(), s.getStreamType());
     }
 
@@ -97,17 +100,34 @@ public class PreviewService {
     public long onNoneReader(String app, String stream) {
         Optional<DeviceStream> found = findByAppStream(app, stream);
         if (found.isEmpty()) {
+            log.info("hook on_stream_none_reader 未匹配码流 app={} stream={}", app, stream);
             return -1L;
         }
         DeviceStream s = found.get();
-        String key = RedisKeys.streamRef(s.getDeviceId(), normalize(s.getStreamType()));
-        try {
-            redis.opsForValue().set(key, "0");
-            redis.expire(key, Duration.ofDays(1));
-        } catch (Exception ignored) {
-            // ignore
+        clearPlayerSessions(s.getDeviceId(), s.getStreamType());
+        return setRef(s.getDeviceId(), s.getStreamType(), 0);
+    }
+
+    /** 按 ZLM getMediaList 把已注册码流的 Redis 人数对齐（关掉播放器后的兜底）。 */
+    public void reconcileFromZlm() {
+        for (DeviceStream s : streamRepository.findAll()) {
+            AppStream as = parseAppStream(s.getStreamUrl());
+            if (as == null) {
+                continue;
+            }
+            OptionalInt readers = zlmClient.getTotalReaderCount(as.app(), as.stream());
+            if (readers.isEmpty()) {
+                continue;
+            }
+            long current = getRef(s.getDeviceId(), s.getStreamType());
+            int actual = readers.getAsInt();
+            if (current != actual) {
+                setRef(s.getDeviceId(), s.getStreamType(), actual);
+            }
+            if (actual <= 0) {
+                clearPlayerSessions(s.getDeviceId(), s.getStreamType());
+            }
         }
-        return 0L;
     }
 
     Optional<DeviceStream> findByAppStream(String app, String stream) {
@@ -115,7 +135,7 @@ public class PreviewService {
             return Optional.empty();
         }
         String wantApp = app.trim();
-        String wantStream = stream.trim();
+        String wantStream = stripPlaySuffix(stream.trim());
         for (DeviceStream s : streamRepository.findAll()) {
             AppStream as = parseAppStream(s.getStreamUrl());
             if (as != null && wantApp.equalsIgnoreCase(as.app()) && wantStream.equalsIgnoreCase(as.stream())) {
@@ -173,6 +193,76 @@ public class PreviewService {
             return null;
         }
         return null;
+    }
+
+    private long addPlayerSession(String deviceId, String streamType, String sessionId) {
+        String pkey = RedisKeys.streamPlayers(deviceId, normalize(streamType));
+        try {
+            redis.opsForSet().add(pkey, sessionId);
+            redis.expire(pkey, Duration.ofDays(1));
+            Long n = redis.opsForSet().size(pkey);
+            long ref = n == null ? 1L : n;
+            return setRef(deviceId, streamType, ref);
+        } catch (Exception e) {
+            return increase(deviceId, streamType);
+        }
+    }
+
+    private long removePlayerSession(String deviceId, String streamType, String sessionId) {
+        String pkey = RedisKeys.streamPlayers(deviceId, normalize(streamType));
+        try {
+            redis.opsForSet().remove(pkey, sessionId);
+            Long n = redis.opsForSet().size(pkey);
+            long ref = n == null || n < 0 ? 0L : n;
+            return setRef(deviceId, streamType, ref);
+        } catch (Exception e) {
+            return decrease(deviceId, streamType);
+        }
+    }
+
+    private void clearPlayerSessions(String deviceId, String streamType) {
+        try {
+            redis.delete(RedisKeys.streamPlayers(deviceId, normalize(streamType)));
+        } catch (Exception ignored) {
+            // ignore
+        }
+    }
+
+    private long setRef(String deviceId, String streamType, long value) {
+        if (value < 0) {
+            value = 0;
+        }
+        String key = RedisKeys.streamRef(deviceId, normalize(streamType));
+        try {
+            redis.opsForValue().set(key, String.valueOf(value));
+            redis.expire(key, Duration.ofDays(1));
+            log.info("播放人数同步 deviceId={} type={} ref={}", deviceId, streamType, value);
+            return value;
+        } catch (Exception e) {
+            log.warn("播放人数写入 Redis 失败 deviceId={} type={}: {}", deviceId, streamType, e.getMessage());
+            return value;
+        }
+    }
+
+    static String stripPlaySuffix(String stream) {
+        if (stream == null || stream.isBlank()) {
+            return "";
+        }
+        String s = stream.trim();
+        String lower = s.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".live.flv")) {
+            return s.substring(0, s.length() - ".live.flv".length());
+        }
+        if (lower.endsWith(".flv")) {
+            return s.substring(0, s.length() - 4);
+        }
+        if (lower.endsWith("/hls.m3u8")) {
+            return s.substring(0, s.length() - "/hls.m3u8".length());
+        }
+        if (lower.endsWith(".m3u8")) {
+            return s.substring(0, s.length() - 5);
+        }
+        return s;
     }
 
     private long increase(String deviceId, String streamType) {

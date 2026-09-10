@@ -27,7 +27,6 @@
         <p class="muted">播放人数（Redis）：{{ s.playCount ?? 0 }}</p>
         <div class="actions">
           <button type="button" class="primary sm" :disabled="!s.streamUrl" @click="onPreview(s)">预览</button>
-          <button type="button" class="ghost sm" @click="onStop(s)">停止</button>
           <button type="button" class="ghost sm" @click="openRegister(s)">编辑</button>
           <button type="button" class="link danger" @click="onDelete(s)">删除</button>
         </div>
@@ -118,7 +117,7 @@
     <div v-if="playInfo" class="mask" @click.self="playInfo = null">
       <div class="modal player-modal">
         <h2>预览 · {{ playInfo.streamType === 'main' ? '主码流' : '子码流' }}</h2>
-        <p class="muted">播放人数：{{ playInfo.ref }}</p>
+        <p class="muted">播放人数由 ZLM 回调维护：{{ playInfo.ref }}</p>
         <StreamPlayer :url="playInfo.streamUrl" />
         <div class="form-actions">
           <button type="button" class="ghost" @click="playInfo = null">关闭</button>
@@ -129,13 +128,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import StreamPlayer from '../components/StreamPlayer.vue'
 import {
   deleteStream, fetchDevice, fetchDeviceByDeviceId, fetchDevices,
-  fetchRecordings, previewStart, previewStop, recordingFileUrl, registerStream
+  fetchRecordings, previewStart, recordingFileUrl, registerStream
 } from '../api/device'
 
 const route = useRoute()
@@ -148,6 +147,7 @@ const formError = ref('')
 const regOpen = ref(false)
 const editingStream = ref(null)
 const playInfo = ref(null)
+let countTimer = null
 
 const recordings = ref([])
 const recLoading = ref(false)
@@ -276,17 +276,32 @@ async function onPreview(s) {
   }
 }
 
-async function onStop(s) {
+watch(deviceId, load, { immediate: false })
+onMounted(() => {
+  load()
+  countTimer = setInterval(() => {
+    if (deviceId.value && !loading.value) {
+      refreshCounts()
+    }
+  }, 4000)
+})
+onBeforeUnmount(() => {
+  if (countTimer) {
+    clearInterval(countTimer)
+    countTimer = null
+  }
+})
+
+async function refreshCounts() {
   try {
-    await previewStop({ deviceId: deviceId.value, streamType: s.streamType })
-    await load()
-  } catch (e) {
-    alert(e.message || '停止失败')
+    const latest = await fetchDeviceByDeviceId(deviceId.value)
+    if (latest?.streams && device.value) {
+      device.value = latest
+    }
+  } catch (_) {
+    /* ignore */
   }
 }
-
-watch(deviceId, load, { immediate: false })
-onMounted(load)
 </script>
 
 <style scoped>

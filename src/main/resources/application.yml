@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8090
 
 spring:
   application:
@@ -22,8 +22,9 @@ spring:
       timeout: 3000ms
 
 zlm:
-  base-url: http://127.0.0.1:80
-  secret: "035c73f7-bb6b-4889-a715-d9eb2d1925cc"
+  base-url: http://127.0.0.1:8080
+  secret: "lOGy52moDso1A6pfUODecYcrDNNvyKUV"
+  play-count-sync-ms: 5000
 
 # 【临时测试数据工具，用完删除 tools 包并去掉本段配置】
 # 开启后：检测码流表 main 是否有推流，有则每隔 5 分钟录一段到「device_id」目录

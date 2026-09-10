@@ -10,7 +10,6 @@ export const deleteDevice = (id) => http.delete(`/api/devices/${id}`)
 export const registerStream = (data) => http.post('/api/streams/register', data)
 export const deleteStream = (id) => http.delete(`/api/streams/${id}`)
 export const previewStart = (data) => http.post('/api/preview/start', data)
-export const previewStop = (data) => http.post('/api/preview/stop', data)
 export const fetchRecordings = (deviceId, params = {}) =>
   http.get('/api/recordings', { params: { deviceId, ...params } })
 export const recordingFileUrl = (deviceId, fileName) => {

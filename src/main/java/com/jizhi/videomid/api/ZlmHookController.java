@@ -34,29 +34,35 @@ public class ZlmHookController {
         this.previewService = previewService;
     }
 
-    /** 有播放器开始拉流 → Redis +1 */
+    /** 有播放器开始拉流 → Redis 人数对齐 / +1 */
     @PostMapping("/on_play")
     public Map<String, Object> onPlay(@RequestBody Map<String, Object> body) {
         String app = str(body.get("app"));
         String stream = str(body.get("stream"));
-        log.debug("ZLM on_play app={} stream={} schema={}", app, stream, body.get("schema"));
-        previewService.onPlayerStart(app, stream);
+        String id = str(body.get("id"));
+        log.info("[ZLM→本服务] 收到 on_play app={} stream={} schema={} id={} ip={} 原始参数={}",
+                app, stream, body.get("schema"), id, body.get("ip"), body);
+        long ref = previewService.onPlayerStart(app, stream, id);
+        log.info("[ZLM→本服务] on_play 处理{} app={} stream={} redis人数={}",
+                ref >= 0 ? "成功" : "失败(未匹配码流)", app, stream, ref);
         return ok();
     }
 
     /**
-     * 播放器或推流器断开流量上报。
-     * player=true 表示播放端断开 → Redis -1
+     * 播放器或推流器断开。按 ZLM 当前观看人数回写 Redis（关播放器会减到真实值）。
      */
     @PostMapping("/on_flow_report")
     public Map<String, Object> onFlowReport(@RequestBody Map<String, Object> body) {
         boolean player = bool(body.get("player"));
         String app = str(body.get("app"));
         String stream = str(body.get("stream"));
-        log.debug("ZLM on_flow_report player={} app={} stream={}", player, app, stream);
-        if (player) {
-            previewService.onPlayerStop(app, stream);
-        }
+        String schema = str(body.get("schema"));
+        String id = str(body.get("id"));
+        log.info("[ZLM→本服务] 收到 on_flow_report player={} schema={} app={} stream={} id={} 原始参数={}",
+                player, schema, app, stream, id, body);
+        long ref = previewService.onPlayerStop(app, stream, id);
+        log.info("[ZLM→本服务] on_flow_report 处理{} app={} stream={} redis人数={}",
+                ref >= 0 ? "成功" : "失败(未匹配码流)", app, stream, ref);
         return ok();
     }
 
@@ -65,9 +71,10 @@ public class ZlmHookController {
     public Map<String, Object> onStreamNoneReader(@RequestBody Map<String, Object> body) {
         String app = str(body.get("app"));
         String stream = str(body.get("stream"));
-        log.debug("ZLM on_stream_none_reader app={} stream={}", app, stream);
-        previewService.onNoneReader(app, stream);
-        // close=false：不要让 ZLM 因此关流（只用来清人数）
+        log.info("[ZLM→本服务] 收到 on_stream_none_reader app={} stream={} 原始参数={}", app, stream, body);
+        long ref = previewService.onNoneReader(app, stream);
+        log.info("[ZLM→本服务] on_stream_none_reader 处理{} app={} stream={} redis人数={} close=false",
+                ref >= 0 ? "成功" : "失败(未匹配码流)", app, stream, ref);
         Map<String, Object> resp = ok();
         resp.put("close", false);
         return resp;
