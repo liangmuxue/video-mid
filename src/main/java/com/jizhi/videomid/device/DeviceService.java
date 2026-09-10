@@ -23,32 +23,19 @@ public class DeviceService {
         this.previewService = previewService;
     }
 
-    public List<Map<String, Object>> listDevices() {
-        List<Device> devices = deviceRepository.findAll();
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Device d : devices) {
-            Map<String, Object> m = toDeviceView(d);
-            List<Map<String, Object>> streams = new ArrayList<>();
-            String mainUrl = null;
-            String subUrl = null;
-            for (DeviceStream s : streamRepository.findByDeviceId(d.getDeviceId())) {
-                Map<String, Object> sv = toStreamView(s);
-                sv.put("playCount", previewService.getRef(s.getDeviceId(), s.getStreamType()));
-                streams.add(sv);
-                if ("main".equalsIgnoreCase(s.getStreamType())) mainUrl = s.getStreamUrl();
-                if ("sub".equalsIgnoreCase(s.getStreamType())) subUrl = s.getStreamUrl();
-            }
-            m.put("streams", streams);
-            m.put("mainStreamUrl", mainUrl);
-            m.put("subStreamUrl", subUrl);
-            result.add(m);
-        }
-        return result;
-    }
-
     public Map<String, Object> getDevice(Long id) {
         Device d = deviceRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("设备不存在"));
+        return buildDeviceDetail(d);
+    }
+
+    public Map<String, Object> getDeviceByDeviceId(String deviceId) {
+        Device d = deviceRepository.findByDeviceId(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
+        return buildDeviceDetail(d);
+    }
+
+    private Map<String, Object> buildDeviceDetail(Device d) {
         Map<String, Object> m = toDeviceView(d);
         List<Map<String, Object>> streams = streamRepository.findByDeviceId(d.getDeviceId())
                 .stream().map(s -> {
@@ -57,7 +44,60 @@ public class DeviceService {
                     return sv;
                 }).toList();
         m.put("streams", streams);
+        m.put("streamCount", streams.size());
         return m;
+    }
+
+    public List<Map<String, Object>> listDevices() {
+        List<Device> devices = deviceRepository.findAll();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Device d : devices) {
+            Map<String, Object> m = toDeviceView(d);
+            int count = streamRepository.findByDeviceId(d.getDeviceId()).size();
+            m.put("streamCount", count);
+            result.add(m);
+        }
+        return result;
+    }
+
+    /** 对外查询：按 name / deviceId 模糊或精确筛选（均可选） */
+    public List<Map<String, Object>> searchDevices(String name, String deviceId) {
+        String nameQ = name == null ? null : name.trim().toLowerCase();
+        String idQ = deviceId == null ? null : deviceId.trim().toLowerCase();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Device d : deviceRepository.findAll()) {
+            if (nameQ != null && !nameQ.isEmpty()) {
+                String n = d.getName() == null ? "" : d.getName().toLowerCase();
+                if (!n.contains(nameQ)) {
+                    continue;
+                }
+            }
+            if (idQ != null && !idQ.isEmpty()) {
+                String id = d.getDeviceId() == null ? "" : d.getDeviceId().toLowerCase();
+                if (!id.contains(idQ)) {
+                    continue;
+                }
+            }
+            Map<String, Object> m = toDeviceView(d);
+            m.put("streamCount", streamRepository.findByDeviceId(d.getDeviceId()).size());
+            result.add(m);
+        }
+        return result;
+    }
+
+    /** 对外查询：某设备下全部码流 */
+    public List<Map<String, Object>> listStreamsByDeviceId(String deviceId) {
+        if (deviceId == null || deviceId.isBlank()) {
+            throw new IllegalArgumentException("deviceId 不能为空");
+        }
+        String id = deviceId.trim();
+        deviceRepository.findByDeviceId(id)
+                .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + id));
+        return streamRepository.findByDeviceId(id).stream().map(s -> {
+            Map<String, Object> sv = toStreamView(s);
+            sv.put("playCount", previewService.getRef(s.getDeviceId(), s.getStreamType()));
+            return sv;
+        }).toList();
     }
 
     @Transactional

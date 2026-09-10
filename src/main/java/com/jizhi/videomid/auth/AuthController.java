@@ -43,6 +43,11 @@ public class AuthController {
         if (header != null && header.startsWith("Bearer ")) {
             return header.substring(7).trim();
         }
+        // video 标签无法带 Header，允许 ?token= 访问录像文件
+        String queryToken = request.getParameter("token");
+        if (queryToken != null && !queryToken.isBlank()) {
+            return queryToken.trim();
+        }
         return null;
     }
 }

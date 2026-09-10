@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
 import HomeView from '../views/HomeView.vue'
 import DevicesView from '../views/DevicesView.vue'
+import DeviceStreamsView from '../views/DeviceStreamsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -10,6 +11,7 @@ const router = createRouter({
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/', name: 'home', component: HomeView },
     { path: '/devices', name: 'devices', component: DevicesView },
+    { path: '/devices/:deviceId/streams', name: 'device-streams', component: DeviceStreamsView },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
 })

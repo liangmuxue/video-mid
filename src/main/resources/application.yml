@@ -25,6 +25,21 @@ zlm:
   base-url: http://127.0.0.1:80
   secret: "035c73f7-bb6b-4889-a715-d9eb2d1925cc"
 
+# 【临时测试数据工具，用完删除 tools 包并去掉本段配置】
+# 开启后：检测码流表 main 是否有推流，有则每隔 5 分钟录一段到「device_id」目录
+testdata:
+  main-stream-record:
+    enabled: true
+    output-dir: data/testdata-records
+    interval-seconds: 300
+    clip-seconds: 300
+    ffmpeg-path: ffmpeg
+    zlm-http-port: 8080
+
+# 对外接口返回视频绝对地址时使用（可选；不配则按请求 host 自动生成）
+open-api:
+  public-base-url: http://8.130.74.232:8090
+
 # JWT 登录配置
 auth:
   jwt-secret: "jizhi-video-mid-jwt-secret-change-me-32bytes!!"

@@ -29,6 +29,11 @@ public class DeviceController {
         return ApiResponse.ok(deviceService.listDevices());
     }
 
+    @GetMapping("/devices/by-device-id/{deviceId}")
+    public ApiResponse<Map<String, Object>> byDeviceId(@PathVariable String deviceId) {
+        return ApiResponse.ok(deviceService.getDeviceByDeviceId(deviceId));
+    }
+
     @GetMapping("/devices/{id}")
     public ApiResponse<Map<String, Object>> detail(@PathVariable Long id) {
         return ApiResponse.ok(deviceService.getDevice(id));
