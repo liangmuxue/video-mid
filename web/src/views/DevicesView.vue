@@ -36,6 +36,7 @@
             <td>{{ d.address || '-' }}</td>
             <td>{{ d.streamCount ?? d.streams?.length ?? 0 }}</td>
             <td class="actions">
+              <button type="button" class="link" @click="openPlayback(d)">录像回放</button>
               <router-link class="link" :to="`/devices/${encodeURIComponent(d.deviceId)}/streams`">管理码流</router-link>
               <button type="button" class="link" @click="openDevice(d)">编辑</button>
               <button type="button" class="link danger" @click="onDelete(d)">删除</button>
@@ -68,12 +69,30 @@
         </div>
       </form>
     </div>
+
+    <!-- 当前页弹层嵌入回放组件，不新开路由；遮罩需「按下+抬起」都在遮罩上才关闭，避免时间轴拖拽松手误关 -->
+    <div
+      v-if="playback"
+      class="mask"
+      @pointerdown.self="onPlaybackMaskDown"
+      @pointerup.self="onPlaybackMaskUp"
+      @click.self.prevent
+    >
+      <div class="modal playback-modal" @pointerdown.stop>
+        <RecordingPlaybackPanel
+          :device-id="playback.deviceId"
+          :device-name="playback.name || ''"
+          @close="closePlayback"
+        />
+      </div>
+    </div>
   </AppShell>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import AppShell from '../components/AppShell.vue'
+import RecordingPlaybackPanel from '../components/RecordingPlaybackPanel.vue'
 import { createDevice, deleteDevice, fetchDevices, updateDevice } from '../api/device'
 
 const devices = ref([])
@@ -86,6 +105,9 @@ const formError = ref('')
 const form = reactive({
   deviceId: '', name: '', status: 'ON', manufacturer: '', model: '', address: '', gatewayId: '', platformId: ''
 })
+const playback = ref(null)
+/** 仅当在遮罩空白处按下时允许抬起关闭，防止时间轴拖出弹窗外松手误关 */
+let playbackMaskArmed = false
 
 const filtered = computed(() => {
   const q = keyword.value.toLowerCase()
@@ -122,6 +144,26 @@ function openDevice(d = null) {
     platformId: d?.platformId || ''
   })
   formOpen.value = true
+}
+
+function openPlayback(d) {
+  if (!d?.deviceId) return
+  playbackMaskArmed = false
+  playback.value = { deviceId: d.deviceId, name: d.name || '' }
+}
+
+function onPlaybackMaskDown() {
+  playbackMaskArmed = true
+}
+
+function onPlaybackMaskUp() {
+  if (playbackMaskArmed) closePlayback()
+  playbackMaskArmed = false
+}
+
+function closePlayback() {
+  playbackMaskArmed = false
+  playback.value = null
 }
 
 async function save() {
@@ -173,6 +215,12 @@ th { color: var(--muted); font-size: 13px; font-weight: 500; }
 .empty { color: var(--muted); text-align: center; }
 .mask { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 20px; z-index: 40; }
 .modal { width: min(460px, 100%); background: #102019; border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: grid; gap: 12px; box-shadow: var(--shadow); }
+.playback-modal {
+  width: min(960px, 100%);
+  max-height: min(92vh, 960px);
+  overflow: auto;
+  padding: 18px 20px 20px;
+}
 .modal h2 { margin: 0; font-family: Syne, sans-serif; }
 .modal label { display: grid; gap: 6px; }
 .modal label span { font-size: 13px; color: var(--muted); }

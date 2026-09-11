@@ -1,0 +1,24 @@
+{
+  "name": "@video-mid/recording-day-timeline",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./RecordingDayTimeline.vue": "./src/RecordingDayTimeline.vue"
+  },
+  "scripts": {
+    "demo": "vite --config demo/vite.config.js",
+    "demo:build": "vite build --config demo/vite.config.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "axios": "^1.7.7",
+    "vite": "^5.4.10",
+    "vue": "^3.5.12"
+  }
+}
