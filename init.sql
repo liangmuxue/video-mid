@@ -1,4 +1,4 @@
-﻿-- video-mid 数据库初始化
+-- video-mid 数据库初始化
 CREATE DATABASE IF NOT EXISTS `video_mid`
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS `device` (
   `device_id`     VARCHAR(64)  NOT NULL COMMENT '业务设备唯一ID',
   `name`          VARCHAR(256) DEFAULT NULL COMMENT '设备名称',
   `platform_id`   VARCHAR(64)  DEFAULT NULL COMMENT '下级平台国标ID',
-  `status`        VARCHAR(16)  NOT NULL DEFAULT 'OFF' COMMENT 'ON/OFF',
+  `status`        VARCHAR(16)  NOT NULL DEFAULT '已停用' COMMENT '已启用/已停用/不可用',
   `manufacturer`  VARCHAR(128) DEFAULT NULL COMMENT '厂家',
   `model`         VARCHAR(128) DEFAULT NULL COMMENT '型号',
   `address`       VARCHAR(256) DEFAULT NULL COMMENT '安装地址',

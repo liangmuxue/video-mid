@@ -4,6 +4,7 @@ import LoginView from '../views/LoginView.vue'
 import HomeView from '../views/HomeView.vue'
 import DevicesView from '../views/DevicesView.vue'
 import DeviceStreamsView from '../views/DeviceStreamsView.vue'
+import BizPortalView from '../views/BizPortalView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -12,6 +13,7 @@ const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/devices', name: 'devices', component: DevicesView },
     { path: '/devices/:deviceId/streams', name: 'device-streams', component: DeviceStreamsView },
+    { path: '/biz', name: 'biz', component: BizPortalView },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
 })

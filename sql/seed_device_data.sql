@@ -1,4 +1,4 @@
-﻿-- 仅初始化演示数据（表已存在时执行）
+-- 仅初始化演示数据（表已存在时执行）
 USE `video_mid`;
 
 INSERT INTO `device` (`device_id`, `name`, `platform_id`, `status`, `manufacturer`, `model`, `address`, `ptz_type`, `gateway_id`)

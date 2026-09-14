@@ -43,12 +43,12 @@ public class PreviewService {
             throw new IllegalArgumentException("码流地址为空，请先注册 streamUrl");
         }
 
-        // 人数只由 ZLM Hook 维护；此处只返回地址。
         Map<String, Object> data = new HashMap<>();
         data.put("deviceId", deviceId);
         data.put("streamType", type);
         data.put("streamUrl", stream.getStreamUrl());
         data.put("playUrl", stream.getStreamUrl());
+        data.put("liveEnabled", Boolean.TRUE.equals(stream.getLiveEnabled()));
         data.put("ref", getRef(deviceId, type));
         data.put("countBy", "zlm-hook");
         return data;
@@ -145,7 +145,7 @@ public class PreviewService {
         return Optional.empty();
     }
 
-    static AppStream parseAppStream(String streamUrl) {
+    public static AppStream parseAppStream(String streamUrl) {
         if (streamUrl == null || streamUrl.isBlank()) {
             return null;
         }
@@ -298,5 +298,5 @@ public class PreviewService {
         return streamType.toLowerCase(Locale.ROOT);
     }
 
-    record AppStream(String app, String stream) {}
+    public record AppStream(String app, String stream) {}
 }

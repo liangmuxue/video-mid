@@ -30,19 +30,24 @@
 import { RecordingDayTimeline } from '../../toolkits/recording-day-timeline/src'
 import { fetchRecordings, recordingFileUrl } from '../api/device'
 
-defineProps({
+const props = defineProps({
   deviceId: { type: String, required: true },
   deviceName: { type: String, default: '' },
-  clipSeconds: { type: Number, default: 300 }
+  clipSeconds: { type: Number, default: 300 },
+  /** 可选：覆盖默认管理端录像接口（业务端传入） */
+  fetchRecordings: { type: Function, default: null },
+  getVideoUrl: { type: Function, default: null }
 })
 
 const emit = defineEmits(['close'])
 
 function onFetch(id, params) {
+  if (props.fetchRecordings) return props.fetchRecordings(id, params)
   return fetchRecordings(id, params)
 }
 
 function onVideoUrl(id, fileName, record) {
+  if (props.getVideoUrl) return props.getVideoUrl(id, fileName, record)
   if (record?.videoUrl) return record.videoUrl
   return recordingFileUrl(id, fileName)
 }

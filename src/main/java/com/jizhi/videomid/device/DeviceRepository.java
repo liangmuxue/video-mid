@@ -9,7 +9,10 @@ import org.springframework.stereotype.Repository;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -21,6 +24,8 @@ public class DeviceRepository {
         d.setDeviceId(rs.getString("device_id"));
         d.setName(rs.getString("name"));
         d.setPlatformId(rs.getString("platform_id"));
+        long folderId = rs.getLong("folder_id");
+        if (!rs.wasNull()) d.setFolderId(folderId);
         d.setStatus(rs.getString("status"));
         d.setManufacturer(rs.getString("manufacturer"));
         d.setModel(rs.getString("model"));
@@ -62,20 +67,21 @@ public class DeviceRepository {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device (device_id, name, platform_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude) " +
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device (device_id, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude) " +
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, d.getDeviceId());
             ps.setString(2, d.getName());
             ps.setString(3, d.getPlatformId());
-            ps.setString(4, d.getStatus() == null ? "OFF" : d.getStatus());
-            ps.setString(5, d.getManufacturer());
-            ps.setString(6, d.getModel());
-            ps.setString(7, d.getAddress());
-            ps.setInt(8, d.getPtzType() == null ? 0 : d.getPtzType());
-            ps.setString(9, d.getGatewayId());
-            if (d.getLongitude() == null) ps.setObject(10, null); else ps.setDouble(10, d.getLongitude());
-            if (d.getLatitude() == null) ps.setObject(11, null); else ps.setDouble(11, d.getLatitude());
+            if (d.getFolderId() == null) ps.setNull(4, Types.BIGINT); else ps.setLong(4, d.getFolderId());
+            ps.setString(5, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
+            ps.setString(6, d.getManufacturer());
+            ps.setString(7, d.getModel());
+            ps.setString(8, d.getAddress());
+            ps.setInt(9, d.getPtzType() == null ? 0 : d.getPtzType());
+            ps.setString(10, d.getGatewayId());
+            if (d.getLongitude() == null) ps.setObject(11, null); else ps.setDouble(11, d.getLongitude());
+            if (d.getLatitude() == null) ps.setObject(12, null); else ps.setDouble(12, d.getLatitude());
             return ps;
         }, kh);
         Number key = kh.getKey();
@@ -84,9 +90,28 @@ public class DeviceRepository {
 
     public int update(Device d) {
         return jdbc.update(
-                "UPDATE device SET name=?, platform_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=? WHERE id=?",
-                d.getName(), d.getPlatformId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
+                "UPDATE device SET name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=? WHERE id=?",
+                d.getName(), d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
                 d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(), d.getId());
+    }
+
+    public int updateStatus(Long id, String status) {
+        return jdbc.update("UPDATE device SET status=? WHERE id=?", status, id);
+    }
+
+    public long countInFolder(Long folderId) {
+        Long n = jdbc.queryForObject(
+                "SELECT COUNT(1) FROM device WHERE folder_id = ?", Long.class, folderId);
+        return n == null ? 0L : n;
+    }
+
+    public Map<Long, Integer> countByFolderId() {
+        Map<Long, Integer> map = new HashMap<>();
+        jdbc.query("SELECT folder_id, COUNT(1) AS cnt FROM device WHERE folder_id IS NOT NULL GROUP BY folder_id",
+                rs -> {
+                    map.put(rs.getLong("folder_id"), rs.getInt("cnt"));
+                });
+        return map;
     }
 
     public int deleteById(Long id) {

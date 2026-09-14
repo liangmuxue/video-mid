@@ -6,6 +6,7 @@
         <nav>
           <router-link to="/">概览</router-link>
           <router-link to="/devices">设备管理</router-link>
+          <router-link to="/biz">业务端</router-link>
         </nav>
       </div>
       <div class="user">

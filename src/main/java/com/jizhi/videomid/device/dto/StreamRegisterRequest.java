@@ -14,6 +14,7 @@ public class StreamRegisterRequest {
     private String channelId;
     private String status;
     private Integer sortNo;
+    private Boolean liveEnabled;
     /** 注册时可顺带创建/更新设备名称 */
     private String deviceName;
 
@@ -31,6 +32,8 @@ public class StreamRegisterRequest {
     public void setStatus(String status) { this.status = status; }
     public Integer getSortNo() { return sortNo; }
     public void setSortNo(Integer sortNo) { this.sortNo = sortNo; }
+    public Boolean getLiveEnabled() { return liveEnabled; }
+    public void setLiveEnabled(Boolean liveEnabled) { this.liveEnabled = liveEnabled; }
     public String getDeviceName() { return deviceName; }
     public void setDeviceName(String deviceName) { this.deviceName = deviceName; }
 }

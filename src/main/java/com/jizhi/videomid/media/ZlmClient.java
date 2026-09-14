@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 
 /**
@@ -113,6 +114,33 @@ public class ZlmClient {
         } catch (Exception e) {
             log.warn("[本服务→ZLM] getMediaList 失败 app={} stream={} error={}", app, stream, e.getMessage());
             return OptionalInt.empty();
+        }
+    }
+
+    /**
+     * 判断某路流是否仍在推流（ZLM mediaList 有条目即视为在线）。
+     * 接口失败返回 empty，避免误判为离线。
+     */
+    public Optional<Boolean> isMediaOnline(String app, String stream) {
+        if (app == null || stream == null || app.isBlank() || stream.isBlank()) {
+            return Optional.empty();
+        }
+        String url = api("/index/api/getMediaList")
+                .queryParam("app", app.trim())
+                .queryParam("stream", stream.trim())
+                .toUriString();
+        try {
+            String body = restTemplate.getForObject(url, String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            if (resp == null || resp.path("code").asInt(-1) != 0) {
+                return Optional.empty();
+            }
+            JsonNode data = resp.path("data");
+            boolean online = data.isArray() && !data.isEmpty();
+            return Optional.of(online);
+        } catch (Exception e) {
+            log.warn("[本服务→ZLM] isMediaOnline 失败 app={} stream={} error={}", app, stream, e.getMessage());
+            return Optional.empty();
         }
     }
 

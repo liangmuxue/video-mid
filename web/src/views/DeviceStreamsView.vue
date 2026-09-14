@@ -7,7 +7,7 @@
         <p v-if="device">
           <span class="mono">{{ device.deviceId }}</span>
           · {{ device.name || '未命名设备' }}
-          · 状态 {{ device.status }}
+          · 状态 {{ deviceStatusLabel(device.status) }}
         </p>
       </div>
       <button type="button" class="primary" @click="openRegister()">注册码流</button>
@@ -21,12 +21,19 @@
         <header>
           <strong>{{ s.streamType === 'main' ? '主码流' : '子码流' }}</strong>
           <span class="badge" :class="s.status === 'ON' ? 'on' : 'off'">{{ s.status }}</span>
+          <span v-if="s.liveEnabled" class="badge live">业务直播</span>
         </header>
         <p class="name">{{ s.streamName || '-' }}</p>
         <p class="url">{{ s.streamUrl || '（未注册 RTMP 地址）' }}</p>
         <p class="muted">播放人数（Redis）：{{ s.playCount ?? 0 }}</p>
         <div class="actions">
           <button type="button" class="primary sm" :disabled="!s.streamUrl" @click="onPreview(s)">预览</button>
+          <button
+            type="button"
+            class="ghost sm"
+            :disabled="!!s.liveEnabled"
+            @click="onSetLive(s)"
+          >{{ s.liveEnabled ? '当前直播流' : '设为业务直播' }}</button>
           <button type="button" class="ghost sm" @click="openRegister(s)">编辑</button>
           <button type="button" class="link danger" @click="onDelete(s)">删除</button>
         </div>
@@ -134,7 +141,7 @@ import AppShell from '../components/AppShell.vue'
 import StreamPlayer from '../components/StreamPlayer.vue'
 import {
   deleteStream, fetchDevice, fetchDeviceByDeviceId, fetchDevices,
-  fetchRecordings, previewStart, recordingFileUrl, registerStream
+  fetchRecordings, previewStart, recordingFileUrl, registerStream, setStreamLive
 } from '../api/device'
 
 const route = useRoute()
@@ -165,6 +172,12 @@ const regForm = reactive({
 })
 
 const streams = computed(() => device.value?.streams || [])
+
+function deviceStatusLabel(s) {
+  if (s === 'ON') return '已启用'
+  if (s === 'OFF') return '已停用'
+  return s || '-'
+}
 
 function toApiTime(localValue) {
   if (!localValue) return undefined
@@ -264,6 +277,15 @@ async function onDelete(s) {
   await load()
 }
 
+async function onSetLive(s) {
+  try {
+    await setStreamLive(s.id)
+    await load()
+  } catch (e) {
+    error.value = e.message || '设置直播流失败'
+  }
+}
+
 async function onPreview(s) {
   try {
     playInfo.value = await previewStart({
@@ -320,6 +342,7 @@ h1 { margin: 8px 0 0; font-family: Syne, sans-serif; font-size: 32px; }
 .url { margin: 0; font-size: 12px; color: var(--muted); word-break: break-all; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
 .badge.on { color: var(--accent-2); }
+.badge.live { color: #7ec8ff; border-color: rgba(126,200,255,.35); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
 .primary, .ghost, .link { cursor: pointer; }
 .primary { border: 0; border-radius: 12px; padding: 10px 14px; background: linear-gradient(135deg, var(--accent), #2f9a65); color: #04140c; font-weight: 600; }

@@ -12,6 +12,8 @@ public class DeviceStream {
     private String streamName;
     private String status;
     private Integer sortNo;
+    /** 业务端直播：同一 device 最多一路为 true */
+    private Boolean liveEnabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -31,6 +33,8 @@ public class DeviceStream {
     public void setStatus(String status) { this.status = status; }
     public Integer getSortNo() { return sortNo; }
     public void setSortNo(Integer sortNo) { this.sortNo = sortNo; }
+    public Boolean getLiveEnabled() { return liveEnabled; }
+    public void setLiveEnabled(Boolean liveEnabled) { this.liveEnabled = liveEnabled; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

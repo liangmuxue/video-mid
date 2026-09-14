@@ -7,6 +7,7 @@ public class DeviceRequest {
     private String deviceId;
     private String name;
     private String platformId;
+    private Long folderId;
     private String status;
     private String manufacturer;
     private String model;
@@ -22,6 +23,8 @@ public class DeviceRequest {
     public void setName(String name) { this.name = name; }
     public String getPlatformId() { return platformId; }
     public void setPlatformId(String platformId) { this.platformId = platformId; }
+    public Long getFolderId() { return folderId; }
+    public void setFolderId(Long folderId) { this.folderId = folderId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getManufacturer() { return manufacturer; }

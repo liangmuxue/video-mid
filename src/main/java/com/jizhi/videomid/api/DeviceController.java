@@ -25,8 +25,10 @@ public class DeviceController {
     }
 
     @GetMapping("/devices")
-    public ApiResponse<List<Map<String, Object>>> list() {
-        return ApiResponse.ok(deviceService.listDevices());
+    public ApiResponse<List<Map<String, Object>>> list(
+            @RequestParam(required = false) Long folderId,
+            @RequestParam(required = false, defaultValue = "true") boolean includeChildren) {
+        return ApiResponse.ok(deviceService.listDevices(folderId, includeChildren));
     }
 
     @GetMapping("/devices/by-device-id/{deviceId}")
@@ -66,6 +68,12 @@ public class DeviceController {
     public ApiResponse<Void> deleteStream(@PathVariable Long id) {
         deviceService.deleteStream(id);
         return ApiResponse.ok(null);
+    }
+
+    /** 设为业务端直播流（同设备互斥，默认优先 sub） */
+    @PutMapping("/streams/{id}/live")
+    public ApiResponse<Map<String, Object>> setLive(@PathVariable Long id) {
+        return ApiResponse.ok(deviceService.setLiveStream(id));
     }
 
     /** 开始预览：只返回已注册播放地址，人数由 ZLM Hook 维护 */

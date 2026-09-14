@@ -25,6 +25,11 @@ public class DeviceStreamRepository {
         s.setStreamName(rs.getString("stream_name"));
         s.setStatus(rs.getString("status"));
         s.setSortNo(rs.getInt("sort_no"));
+        try {
+            s.setLiveEnabled(rs.getInt("live_enabled") == 1);
+        } catch (Exception e) {
+            s.setLiveEnabled(false);
+        }
         Timestamp c = rs.getTimestamp("created_at");
         if (c != null) s.setCreatedAt(c.toLocalDateTime());
         Timestamp u = rs.getTimestamp("updated_at");
@@ -60,11 +65,18 @@ public class DeviceStreamRepository {
         return list.stream().findFirst();
     }
 
+    public Optional<DeviceStream> findLiveByDeviceId(String deviceId) {
+        List<DeviceStream> list = jdbc.query(
+                "SELECT * FROM device_stream WHERE device_id = ? AND live_enabled = 1 LIMIT 1",
+                MAPPER, deviceId);
+        return list.stream().findFirst();
+    }
+
     public long insert(DeviceStream s) {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device_stream (device_id, stream_type, channel_id, stream_url, stream_name, status, sort_no) VALUES (?,?,?,?,?,?,?)",
+                    "INSERT INTO device_stream (device_id, stream_type, channel_id, stream_url, stream_name, status, sort_no, live_enabled) VALUES (?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, s.getDeviceId());
             ps.setString(2, s.getStreamType());
@@ -73,6 +85,7 @@ public class DeviceStreamRepository {
             ps.setString(5, s.getStreamName());
             ps.setString(6, s.getStatus() == null ? "OFF" : s.getStatus());
             ps.setInt(7, s.getSortNo() == null ? 0 : s.getSortNo());
+            ps.setInt(8, Boolean.TRUE.equals(s.getLiveEnabled()) ? 1 : 0);
             return ps;
         }, kh);
         Number key = kh.getKey();
@@ -81,9 +94,19 @@ public class DeviceStreamRepository {
 
     public int update(DeviceStream s) {
         return jdbc.update(
-                "UPDATE device_stream SET channel_id=?, stream_url=?, stream_name=?, status=?, sort_no=? WHERE id=?",
+                "UPDATE device_stream SET channel_id=?, stream_url=?, stream_name=?, status=?, sort_no=?, live_enabled=? WHERE id=?",
                 blankToNull(s.getChannelId()), s.getStreamUrl(), s.getStreamName(),
-                s.getStatus(), s.getSortNo() == null ? 0 : s.getSortNo(), s.getId());
+                s.getStatus(), s.getSortNo() == null ? 0 : s.getSortNo(),
+                Boolean.TRUE.equals(s.getLiveEnabled()) ? 1 : 0,
+                s.getId());
+    }
+
+    public int clearLiveByDeviceId(String deviceId) {
+        return jdbc.update("UPDATE device_stream SET live_enabled = 0 WHERE device_id = ?", deviceId);
+    }
+
+    public int setLive(Long id, boolean enabled) {
+        return jdbc.update("UPDATE device_stream SET live_enabled = ? WHERE id = ?", enabled ? 1 : 0, id);
     }
 
     public int deleteById(Long id) {
