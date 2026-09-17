@@ -30,7 +30,7 @@ zlm:
 # 开启后：检测码流表 main 是否有推流，有则每隔 5 分钟录一段到「device_id」目录
 testdata:
   main-stream-record:
-    enabled: true
+    enabled: false
     output-dir: data/testdata-records
     interval-seconds: 300
     clip-seconds: 300

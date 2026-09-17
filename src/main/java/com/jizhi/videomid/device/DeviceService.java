@@ -301,7 +301,7 @@ public class DeviceService {
         d.setPlatformId(req.getPlatformId());
         d.setFolderId(req.getFolderId());
         // 人工仅可设 已启用 / 已停用
-        d.setStatus(DeviceStatus.normalizeManual(req.getStatus()));
+        d.setStatus(DeviceStatus.normalizeManual(req.getStatus() == null ? DeviceStatus.ENABLED : req.getStatus()));
         d.setManufacturer(req.getManufacturer());
         d.setModel(req.getModel());
         d.setAddress(req.getAddress());
@@ -320,16 +320,16 @@ public class DeviceService {
         List<Device> devices = deviceRepository.findAll();
         int changed = 0;
         for (Device d : devices) {
-            String current = DeviceStatus.normalize(d.getStatus());
-            if (DeviceStatus.DISABLED.equals(current)) {
+            int current = DeviceStatus.normalize(d.getStatus());
+            if (DeviceStatus.isDisabled(current)) {
                 continue;
             }
             Boolean online = isDevicePushing(d.getDeviceId());
             if (online == null) {
                 continue;
             }
-            String target = online ? DeviceStatus.ENABLED : DeviceStatus.UNAVAILABLE;
-            if (!target.equals(current)) {
+            int target = online ? DeviceStatus.ENABLED : DeviceStatus.UNAVAILABLE;
+            if (target != current) {
                 deviceRepository.updateStatus(d.getId(), target);
                 changed++;
                 log.info("设备推流巡检 deviceId={} {} -> {}", d.getDeviceId(), current, target);

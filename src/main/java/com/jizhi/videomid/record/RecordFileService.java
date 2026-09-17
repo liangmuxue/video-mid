@@ -1,5 +1,6 @@
 package com.jizhi.videomid.record;
 
+import com.jizhi.videomid.util.TsUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -17,6 +19,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,8 +66,7 @@ public class RecordFileService {
                 Map<String, Object> row = new HashMap<>();
                 row.put("deviceId", id);
                 row.put("fileName", name);
-                row.put("timestamp", FILE_TS.format(ts));
-                row.put("recordTime", ts);
+                row.put("recordTime", TsUtil.toMillis(ts));
                 row.put("size", Files.size(file));
                 row.put("path", file.toAbsolutePath().normalize().toString());
                 result.add(row);
@@ -73,7 +75,7 @@ public class RecordFileService {
             throw new IllegalStateException("读取录像目录失败: " + e.getMessage(), e);
         }
 
-        result.sort(Comparator.comparing((Map<String, Object> r) -> (LocalDateTime) r.get("recordTime")).reversed());
+        result.sort(Comparator.comparing((Map<String, Object> r) -> (Long) r.get("recordTime")).reversed());
         return result;
     }
 
@@ -81,6 +83,47 @@ public class RecordFileService {
      * 对外查询：在 list 结果上附加可直接访问的视频 URL。
      * @param publicBaseUrl 如 http://host:8090（不含末尾斜杠）
      */
+    /**
+     * 某月内有录像的日期列表（yyyy-MM-dd，升序）。
+     */
+    public List<String> listRecordingDays(String deviceId, int year, int month) {
+        String id = requireDeviceId(deviceId);
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException("month 必须在 1~12");
+        }
+        if (year < 1970 || year > 2100) {
+            throw new IllegalArgumentException("year 非法");
+        }
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+        LocalDateTime fromTs = monthStart.atStartOfDay();
+        LocalDateTime toTs = monthEnd.atTime(23, 59, 59);
+
+        Path dir = deviceDir(id);
+        TreeSet<String> days = new TreeSet<>();
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.mp4")) {
+            for (Path file : stream) {
+                String name = file.getFileName().toString();
+                Matcher m = FILE_PATTERN.matcher(name);
+                if (!m.matches()) {
+                    continue;
+                }
+                LocalDateTime ts = LocalDateTime.parse(m.group(1), FILE_TS);
+                if (ts.isBefore(fromTs) || ts.isAfter(toTs)) {
+                    continue;
+                }
+                days.add(ts.toLocalDate().toString());
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("读取录像目录失败: " + e.getMessage(), e);
+        }
+        return new ArrayList<>(days);
+    }
+
     public List<Map<String, Object>> listWithVideoUrls(String deviceId, String from, String to, String publicBaseUrl) {
         String base = publicBaseUrl == null ? "" : publicBaseUrl.replaceAll("/+$", "");
         List<Map<String, Object>> list = list(deviceId, from, to);
@@ -139,13 +182,17 @@ public class RecordFileService {
     }
 
     /**
-     * 支持：yyyyMMdd_HHmmss、yyyy-MM-dd HH:mm:ss、yyyy-MM-dd'T'HH:mm:ss、yyyy-MM-dd
+     * 支持毫秒时间戳（推荐）；兼容 yyyyMMdd_HHmmss、yyyy-MM-dd HH:mm:ss 等旧格式。
      */
     static LocalDateTime parseOptional(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
         String s = raw.trim();
+        if (s.matches("\\d{10,13}")) {
+            long millis = s.length() == 10 ? Long.parseLong(s) * 1000L : Long.parseLong(s);
+            return TsUtil.fromMillis(millis);
+        }
         try {
             if (s.length() == 15 && s.charAt(8) == '_') {
                 return LocalDateTime.parse(s, FILE_TS);
@@ -158,7 +205,7 @@ public class RecordFileService {
             }
             return LocalDateTime.parse(s);
         } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("时间格式错误，支持 yyyyMMdd_HHmmss 或 yyyy-MM-dd HH:mm:ss: " + raw);
+            throw new IllegalArgumentException("时间格式错误，请传毫秒时间戳: " + raw);
         }
     }
 }

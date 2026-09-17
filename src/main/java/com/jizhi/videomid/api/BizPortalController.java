@@ -46,13 +46,10 @@ public class BizPortalController {
             @RequestParam(required = false) Long folderId,
             @RequestParam(required = false, defaultValue = "true") boolean includeChildren) {
         List<Map<String, Object>> list = deviceService.listDevices(folderId, includeChildren);
-        // 业务端全部可见（含已停用灰色）；附带可否播放标记
         for (Map<String, Object> m : list) {
-            String status = String.valueOf(m.getOrDefault("status", ""));
-            boolean disabled = DeviceStatus.DISABLED.equals(DeviceStatus.normalize(status));
-            // 已停用：可见不可播；已启用/不可用：可尝试回放，直播仅已启用
-            m.put("playable", !disabled);
-            m.put("livePlayable", DeviceStatus.ENABLED.equals(DeviceStatus.normalize(status)));
+            int status = DeviceStatus.normalize(m.get("status"));
+            m.put("playable", !DeviceStatus.isDisabled(status));
+            m.put("livePlayable", DeviceStatus.isEnabled(status));
         }
         return ApiResponse.ok(list);
     }
@@ -60,10 +57,9 @@ public class BizPortalController {
     @GetMapping("/devices/{deviceId}")
     public ApiResponse<Map<String, Object>> device(@PathVariable String deviceId) {
         Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        String status = String.valueOf(detail.getOrDefault("status", ""));
-        boolean disabled = DeviceStatus.DISABLED.equals(DeviceStatus.normalize(status));
-        detail.put("playable", !disabled);
-        detail.put("livePlayable", DeviceStatus.ENABLED.equals(DeviceStatus.normalize(status)));
+        int status = DeviceStatus.normalize(detail.get("status"));
+        detail.put("playable", !DeviceStatus.isDisabled(status));
+        detail.put("livePlayable", DeviceStatus.isEnabled(status));
         DeviceStream live = deviceService.resolveLiveStream(deviceId).orElse(null);
         if (live != null) {
             Map<String, Object> liveView = new HashMap<>();
@@ -82,23 +78,37 @@ public class BizPortalController {
     @PostMapping("/devices/{deviceId}/live")
     public ApiResponse<Map<String, Object>> startLive(@PathVariable String deviceId) {
         Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        String status = String.valueOf(detail.getOrDefault("status", ""));
-        if (!DeviceStatus.ENABLED.equals(DeviceStatus.normalize(status))) {
+        int status = DeviceStatus.normalize(detail.get("status"));
+        if (!DeviceStatus.isEnabled(status)) {
             throw new IllegalArgumentException("仅「已启用」设备可直播");
         }
         return ApiResponse.ok(deviceService.startBizLive(deviceId));
     }
 
+    /** 某月内有录像的日期 yyyy-MM-dd */
+    @GetMapping("/devices/{deviceId}/recording-days")
+    public ApiResponse<List<String>> recordingDays(
+            @PathVariable String deviceId,
+            @RequestParam int year,
+            @RequestParam int month) {
+        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
+        int status = DeviceStatus.normalize(detail.get("status"));
+        if (DeviceStatus.isDisabled(status)) {
+            throw new IllegalArgumentException("设备已停用，无法回放");
+        }
+        return ApiResponse.ok(recordFileService.listRecordingDays(deviceId, year, month));
+    }
+
+    /** from / to 为毫秒时间戳（可选） */
     @GetMapping("/devices/{deviceId}/recordings")
     public ApiResponse<List<Map<String, Object>>> recordings(
             @PathVariable String deviceId,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
             HttpServletRequest request) {
-        // 已停用：灰色可见但不可播（含回放）
         Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        String status = String.valueOf(detail.getOrDefault("status", ""));
-        if (DeviceStatus.DISABLED.equals(DeviceStatus.normalize(status))) {
+        int status = DeviceStatus.normalize(detail.get("status"));
+        if (DeviceStatus.isDisabled(status)) {
             throw new IllegalArgumentException("设备已停用，无法回放");
         }
         String base = publicBaseUrl == null || publicBaseUrl.isBlank()

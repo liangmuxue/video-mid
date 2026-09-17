@@ -1,13 +1,12 @@
 package com.jizhi.videomid.auth;
 
+import com.jizhi.videomid.util.TsUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,18 +22,9 @@ public class SysUserRepository {
             u.setPassword(rs.getString("password"));
             u.setNickname(rs.getString("nickname"));
             u.setStatus(rs.getInt("status"));
-            Timestamp lastLogin = rs.getTimestamp("last_login_at");
-            if (lastLogin != null) {
-                u.setLastLoginAt(lastLogin.toLocalDateTime());
-            }
-            Timestamp created = rs.getTimestamp("created_at");
-            if (created != null) {
-                u.setCreatedAt(created.toLocalDateTime());
-            }
-            Timestamp updated = rs.getTimestamp("updated_at");
-            if (updated != null) {
-                u.setUpdatedAt(updated.toLocalDateTime());
-            }
+            u.setLastLoginAt(readMillis(rs, "last_login_at"));
+            u.setCreatedAt(readMillis(rs, "created_at"));
+            u.setUpdatedAt(readMillis(rs, "updated_at"));
             return u;
         }
     };
@@ -69,20 +59,29 @@ public class SysUserRepository {
     }
 
     public void insert(SysUser user) {
+        long now = TsUtil.nowMillis();
         jdbc.update(
-                "INSERT INTO sys_user (username, password, nickname, status) VALUES (?, ?, ?, ?)",
+                "INSERT INTO sys_user (username, password, nickname, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
                 user.getUsername(),
                 user.getPassword(),
                 user.getNickname(),
-                user.getStatus()
+                user.getStatus(),
+                now,
+                now
         );
     }
 
-    public void updateLastLogin(Long userId, LocalDateTime time) {
+    public void updateLastLogin(Long userId, long millis) {
         jdbc.update(
-                "UPDATE sys_user SET last_login_at = ? WHERE id = ?",
-                Timestamp.valueOf(time),
+                "UPDATE sys_user SET last_login_at = ?, updated_at = ? WHERE id = ?",
+                millis,
+                TsUtil.nowMillis(),
                 userId
         );
+    }
+
+    private static Long readMillis(ResultSet rs, String col) throws SQLException {
+        long v = rs.getLong(col);
+        return rs.wasNull() ? null : v;
     }
 }

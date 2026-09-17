@@ -16,18 +16,24 @@ CREATE TABLE IF NOT EXISTS `device_folder` (
 
 SET @col_exists := (
   SELECT COUNT(1) FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device' AND COLUMN_NAME = 'folder_id'
+  WHERE TABLE_SCHEMA = 'video_mid' AND TABLE_NAME = 'device' AND COLUMN_NAME = 'folder_id'
+);
+SET @has_platform := (
+  SELECT COUNT(1) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = 'video_mid' AND TABLE_NAME = 'device' AND COLUMN_NAME = 'platform_id'
 );
 SET @sql := IF(@col_exists = 0,
-  'ALTER TABLE `device` ADD COLUMN `folder_id` BIGINT DEFAULT NULL COMMENT ''所属目录'' AFTER `platform_id`',
+  IF(@has_platform > 0,
+    'ALTER TABLE `video_mid`.`device` ADD COLUMN `folder_id` BIGINT DEFAULT NULL COMMENT ''所属目录'' AFTER `platform_id`',
+    'ALTER TABLE `video_mid`.`device` ADD COLUMN `folder_id` BIGINT DEFAULT NULL COMMENT ''所属目录'''),
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @idx_exists := (
   SELECT COUNT(1) FROM information_schema.STATISTICS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device' AND INDEX_NAME = 'idx_folder_id'
+  WHERE TABLE_SCHEMA = 'video_mid' AND TABLE_NAME = 'device' AND INDEX_NAME = 'idx_folder_id'
 );
 SET @sql2 := IF(@idx_exists = 0,
-  'ALTER TABLE `device` ADD KEY `idx_folder_id` (`folder_id`)',
+  'ALTER TABLE `video_mid`.`device` ADD KEY `idx_folder_id` (`folder_id`)',
   'SELECT 1');
 PREPARE stmt2 FROM @sql2; EXECUTE stmt2; DEALLOCATE PREPARE stmt2;

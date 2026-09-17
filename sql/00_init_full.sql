@@ -1,0 +1,2 @@
+-- 已合并至 rebuild_business_tables.sql
+-- 在 Navicat 中请执行：sql/rebuild_business_tables.sql

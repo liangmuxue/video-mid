@@ -27,6 +27,10 @@ export const fetchBizRecordings = (deviceId, params = {}) =>
   http.get(`/api/biz/devices/${encodeURIComponent(deviceId)}/recordings`, { params })
 export const fetchRecordings = (deviceId, params = {}) =>
   http.get('/api/recordings', { params: { deviceId, ...params } })
+export const fetchRecordingDays = (deviceId, params = {}) =>
+  http.get('/api/recordings/days', { params: { deviceId, ...params } })
+export const fetchBizRecordingDays = (deviceId, params = {}) =>
+  http.get(`/api/biz/devices/${encodeURIComponent(deviceId)}/recording-days`, { params })
 export const recordingFileUrl = (deviceId, fileName) => {
   const base = (http.defaults.baseURL || '').replace(/\/$/, '')
   const token = localStorage.getItem('video_mid_token')

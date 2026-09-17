@@ -1,9 +1,6 @@
 package com.jizhi.videomid.device;
 
-import java.time.LocalDateTime;
-
 public class DeviceStream {
-
     private Long id;
     private String deviceId;
     private String streamType;
@@ -12,10 +9,9 @@ public class DeviceStream {
     private String streamName;
     private String status;
     private Integer sortNo;
-    /** 业务端直播：同一 device 最多一路为 true */
     private Boolean liveEnabled;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Long createdAt;
+    private Long updatedAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -35,8 +31,8 @@ public class DeviceStream {
     public void setSortNo(Integer sortNo) { this.sortNo = sortNo; }
     public Boolean getLiveEnabled() { return liveEnabled; }
     public void setLiveEnabled(Boolean liveEnabled) { this.liveEnabled = liveEnabled; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public Long getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
+    public Long getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Long updatedAt) { this.updatedAt = updatedAt; }
 }

@@ -7,8 +7,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.jizhi.videomid.util.TsUtil;
+
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,7 +46,7 @@ public class AuthService {
         // Redis 仅作会话缓存/注销；连不上时降级为纯 JWT，不影响登录
         cacheToken(token, user.getId());
         try {
-            userRepository.updateLastLogin(user.getId(), LocalDateTime.now());
+            userRepository.updateLastLogin(user.getId(), TsUtil.nowMillis());
         } catch (Exception e) {
             log.warn("update last_login_at failed: {}", e.getMessage());
         }

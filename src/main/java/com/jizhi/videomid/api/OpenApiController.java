@@ -55,9 +55,18 @@ public class OpenApiController {
         return ApiResponse.ok(deviceService.listStreamsByDeviceId(deviceId));
     }
 
+    /** 某月内有录像的日期 yyyy-MM-dd */
+    @GetMapping("/devices/{deviceId}/recording-days")
+    public ApiResponse<List<String>> recordingDays(
+            @PathVariable String deviceId,
+            @RequestParam int year,
+            @RequestParam int month) {
+        return ApiResponse.ok(recordFileService.listRecordingDays(deviceId, year, month));
+    }
+
     /**
      * 3. 按 deviceId + 时间戳查询历史录像，返回视频访问链接
-     * from / to 可选，格式：yyyyMMdd_HHmmss 或 yyyy-MM-dd HH:mm:ss
+     * from / to 可选，毫秒时间戳
      */
     @GetMapping("/devices/{deviceId}/recordings")
     public ApiResponse<List<Map<String, Object>>> listRecordings(

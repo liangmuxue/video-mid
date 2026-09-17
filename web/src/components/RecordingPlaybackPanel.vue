@@ -19,6 +19,7 @@
       :key="deviceId"
       :device-id="deviceId"
       :fetch-recordings="onFetch"
+      :fetch-recording-days="onFetchDays"
       :get-video-url="onVideoUrl"
       :clip-seconds="clipSeconds"
       :show-player="true"
@@ -28,7 +29,7 @@
 
 <script setup>
 import { RecordingDayTimeline } from '../../toolkits/recording-day-timeline/src'
-import { fetchRecordings, recordingFileUrl } from '../api/device'
+import { fetchRecordingDays, fetchRecordings, recordingFileUrl } from '../api/device'
 
 const props = defineProps({
   deviceId: { type: String, required: true },
@@ -36,6 +37,7 @@ const props = defineProps({
   clipSeconds: { type: Number, default: 300 },
   /** 可选：覆盖默认管理端录像接口（业务端传入） */
   fetchRecordings: { type: Function, default: null },
+  fetchRecordingDays: { type: Function, default: null },
   getVideoUrl: { type: Function, default: null }
 })
 
@@ -44,6 +46,11 @@ const emit = defineEmits(['close'])
 function onFetch(id, params) {
   if (props.fetchRecordings) return props.fetchRecordings(id, params)
   return fetchRecordings(id, params)
+}
+
+function onFetchDays(id, params) {
+  if (props.fetchRecordingDays) return props.fetchRecordingDays(id, params)
+  return fetchRecordingDays(id, params)
 }
 
 function onVideoUrl(id, fileName, record) {

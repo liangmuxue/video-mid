@@ -1,8 +1,26 @@
 /** 一天秒数 */
 export const DAY_SECONDS = 24 * 60 * 60
 
+export function todayStr() {
+  return formatDateStr(new Date())
+}
+
+/** Date → yyyy-MM-dd */
+export function formatDateStr(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** 某月起止毫秒时间戳 */
+export function monthBounds(year, month) {
+  const fromDate = new Date(year, month - 1, 1, 0, 0, 0, 0)
+  const toDate = new Date(year, month, 0, 23, 59, 59, 999)
+  return { from: fromDate.getTime(), to: toDate.getTime() }
+}
+
 /**
- * 选中日期的起止（固定 00:00:00 ~ 23:59:59）
+ * 选中日期的起止（毫秒时间戳，当天 00:00:00 ~ 23:59:59.999）
  * @param {string} dateStr yyyy-MM-dd
  */
 export function dayBounds(dateStr) {
@@ -10,21 +28,32 @@ export function dayBounds(dateStr) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     throw new Error('日期格式应为 yyyy-MM-dd')
   }
+  const fromDate = new Date(`${day}T00:00:00`)
+  const toDate = new Date(`${day}T23:59:59.999`)
   return {
     day,
-    from: `${day} 00:00:00`,
-    to: `${day} 23:59:59`
+    from: fromDate.getTime(),
+    to: toDate.getTime()
   }
 }
 
 /**
- * 解析录像时间戳 → Date
- * 支持 yyyyMMdd_HHmmss / ISO / yyyy-MM-dd HH:mm:ss
+ * 解析录像时间 → Date
+ * 支持毫秒时间戳（number / 数字字符串）、yyyyMMdd_HHmmss、ISO、yyyy-MM-dd HH:mm:ss
  */
 export function parseRecordTimestamp(raw) {
-  if (!raw) return null
+  if (raw == null || raw === '') return null
   if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw
+  if (typeof raw === 'number') {
+    const dt = new Date(raw)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
   const s = String(raw).trim()
+  if (/^\d{10,13}$/.test(s)) {
+    const ms = s.length === 10 ? Number(s) * 1000 : Number(s)
+    const dt = new Date(ms)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
   if (/^\d{8}_\d{6}$/.test(s)) {
     const y = s.slice(0, 4)
     const m = s.slice(4, 6)
@@ -95,7 +124,6 @@ export function buildDaySegments(records, dateStr, clipSeconds = 300) {
 
   raw.sort((a, b) => a.startSec - b.startSec)
 
-  // 合并重叠区间，保留代表录像（取最早那段的 record）
   const merged = []
   for (const seg of raw) {
     const last = merged[merged.length - 1]
@@ -123,12 +151,10 @@ export function earliestSegment(segments) {
   return segments.reduce((a, b) => (a.startSec <= b.startSec ? a : b))
 }
 
-/** 点击秒数落在哪个有录像段内（灰色不可点） */
 export function hitSegment(segments, sec) {
   return (segments || []).find((s) => sec >= s.startSec && sec < s.endSec) || null
 }
 
-/** 在段内定位具体录像文件（按开始时间） */
 export function pickRecordAt(segment, sec) {
   if (!segment) return null
   const records = [...(segment.records || [segment.record])].filter(Boolean)

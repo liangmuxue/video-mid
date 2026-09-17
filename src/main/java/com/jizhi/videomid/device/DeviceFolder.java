@@ -1,16 +1,13 @@
 package com.jizhi.videomid.device;
 
-import java.time.LocalDateTime;
-
 public class DeviceFolder {
-
     private Long id;
     private Long parentId;
     private String name;
     private Integer sortNo;
     private String path;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Long createdAt;
+    private Long updatedAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -22,8 +19,8 @@ public class DeviceFolder {
     public void setSortNo(Integer sortNo) { this.sortNo = sortNo; }
     public String getPath() { return path; }
     public void setPath(String path) { this.path = path; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public Long getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
+    public Long getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Long updatedAt) { this.updatedAt = updatedAt; }
 }

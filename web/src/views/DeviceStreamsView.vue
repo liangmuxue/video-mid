@@ -69,7 +69,7 @@
           </thead>
           <tbody>
             <tr v-for="r in recordings" :key="r.fileName">
-              <td class="mono">{{ r.timestamp }}</td>
+              <td class="mono">{{ formatRecordTime(r.recordTime) }}</td>
               <td>{{ r.fileName }}</td>
               <td>{{ formatSize(r.size) }}</td>
               <td class="actions">
@@ -143,6 +143,7 @@ import {
   deleteStream, fetchDevice, fetchDeviceByDeviceId, fetchDevices,
   fetchRecordings, previewStart, recordingFileUrl, registerStream, setStreamLive
 } from '../api/device'
+import { statusLabel } from '../utils/deviceStatus'
 
 const route = useRoute()
 const deviceId = computed(() => decodeURIComponent(route.params.deviceId || ''))
@@ -174,16 +175,22 @@ const regForm = reactive({
 const streams = computed(() => device.value?.streams || [])
 
 function deviceStatusLabel(s) {
-  if (s === 'ON') return '已启用'
-  if (s === 'OFF') return '已停用'
-  return s || '-'
+  return statusLabel(s)
 }
 
 function toApiTime(localValue) {
   if (!localValue) return undefined
-  // datetime-local: 2026-09-10T14:30 -> 2026-09-10 14:30:00
   const s = localValue.length === 16 ? `${localValue}:00` : localValue
-  return s.replace('T', ' ')
+  const dt = new Date(s.replace(' ', 'T'))
+  return Number.isNaN(dt.getTime()) ? undefined : dt.getTime()
+}
+
+function formatRecordTime(ms) {
+  if (ms == null) return '-'
+  const dt = new Date(Number(ms))
+  if (Number.isNaN(dt.getTime())) return String(ms)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`
 }
 
 function formatSize(n) {

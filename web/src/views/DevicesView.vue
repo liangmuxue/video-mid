@@ -69,14 +69,7 @@
                 <td class="mono">{{ d.deviceId }}</td>
                 <td>{{ d.name || '-' }}</td>
                 <td>
-                  <span
-                    class="badge"
-                    :class="{
-                      on: d.status === '已启用' || d.status === 'ON',
-                      off: d.status === '已停用' || d.status === 'OFF',
-                      unavailable: d.status === '不可用'
-                    }"
-                  >{{ statusLabel(d.status) }}</span>
+                  <span class="badge" :class="statusClass(d.status)">{{ statusLabel(d.status) }}</span>
                 </td>
                 <td>{{ d.manufacturer || '-' }}</td>
                 <td>{{ d.address || '-' }}</td>
@@ -112,9 +105,9 @@
           </select>
         </label>
         <label><span>状态</span>
-          <select v-model="form.status">
-            <option value="已启用">已启用</option>
-            <option value="已停用">已停用</option>
+          <select v-model.number="form.status">
+            <option :value="1">已启用</option>
+            <option :value="2">已停用</option>
           </select>
         </label>
         <p class="tip">「不可用」由系统按推流自动判定；停用后不会被巡检改写。</p>
@@ -187,6 +180,13 @@ import {
   updateDevice,
   updateDeviceFolder
 } from '../api/device'
+import {
+  STATUS_DISABLED,
+  STATUS_ENABLED,
+  normalizeStatus,
+  statusClass,
+  statusLabel
+} from '../utils/deviceStatus'
 
 const devices = ref([])
 const folderTree = ref([])
@@ -203,7 +203,7 @@ const form = reactive({
   deviceId: '',
   name: '',
   folderId: null,
-  status: '已启用',
+  status: STATUS_ENABLED,
   manufacturer: '',
   model: '',
   address: '',
@@ -285,17 +285,11 @@ function selectFolder(id) {
   loadDevices()
 }
 
-function statusLabel(s) {
-  if (s === 'ON') return '已启用'
-  if (s === 'OFF') return '已停用'
-  return s || '-'
-}
-
 function openDevice(d = null) {
   formError.value = ''
   editingId.value = d?.id || null
-  const raw = d?.status || '已启用'
-  const manual = raw === '已停用' || raw === 'OFF' || raw === 'off' ? '已停用' : '已启用'
+  const raw = normalizeStatus(d?.status ?? STATUS_ENABLED)
+  const manual = raw === STATUS_DISABLED ? STATUS_DISABLED : STATUS_ENABLED
   Object.assign(form, {
     deviceId: d?.deviceId || '',
     name: d?.name || '',

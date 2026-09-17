@@ -1,0 +1,3955 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "极知视频中台 API",
+    "description": "分类：业务端 / 设备管理 / 录像回放 / 直播 / 对外开放（无鉴权）/ 系统鉴权 / 运维健康 / 内部回调。\n业务接口统一响应 { code, message, data }；code=0 成功。\n时间字段统一为毫秒时间戳（int64）；设备 status：0=不可用 1=已启用 2=已停用。\n业务直播默认使用子码流（sub）。\n需登录接口请带 Authorization: Bearer {token}；/api/open/**、POST /api/streams/register、POST /api/auth/login、/health/**、/index/hook/** 无需鉴权。",
+    "version": "1.4.0"
+  },
+  "servers": [
+    {
+      "url": "http://8.130.74.232:8090",
+      "description": "线上环境"
+    },
+    {
+      "url": "http://127.0.0.1:8090",
+      "description": "本地环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "业务端",
+      "description": "业务门户接口，需登录"
+    },
+    {
+      "name": "设备管理",
+      "description": "设备/目录/码流管理；码流注册无需登录"
+    },
+    {
+      "name": "录像回放",
+      "description": "管理端与业务端录像查询"
+    },
+    {
+      "name": "直播",
+      "description": "预览开播、业务直播"
+    },
+    {
+      "name": "对外开放（无鉴权）",
+      "description": "/api/open/**，第三方免登录调用"
+    },
+    {
+      "name": "系统/鉴权",
+      "description": "登录、登出、当前用户"
+    },
+    {
+      "name": "运维/健康",
+      "description": "依赖连通性检查"
+    },
+    {
+      "name": "内部回调（ZLM Hook）",
+      "description": "仅供 ZLMediaKit 回调，非前端业务接口"
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "系统/鉴权"
+        ],
+        "summary": "登录",
+        "description": "无需鉴权。成功返回 JWT，后续请求 Header：Authorization: Bearer {token}。默认账号见部署说明（如 admin/admin123）。",
+        "operationId": "authLogin",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "description": "用户名与密码",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "example": {
+                "username": "admin",
+                "password": "admin123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespLogin"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiJ9.example",
+                    "tokenType": "Bearer",
+                    "expiresIn": 86400,
+                    "user": {
+                      "id": 1,
+                      "username": "admin",
+                      "nickname": "管理员",
+                      "status": 1,
+                      "lastLoginAt": 1726646400000
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "系统/鉴权"
+        ],
+        "summary": "登出",
+        "description": "需登录。清除 Redis 中的会话缓存；无 Body。",
+        "operationId": "authLogout",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "系统/鉴权"
+        ],
+        "summary": "当前登录用户",
+        "description": "需登录。根据 Token 返回当前用户信息。",
+        "operationId": "authMe",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespUser"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 1,
+                    "username": "admin",
+                    "nickname": "管理员",
+                    "status": 1,
+                    "lastLoginAt": 1726646400000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/deps": {
+      "get": {
+        "tags": [
+          "运维/健康"
+        ],
+        "summary": "依赖连通性检查",
+        "description": "无需鉴权。直接返回对象（不是 {code,message,data} 包装），用于运维探活。",
+        "operationId": "healthDeps",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "探活结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDeps"
+                },
+                "example": {
+                  "mysql": "UP",
+                  "redis": "UP",
+                  "zlm": "UP",
+                  "status": "UP"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/index/hook/on_play": {
+      "post": {
+        "tags": [
+          "内部回调（ZLM Hook）"
+        ],
+        "summary": "ZLM-有播放器开始拉流",
+        "description": "ZLM on_play 回调。服务端对齐/增加 Redis 播放人数。无需鉴权。仅 ZLM 调用。",
+        "operationId": "zlmOnPlay",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "description": "ZLM 推送的 Hook 参数",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZlmHookCommonBody"
+              },
+              "example": {
+                "app": "live",
+                "stream": "cam01_sub",
+                "schema": "http",
+                "id": "player-1",
+                "ip": "1.2.3.4"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "告知 ZLM 处理成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZlmHookOk"
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "success"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/index/hook/on_flow_report": {
+      "post": {
+        "tags": [
+          "内部回调（ZLM Hook）"
+        ],
+        "summary": "ZLM-播放/推流断开上报",
+        "description": "ZLM on_flow_report。播放器断开时回写 Redis 真实人数。无需鉴权。",
+        "operationId": "zlmOnFlowReport",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "description": "含 player 标记：true 表示播放端",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZlmHookCommonBody"
+              },
+              "example": {
+                "player": true,
+                "app": "live",
+                "stream": "cam01_sub",
+                "schema": "http",
+                "id": "player-1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "告知 ZLM 处理成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZlmHookOk"
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "success"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/index/hook/on_stream_none_reader": {
+      "post": {
+        "tags": [
+          "内部回调（ZLM Hook）"
+        ],
+        "summary": "ZLM-流已无人观看",
+        "description": "ZLM on_stream_none_reader。Redis 播放人数置 0；响应 close=false 不主动关流。无需鉴权。",
+        "operationId": "zlmOnNoneReader",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "description": "至少含 app、stream",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZlmHookCommonBody"
+              },
+              "example": {
+                "app": "live",
+                "stream": "cam01_sub"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "返回 close=false，保留流",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZlmHookOk"
+                },
+                "example": {
+                  "code": 0,
+                  "msg": "success",
+                  "close": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/folders/tree": {
+      "get": {
+        "tags": [
+          "业务端"
+        ],
+        "summary": "业务端-目录树",
+        "description": "返回完整设备目录树，含本级/子孙设备数量。无 Query 参数。",
+        "operationId": "bizFolderTree",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespFolderTree"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "id": 1,
+                      "parentId": null,
+                      "name": "园区",
+                      "sortNo": 1,
+                      "path": "/1/",
+                      "deviceCount": 2,
+                      "totalDeviceCount": 5,
+                      "createdAt": 1726560000000,
+                      "updatedAt": 1726560000000,
+                      "children": [
+                        {
+                          "id": 2,
+                          "parentId": 1,
+                          "name": "东门",
+                          "sortNo": 1,
+                          "path": "/1/2/",
+                          "deviceCount": 3,
+                          "totalDeviceCount": 3,
+                          "createdAt": 1726560000000,
+                          "updatedAt": 1726560000000,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices": {
+      "get": {
+        "tags": [
+          "业务端"
+        ],
+        "summary": "业务端-设备列表",
+        "description": "含已停用设备；返回 playable、livePlayable。",
+        "operationId": "bizDevices",
+        "parameters": [
+          {
+            "name": "folderId",
+            "in": "query",
+            "required": false,
+            "description": "按目录过滤：目录主键 ID；不传则返回全部设备",
+            "schema": {
+              "type": "integer",
+              "description": "按目录过滤：目录主键 ID；不传则返回全部设备",
+              "example": 2,
+              "format": "int64"
+            },
+            "example": 2
+          },
+          {
+            "name": "includeChildren",
+            "in": "query",
+            "required": false,
+            "description": "当传入 folderId 时：true=包含子孙目录下设备（默认 true）；false=仅本目录",
+            "schema": {
+              "type": "boolean",
+              "description": "当传入 folderId 时：true=包含子孙目录下设备（默认 true）；false=仅本目录",
+              "example": true
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespBizDeviceList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "id": 1,
+                      "deviceId": "CAM_EAST_01",
+                      "name": "东门球机",
+                      "platformId": null,
+                      "folderId": 2,
+                      "status": 1,
+                      "manufacturer": "宇视",
+                      "model": "IPC-B",
+                      "address": "小区东门",
+                      "ptzType": 1,
+                      "gatewayId": null,
+                      "longitude": 116.4,
+                      "latitude": 39.9,
+                      "streamCount": 2,
+                      "createdAt": 1726560000000,
+                      "updatedAt": 1726646400000,
+                      "playable": true,
+                      "livePlayable": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}": {
+      "get": {
+        "tags": [
+          "业务端"
+        ],
+        "summary": "业务端-设备详情",
+        "description": "含 streams 与 liveStream（业务直播流摘要）。",
+        "operationId": "bizDeviceDetail",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码 deviceId",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码 deviceId",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespBizDeviceDetail"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 1,
+                    "deviceId": "CAM_EAST_01",
+                    "name": "东门球机",
+                    "platformId": null,
+                    "folderId": 2,
+                    "status": 1,
+                    "manufacturer": "宇视",
+                    "model": "IPC-B",
+                    "address": "小区东门",
+                    "ptzType": 1,
+                    "gatewayId": null,
+                    "longitude": 116.4,
+                    "latitude": 39.9,
+                    "streamCount": 2,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000,
+                    "playable": true,
+                    "livePlayable": true,
+                    "streams": [
+                      {
+                        "id": 11,
+                        "deviceId": "CAM_EAST_01",
+                        "streamType": "sub",
+                        "channelId": null,
+                        "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                        "streamName": "东门-子码流",
+                        "status": "ON",
+                        "sortNo": 2,
+                        "liveEnabled": true,
+                        "playCount": 1,
+                        "createdAt": 1726560000000,
+                        "updatedAt": 1726646400000
+                      }
+                    ],
+                    "liveStream": {
+                      "id": 11,
+                      "streamType": "sub",
+                      "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                      "streamName": "东门-子码流",
+                      "liveEnabled": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}/live": {
+      "post": {
+        "tags": [
+          "直播",
+          "业务端"
+        ],
+        "summary": "业务端-开始直播",
+        "description": "仅 status=1（已启用）可直播；使用该设备 liveEnabled 的码流（默认 sub）。无 Body。",
+        "operationId": "bizStartLive",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespLiveStart"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "streamType": "sub",
+                    "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "playUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "liveEnabled": true,
+                    "ref": 1,
+                    "countBy": "zlm-hook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}/recording-days": {
+      "get": {
+        "tags": [
+          "录像回放",
+          "业务端"
+        ],
+        "summary": "业务端-有录像的日期",
+        "description": "返回指定年/月内有录像的日期列表（yyyy-MM-dd），供回放日历展示。status=2 不可调用。",
+        "operationId": "bizRecordingDays",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "description": "【必填】年份，如 2026",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】年份，如 2026",
+              "example": 2026
+            },
+            "example": 2026
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "description": "【必填】月份 1~12",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】月份 1~12",
+              "example": 9
+            },
+            "example": 9
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespRecordingDays"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    "2026-09-10",
+                    "2026-09-15",
+                    "2026-09-17"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}/recordings": {
+      "get": {
+        "tags": [
+          "录像回放",
+          "业务端"
+        ],
+        "summary": "业务端-录像列表",
+        "description": "status=2（已停用）不可回放。from/to 为毫秒时间戳（可选）。",
+        "operationId": "bizRecordings",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "开始时间（含），毫秒时间戳；不传则不限起始",
+            "schema": {
+              "type": "integer",
+              "description": "开始时间（含），毫秒时间戳；不传则不限起始",
+              "example": 1726502400000,
+              "format": "int64"
+            },
+            "example": 1726502400000
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "结束时间（含），毫秒时间戳；不传则不限结束",
+            "schema": {
+              "type": "integer",
+              "description": "结束时间（含），毫秒时间戳；不传则不限结束",
+              "example": 1726588799999,
+              "format": "int64"
+            },
+            "example": 1726588799999
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespRecordingUrlList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "CAM_EAST_01",
+                      "fileName": "20260910_143000.mp4",
+                      "recordTime": 1725952200000,
+                      "size": 12345678,
+                      "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
+                      "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device-folders/tree": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "设备目录树",
+        "description": "管理端目录树。无 Query 参数。",
+        "operationId": "folderTree",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespFolderTree"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "id": 1,
+                      "parentId": null,
+                      "name": "园区",
+                      "sortNo": 1,
+                      "path": "/1/",
+                      "deviceCount": 2,
+                      "totalDeviceCount": 5,
+                      "createdAt": 1726560000000,
+                      "updatedAt": 1726560000000,
+                      "children": [
+                        {
+                          "id": 2,
+                          "parentId": 1,
+                          "name": "东门",
+                          "sortNo": 1,
+                          "path": "/1/2/",
+                          "deviceCount": 3,
+                          "totalDeviceCount": 3,
+                          "createdAt": 1726560000000,
+                          "updatedAt": 1726560000000,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device-folders": {
+      "post": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "新建设备目录",
+        "operationId": "folderCreate",
+        "requestBody": {
+          "required": true,
+          "description": "目录创建参数",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceFolderRequest"
+              },
+              "example": {
+                "parentId": 1,
+                "name": "东门",
+                "sortNo": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespFolderBase"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 2,
+                    "parentId": 1,
+                    "name": "东门",
+                    "sortNo": 1,
+                    "path": "/1/2/",
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726560000000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device-folders/{id}": {
+      "put": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "更新设备目录",
+        "operationId": "folderUpdate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：目录主键 ID",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：目录主键 ID",
+              "example": 2,
+              "format": "int64"
+            },
+            "example": 2
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "待更新字段",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceFolderRequest"
+              },
+              "example": {
+                "name": "东门区域",
+                "sortNo": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespFolderBase"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 2,
+                    "parentId": 1,
+                    "name": "东门区域",
+                    "sortNo": 2,
+                    "path": "/1/2/",
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "删除设备目录",
+        "description": "有子目录或仍挂设备时可能失败，以 message 为准。",
+        "operationId": "folderDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：目录主键 ID",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：目录主键 ID",
+              "example": 2,
+              "format": "int64"
+            },
+            "example": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "设备列表",
+        "operationId": "deviceList",
+        "parameters": [
+          {
+            "name": "folderId",
+            "in": "query",
+            "required": false,
+            "description": "目录主键 ID；不传返回全部",
+            "schema": {
+              "type": "integer",
+              "description": "目录主键 ID；不传返回全部",
+              "example": 2,
+              "format": "int64"
+            },
+            "example": 2
+          },
+          {
+            "name": "includeChildren",
+            "in": "query",
+            "required": false,
+            "description": "是否包含子孙目录设备，默认 true",
+            "schema": {
+              "type": "boolean",
+              "description": "是否包含子孙目录设备，默认 true",
+              "example": true
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespDeviceList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "id": 1,
+                      "deviceId": "CAM_EAST_01",
+                      "name": "东门球机",
+                      "platformId": null,
+                      "folderId": 2,
+                      "status": 1,
+                      "manufacturer": "宇视",
+                      "model": "IPC-B",
+                      "address": "小区东门",
+                      "ptzType": 1,
+                      "gatewayId": null,
+                      "longitude": 116.4,
+                      "latitude": 39.9,
+                      "streamCount": 2,
+                      "createdAt": 1726560000000,
+                      "updatedAt": 1726646400000
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "创建设备",
+        "operationId": "deviceCreate",
+        "requestBody": {
+          "required": true,
+          "description": "设备字段，deviceId 必填",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRequest"
+              },
+              "example": {
+                "deviceId": "CAM_EAST_01",
+                "name": "东门球机",
+                "folderId": 2,
+                "status": 1,
+                "manufacturer": "宇视",
+                "model": "IPC-B",
+                "address": "小区东门"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespDeviceDetail"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 1,
+                    "deviceId": "CAM_EAST_01",
+                    "name": "东门球机",
+                    "platformId": null,
+                    "folderId": 2,
+                    "status": 1,
+                    "manufacturer": "宇视",
+                    "model": "IPC-B",
+                    "address": "小区东门",
+                    "ptzType": 1,
+                    "gatewayId": null,
+                    "longitude": 116.4,
+                    "latitude": 39.9,
+                    "streamCount": 0,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000,
+                    "streams": []
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/by-device-id/{deviceId}": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "按 deviceId 查设备详情",
+        "operationId": "deviceByDeviceId",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespDeviceDetail"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 1,
+                    "deviceId": "CAM_EAST_01",
+                    "name": "东门球机",
+                    "platformId": null,
+                    "folderId": 2,
+                    "status": 1,
+                    "manufacturer": "宇视",
+                    "model": "IPC-B",
+                    "address": "小区东门",
+                    "ptzType": 1,
+                    "gatewayId": null,
+                    "longitude": 116.4,
+                    "latitude": 39.9,
+                    "streamCount": 2,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000,
+                    "streams": [
+                      {
+                        "id": 11,
+                        "deviceId": "CAM_EAST_01",
+                        "streamType": "sub",
+                        "channelId": null,
+                        "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                        "streamName": "东门-子码流",
+                        "status": "ON",
+                        "sortNo": 2,
+                        "liveEnabled": true,
+                        "playCount": 1,
+                        "createdAt": 1726560000000,
+                        "updatedAt": 1726646400000
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "设备详情（主键 id）",
+        "operationId": "deviceDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备主键 ID（非 deviceId）",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：设备主键 ID（非 deviceId）",
+              "example": 1,
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespDeviceDetail"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 1,
+                    "deviceId": "CAM_EAST_01",
+                    "name": "东门球机",
+                    "platformId": null,
+                    "folderId": 2,
+                    "status": 1,
+                    "manufacturer": "宇视",
+                    "model": "IPC-B",
+                    "address": "小区东门",
+                    "ptzType": 1,
+                    "gatewayId": null,
+                    "longitude": 116.4,
+                    "latitude": 39.9,
+                    "streamCount": 2,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000,
+                    "streams": [
+                      {
+                        "id": 11,
+                        "deviceId": "CAM_EAST_01",
+                        "streamType": "sub",
+                        "channelId": null,
+                        "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                        "streamName": "东门-子码流",
+                        "status": "ON",
+                        "sortNo": 2,
+                        "liveEnabled": true,
+                        "playCount": 1,
+                        "createdAt": 1726560000000,
+                        "updatedAt": 1726646400000
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "更新设备",
+        "operationId": "deviceUpdate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备主键 ID",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：设备主键 ID",
+              "example": 1,
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "完整或部分设备字段（以服务端实现为准，建议带齐常用字段）",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRequest"
+              },
+              "example": {
+                "deviceId": "CAM_EAST_01",
+                "name": "东门球机-改",
+                "folderId": 2,
+                "status": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespDeviceDetail"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 1,
+                    "deviceId": "CAM_EAST_01",
+                    "name": "东门球机-改",
+                    "platformId": null,
+                    "folderId": 2,
+                    "status": 2,
+                    "manufacturer": "宇视",
+                    "model": "IPC-B",
+                    "address": "小区东门",
+                    "ptzType": 1,
+                    "gatewayId": null,
+                    "longitude": 116.4,
+                    "latitude": 39.9,
+                    "streamCount": 2,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000,
+                    "streams": [
+                      {
+                        "id": 11,
+                        "deviceId": "CAM_EAST_01",
+                        "streamType": "sub",
+                        "channelId": null,
+                        "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                        "streamName": "东门-子码流",
+                        "status": "ON",
+                        "sortNo": 2,
+                        "liveEnabled": true,
+                        "playCount": 1,
+                        "createdAt": 1726560000000,
+                        "updatedAt": 1726646400000
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "删除设备",
+        "operationId": "deviceDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备主键 ID",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：设备主键 ID",
+              "example": 1,
+              "format": "int64"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/streams/register": {
+      "post": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "码流注册（无鉴权）",
+        "description": "写入/更新 stream_url；拦截器已放行，无需 Token。",
+        "operationId": "streamRegister",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "description": "码流注册参数，deviceId/streamType/streamUrl 必填",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamRegisterRequest"
+              },
+              "example": {
+                "deviceId": "CAM_EAST_01",
+                "streamType": "sub",
+                "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                "streamName": "东门-子码流",
+                "deviceName": "东门球机",
+                "liveEnabled": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespStream"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 11,
+                    "deviceId": "CAM_EAST_01",
+                    "streamType": "sub",
+                    "channelId": null,
+                    "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "streamName": "东门-子码流",
+                    "status": "ON",
+                    "sortNo": 2,
+                    "liveEnabled": true,
+                    "playCount": 1,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/streams/{id}": {
+      "delete": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "删除码流",
+        "operationId": "streamDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：码流主键 ID",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：码流主键 ID",
+              "example": 11,
+              "format": "int64"
+            },
+            "example": 11
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/streams/{id}/live": {
+      "put": {
+        "tags": [
+          "直播"
+        ],
+        "summary": "设为业务直播流",
+        "description": "同设备互斥：将该码流 liveEnabled 置 true，其余置 false。无 Body。",
+        "operationId": "streamSetLive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：码流主键 ID",
+            "schema": {
+              "type": "integer",
+              "description": "路径参数：码流主键 ID",
+              "example": 11,
+              "format": "int64"
+            },
+            "example": 11
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespStream"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "id": 11,
+                    "deviceId": "CAM_EAST_01",
+                    "streamType": "sub",
+                    "channelId": null,
+                    "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "streamName": "东门-子码流",
+                    "status": "ON",
+                    "sortNo": 2,
+                    "liveEnabled": true,
+                    "playCount": 1,
+                    "createdAt": 1726560000000,
+                    "updatedAt": 1726646400000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preview/start": {
+      "post": {
+        "tags": [
+          "直播"
+        ],
+        "summary": "开始预览",
+        "description": "返回已注册播放地址；人数由 ZLM Hook 维护。",
+        "operationId": "previewStart",
+        "requestBody": {
+          "required": true,
+          "description": "预览参数",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              },
+              "example": {
+                "deviceId": "CAM_EAST_01",
+                "streamType": "sub"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespLiveStart"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "streamType": "sub",
+                    "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "playUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "liveEnabled": true,
+                    "ref": 1,
+                    "countBy": "zlm-hook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings": {
+      "get": {
+        "tags": [
+          "录像回放"
+        ],
+        "summary": "管理端-录像列表",
+        "description": "不含 videoUrl；播放请用 GET /api/recordings/{deviceId}/{fileName}。from/to 为毫秒时间戳。",
+        "operationId": "recordingsList",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": true,
+            "description": "【必填】设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "【必填】设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "开始时间（含），毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "开始时间（含），毫秒时间戳",
+              "example": 1726502400000,
+              "format": "int64"
+            },
+            "example": 1726502400000
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "结束时间（含），毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "结束时间（含），毫秒时间戳",
+              "example": 1726588799999,
+              "format": "int64"
+            },
+            "example": 1726588799999
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespRecordingList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "CAM_EAST_01",
+                      "fileName": "20260910_143000.mp4",
+                      "recordTime": 1725952200000,
+                      "size": 12345678,
+                      "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/days": {
+      "get": {
+        "tags": [
+          "录像回放"
+        ],
+        "summary": "管理端-有录像的日期",
+        "description": "返回指定年/月内有录像的日期列表（yyyy-MM-dd），供回放日历展示。",
+        "operationId": "recordingsDays",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": true,
+            "description": "【必填】设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "【必填】设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "description": "【必填】年份，如 2026",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】年份，如 2026",
+              "example": 2026
+            },
+            "example": 2026
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "description": "【必填】月份 1~12",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】月份 1~12",
+              "example": 9
+            },
+            "example": 9
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespRecordingDays"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    "2026-09-10",
+                    "2026-09-15",
+                    "2026-09-17"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/{deviceId}/{fileName}": {
+      "get": {
+        "tags": [
+          "录像回放"
+        ],
+        "summary": "管理端-录像文件",
+        "description": "返回 video/mp4 二进制流，非 JSON。",
+        "operationId": "recordingFile",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：录像文件名，如 20260910_143000.mp4",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：录像文件名，如 20260910_143000.mp4",
+              "example": "20260910_143000.mp4"
+            },
+            "example": "20260910_143000.mp4"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 文件流。Content-Type: video/mp4；Content-Disposition: inline",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "录像文件二进制内容"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）"
+        ],
+        "summary": "开放-查询设备",
+        "description": "无需登录。name、deviceId 均可选，模糊匹配；都不传返回全部。",
+        "operationId": "openSearchDevices",
+        "security": [],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "设备名称，模糊匹配；可选",
+            "schema": {
+              "type": "string",
+              "description": "设备名称，模糊匹配；可选",
+              "example": "东门"
+            },
+            "example": "东门"
+          },
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": false,
+            "description": "设备编码，模糊匹配；可选",
+            "schema": {
+              "type": "string",
+              "description": "设备编码，模糊匹配；可选",
+              "example": "CAM_EAST"
+            },
+            "example": "CAM_EAST"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespDeviceList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "id": 1,
+                      "deviceId": "CAM_EAST_01",
+                      "name": "东门球机",
+                      "platformId": null,
+                      "folderId": 2,
+                      "status": 1,
+                      "manufacturer": "宇视",
+                      "model": "IPC-B",
+                      "address": "小区东门",
+                      "ptzType": 1,
+                      "gatewayId": null,
+                      "longitude": 116.4,
+                      "latitude": 39.9,
+                      "streamCount": 2,
+                      "createdAt": 1726560000000,
+                      "updatedAt": 1726646400000
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices/{deviceId}/streams": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）"
+        ],
+        "summary": "开放-设备码流列表",
+        "description": "无需登录。deviceId 精确匹配；设备不存在返回失败。",
+        "operationId": "openListStreams",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码（精确）",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码（精确）",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespStreamList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "id": 11,
+                      "deviceId": "CAM_EAST_01",
+                      "streamType": "sub",
+                      "channelId": null,
+                      "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                      "streamName": "东门-子码流",
+                      "status": "ON",
+                      "sortNo": 2,
+                      "liveEnabled": true,
+                      "playCount": 1,
+                      "createdAt": 1726560000000,
+                      "updatedAt": 1726646400000
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices/{deviceId}/recording-days": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）"
+        ],
+        "summary": "开放-有录像的日期",
+        "description": "无需登录。返回指定年/月内有录像的日期 yyyy-MM-dd 列表。",
+        "operationId": "openRecordingDays",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "description": "【必填】年份",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】年份",
+              "example": 2026
+            },
+            "example": 2026
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "description": "【必填】月份 1~12",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】月份 1~12",
+              "example": 9
+            },
+            "example": 9
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespRecordingDays"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    "2026-09-10",
+                    "2026-09-15",
+                    "2026-09-17"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices/{deviceId}/recordings": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）"
+        ],
+        "summary": "开放-历史录像列表",
+        "description": "无需登录。返回含 videoUrl；from/to 为毫秒时间戳；无录像时 data=[]。",
+        "operationId": "openListRecordings",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "开始时间（含），毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "开始时间（含），毫秒时间戳",
+              "example": 1726502400000,
+              "format": "int64"
+            },
+            "example": 1726502400000
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "结束时间（含），毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "结束时间（含），毫秒时间戳",
+              "example": 1726588799999,
+              "format": "int64"
+            },
+            "example": 1726588799999
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespRecordingUrlList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "CAM_EAST_01",
+                      "fileName": "20260910_143000.mp4",
+                      "recordTime": 1725952200000,
+                      "size": 12345678,
+                      "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
+                      "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/recordings/{deviceId}/{fileName}": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）"
+        ],
+        "summary": "开放-录像文件直链",
+        "description": "无需登录。返回 video/mp4，供 videoUrl 直接播放。",
+        "operationId": "openRecordingFile",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "fileName",
+            "in": "path",
+            "required": true,
+            "description": "路径参数：录像文件名",
+            "schema": {
+              "type": "string",
+              "description": "路径参数：录像文件名",
+              "example": "20260910_143000.mp4"
+            },
+            "example": "20260910_143000.mp4"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 文件流，无鉴权可直接访问",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "录像文件二进制内容"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FolderNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "目录主键 ID",
+            "example": 1,
+            "format": "int64"
+          },
+          "parentId": {
+            "type": "integer",
+            "description": "父目录 ID；根节点为 null",
+            "nullable": true,
+            "format": "int64"
+          },
+          "name": {
+            "type": "string",
+            "description": "目录名称",
+            "example": "园区"
+          },
+          "sortNo": {
+            "type": "integer",
+            "description": "同级排序号，越小越靠前",
+            "example": 1
+          },
+          "path": {
+            "type": "string",
+            "description": "目录路径，如 /1/ 或 /1/2/",
+            "example": "/1/"
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "deviceCount": {
+            "type": "integer",
+            "description": "本目录直接挂载的设备数量（不含子目录）",
+            "example": 2
+          },
+          "totalDeviceCount": {
+            "type": "integer",
+            "description": "本目录及所有子孙目录下的设备总数",
+            "example": 5
+          },
+          "children": {
+            "type": "array",
+            "description": "子目录列表；叶子节点为空数组 []",
+            "items": {
+              "$ref": "#/components/schemas/FolderNode"
+            }
+          }
+        },
+        "description": "目录树节点"
+      },
+      "DeviceListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "设备主键 ID（数据库自增）",
+            "example": 1,
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "设备业务编码，全局唯一，如 CAM_EAST_01",
+            "example": "CAM_EAST_01"
+          },
+          "name": {
+            "type": "string",
+            "description": "设备名称",
+            "example": "东门球机"
+          },
+          "platformId": {
+            "type": "string",
+            "description": "上级/平台 ID，可空",
+            "nullable": true
+          },
+          "folderId": {
+            "type": "integer",
+            "description": "所属设备目录 ID，可空表示未归类",
+            "example": 2,
+            "nullable": true,
+            "format": "int64"
+          },
+          "status": {
+            "type": "integer",
+            "description": "设备状态：0=不可用（巡检自动设置，不可手改） 1=已启用（可直播可回放） 2=已停用（灰色可见不可播）",
+            "example": 1,
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "description": "厂商名称，可空",
+            "example": "宇视",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "description": "设备型号，可空",
+            "example": "IPC-B",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "description": "安装地址/位置描述，可空",
+            "example": "小区东门",
+            "nullable": true
+          },
+          "ptzType": {
+            "type": "integer",
+            "description": "云台类型：常见 0=无云台，1=球机等，可空",
+            "example": 1,
+            "nullable": true
+          },
+          "gatewayId": {
+            "type": "string",
+            "description": "网关/接入网关 ID，可空",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "description": "经度，可空",
+            "example": 116.4,
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "description": "纬度，可空",
+            "example": 39.9,
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726646400000,
+            "format": "int64"
+          },
+          "streamCount": {
+            "type": "integer",
+            "description": "该设备已注册码流数量",
+            "example": 2
+          }
+        },
+        "description": "设备列表项（不含码流明细）"
+      },
+      "BizDeviceItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "设备主键 ID（数据库自增）",
+            "example": 1,
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "设备业务编码，全局唯一，如 CAM_EAST_01",
+            "example": "CAM_EAST_01"
+          },
+          "name": {
+            "type": "string",
+            "description": "设备名称",
+            "example": "东门球机"
+          },
+          "platformId": {
+            "type": "string",
+            "description": "上级/平台 ID，可空",
+            "nullable": true
+          },
+          "folderId": {
+            "type": "integer",
+            "description": "所属设备目录 ID，可空表示未归类",
+            "example": 2,
+            "nullable": true,
+            "format": "int64"
+          },
+          "status": {
+            "type": "integer",
+            "description": "设备状态：0=不可用（巡检自动设置，不可手改） 1=已启用（可直播可回放） 2=已停用（灰色可见不可播）",
+            "example": 1,
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "description": "厂商名称，可空",
+            "example": "宇视",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "description": "设备型号，可空",
+            "example": "IPC-B",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "description": "安装地址/位置描述，可空",
+            "example": "小区东门",
+            "nullable": true
+          },
+          "ptzType": {
+            "type": "integer",
+            "description": "云台类型：常见 0=无云台，1=球机等，可空",
+            "example": 1,
+            "nullable": true
+          },
+          "gatewayId": {
+            "type": "string",
+            "description": "网关/接入网关 ID，可空",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "description": "经度，可空",
+            "example": 116.4,
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "description": "纬度，可空",
+            "example": 39.9,
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726646400000,
+            "format": "int64"
+          },
+          "streamCount": {
+            "type": "integer",
+            "description": "该设备已注册码流数量",
+            "example": 2
+          },
+          "playable": {
+            "type": "boolean",
+            "description": "业务端可否回放：status=2（已停用）时为 false，其余为 true",
+            "example": true
+          },
+          "livePlayable": {
+            "type": "boolean",
+            "description": "业务端可否直播：仅 status=1（已启用）时为 true",
+            "example": true
+          }
+        },
+        "description": "业务端设备列表项"
+      },
+      "StreamView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "码流主键 ID",
+            "example": 11,
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "所属设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "streamType": {
+            "type": "string",
+            "description": "码流类型：main=主码流，sub=子码流",
+            "example": "sub"
+          },
+          "channelId": {
+            "type": "string",
+            "description": "通道 ID（国标等场景），可空",
+            "nullable": true
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "播放/取流地址（如 FLV/RTMP/HLS 等，按注册写入）",
+            "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+          },
+          "streamName": {
+            "type": "string",
+            "description": "码流显示名称，可空",
+            "example": "东门-子码流",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "码流状态，如 ON/OFF",
+            "example": "ON"
+          },
+          "sortNo": {
+            "type": "integer",
+            "description": "排序号，越小越靠前",
+            "example": 2
+          },
+          "liveEnabled": {
+            "type": "boolean",
+            "description": "是否为该设备的业务直播流（同设备仅一条为 true）",
+            "example": true
+          },
+          "playCount": {
+            "type": "integer",
+            "description": "当前播放人数（由 ZLM Hook 维护）",
+            "example": 0
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726646400000,
+            "format": "int64"
+          }
+        },
+        "description": "码流信息"
+      },
+      "DeviceDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "设备主键 ID（数据库自增）",
+            "example": 1,
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "设备业务编码，全局唯一，如 CAM_EAST_01",
+            "example": "CAM_EAST_01"
+          },
+          "name": {
+            "type": "string",
+            "description": "设备名称",
+            "example": "东门球机"
+          },
+          "platformId": {
+            "type": "string",
+            "description": "上级/平台 ID，可空",
+            "nullable": true
+          },
+          "folderId": {
+            "type": "integer",
+            "description": "所属设备目录 ID，可空表示未归类",
+            "example": 2,
+            "nullable": true,
+            "format": "int64"
+          },
+          "status": {
+            "type": "integer",
+            "description": "设备状态：0=不可用（巡检自动设置，不可手改） 1=已启用（可直播可回放） 2=已停用（灰色可见不可播）",
+            "example": 1,
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "description": "厂商名称，可空",
+            "example": "宇视",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "description": "设备型号，可空",
+            "example": "IPC-B",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "description": "安装地址/位置描述，可空",
+            "example": "小区东门",
+            "nullable": true
+          },
+          "ptzType": {
+            "type": "integer",
+            "description": "云台类型：常见 0=无云台，1=球机等，可空",
+            "example": 1,
+            "nullable": true
+          },
+          "gatewayId": {
+            "type": "string",
+            "description": "网关/接入网关 ID，可空",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "description": "经度，可空",
+            "example": 116.4,
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "description": "纬度，可空",
+            "example": 39.9,
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726646400000,
+            "format": "int64"
+          },
+          "streamCount": {
+            "type": "integer",
+            "description": "码流数量，等于 streams 数组长度",
+            "example": 2
+          },
+          "streams": {
+            "type": "array",
+            "description": "该设备下全部码流列表",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "description": "码流主键 ID",
+                  "example": 11,
+                  "format": "int64"
+                },
+                "deviceId": {
+                  "type": "string",
+                  "description": "所属设备编码",
+                  "example": "CAM_EAST_01"
+                },
+                "streamType": {
+                  "type": "string",
+                  "description": "码流类型：main=主码流，sub=子码流",
+                  "example": "sub"
+                },
+                "channelId": {
+                  "type": "string",
+                  "description": "通道 ID（国标等场景），可空",
+                  "nullable": true
+                },
+                "streamUrl": {
+                  "type": "string",
+                  "description": "播放/取流地址（如 FLV/RTMP/HLS 等，按注册写入）",
+                  "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+                },
+                "streamName": {
+                  "type": "string",
+                  "description": "码流显示名称，可空",
+                  "example": "东门-子码流",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string",
+                  "description": "码流状态，如 ON/OFF",
+                  "example": "ON"
+                },
+                "sortNo": {
+                  "type": "integer",
+                  "description": "排序号，越小越靠前",
+                  "example": 2
+                },
+                "liveEnabled": {
+                  "type": "boolean",
+                  "description": "是否为该设备的业务直播流（同设备仅一条为 true）",
+                  "example": true
+                },
+                "playCount": {
+                  "type": "integer",
+                  "description": "当前播放人数（由 ZLM Hook 维护）",
+                  "example": 0
+                },
+                "createdAt": {
+                  "type": "integer",
+                  "description": "创建时间（毫秒时间戳）",
+                  "example": 1726560000000,
+                  "format": "int64"
+                },
+                "updatedAt": {
+                  "type": "integer",
+                  "description": "最后更新时间（毫秒时间戳）",
+                  "example": 1726646400000,
+                  "format": "int64"
+                }
+              },
+              "description": "码流信息"
+            }
+          }
+        },
+        "description": "设备详情（含码流列表）"
+      },
+      "BizLiveStreamBrief": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "业务直播流的码流主键 ID",
+            "example": 11,
+            "format": "int64"
+          },
+          "streamType": {
+            "type": "string",
+            "description": "业务直播使用的码流类型，默认优先 sub",
+            "example": "sub"
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "业务直播播放地址",
+            "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+          },
+          "streamName": {
+            "type": "string",
+            "description": "码流名称",
+            "example": "东门-子码流"
+          },
+          "liveEnabled": {
+            "type": "boolean",
+            "description": "固定为 true，表示当前即为业务直播流",
+            "example": true
+          }
+        },
+        "description": "业务直播流摘要；设备未配置业务直播流时整个字段为 null"
+      },
+      "BizDeviceDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "设备主键 ID（数据库自增）",
+            "example": 1,
+            "format": "int64"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "设备业务编码，全局唯一，如 CAM_EAST_01",
+            "example": "CAM_EAST_01"
+          },
+          "name": {
+            "type": "string",
+            "description": "设备名称",
+            "example": "东门球机"
+          },
+          "platformId": {
+            "type": "string",
+            "description": "上级/平台 ID，可空",
+            "nullable": true
+          },
+          "folderId": {
+            "type": "integer",
+            "description": "所属设备目录 ID，可空表示未归类",
+            "example": 2,
+            "nullable": true,
+            "format": "int64"
+          },
+          "status": {
+            "type": "integer",
+            "description": "设备状态：0=不可用（巡检自动设置，不可手改） 1=已启用（可直播可回放） 2=已停用（灰色可见不可播）",
+            "example": 1,
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "description": "厂商名称，可空",
+            "example": "宇视",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "description": "设备型号，可空",
+            "example": "IPC-B",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "description": "安装地址/位置描述，可空",
+            "example": "小区东门",
+            "nullable": true
+          },
+          "ptzType": {
+            "type": "integer",
+            "description": "云台类型：常见 0=无云台，1=球机等，可空",
+            "example": 1,
+            "nullable": true
+          },
+          "gatewayId": {
+            "type": "string",
+            "description": "网关/接入网关 ID，可空",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "description": "经度，可空",
+            "example": 116.4,
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "description": "纬度，可空",
+            "example": 39.9,
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726646400000,
+            "format": "int64"
+          },
+          "streamCount": {
+            "type": "integer",
+            "description": "码流数量",
+            "example": 2
+          },
+          "playable": {
+            "type": "boolean",
+            "description": "可否回放：status=2 时为 false",
+            "example": true
+          },
+          "livePlayable": {
+            "type": "boolean",
+            "description": "可否直播：仅 status=1 时为 true",
+            "example": true
+          },
+          "streams": {
+            "type": "array",
+            "description": "设备下全部码流",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "description": "码流主键 ID",
+                  "example": 11,
+                  "format": "int64"
+                },
+                "deviceId": {
+                  "type": "string",
+                  "description": "所属设备编码",
+                  "example": "CAM_EAST_01"
+                },
+                "streamType": {
+                  "type": "string",
+                  "description": "码流类型：main=主码流，sub=子码流",
+                  "example": "sub"
+                },
+                "channelId": {
+                  "type": "string",
+                  "description": "通道 ID（国标等场景），可空",
+                  "nullable": true
+                },
+                "streamUrl": {
+                  "type": "string",
+                  "description": "播放/取流地址（如 FLV/RTMP/HLS 等，按注册写入）",
+                  "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+                },
+                "streamName": {
+                  "type": "string",
+                  "description": "码流显示名称，可空",
+                  "example": "东门-子码流",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string",
+                  "description": "码流状态，如 ON/OFF",
+                  "example": "ON"
+                },
+                "sortNo": {
+                  "type": "integer",
+                  "description": "排序号，越小越靠前",
+                  "example": 2
+                },
+                "liveEnabled": {
+                  "type": "boolean",
+                  "description": "是否为该设备的业务直播流（同设备仅一条为 true）",
+                  "example": true
+                },
+                "playCount": {
+                  "type": "integer",
+                  "description": "当前播放人数（由 ZLM Hook 维护）",
+                  "example": 0
+                },
+                "createdAt": {
+                  "type": "integer",
+                  "description": "创建时间（毫秒时间戳）",
+                  "example": 1726560000000,
+                  "format": "int64"
+                },
+                "updatedAt": {
+                  "type": "integer",
+                  "description": "最后更新时间（毫秒时间戳）",
+                  "example": 1726646400000,
+                  "format": "int64"
+                }
+              },
+              "description": "码流信息"
+            }
+          },
+          "liveStream": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "业务直播流的码流主键 ID",
+                "example": 11,
+                "format": "int64"
+              },
+              "streamType": {
+                "type": "string",
+                "description": "业务直播使用的码流类型，默认优先 sub",
+                "example": "sub"
+              },
+              "streamUrl": {
+                "type": "string",
+                "description": "业务直播播放地址",
+                "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+              },
+              "streamName": {
+                "type": "string",
+                "description": "码流名称",
+                "example": "东门-子码流"
+              },
+              "liveEnabled": {
+                "type": "boolean",
+                "description": "固定为 true，表示当前即为业务直播流",
+                "example": true
+              }
+            },
+            "description": "当前业务直播流配置；未设置时为 null",
+            "nullable": true
+          }
+        },
+        "description": "业务端设备详情"
+      },
+      "LiveStartResult": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "streamType": {
+            "type": "string",
+            "description": "实际开播使用的码流类型",
+            "example": "sub"
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "取流/播放地址",
+            "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+          },
+          "playUrl": {
+            "type": "string",
+            "description": "前端播放地址，与 streamUrl 相同",
+            "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+          },
+          "liveEnabled": {
+            "type": "boolean",
+            "description": "该码流是否标记为业务直播流",
+            "example": true
+          },
+          "ref": {
+            "type": "integer",
+            "description": "当前播放引用人数（ZLM Hook 统计）",
+            "example": 1
+          },
+          "countBy": {
+            "type": "string",
+            "description": "人数统计来源说明，固定为 zlm-hook",
+            "example": "zlm-hook"
+          }
+        },
+        "description": "开播/预览结果"
+      },
+      "RecordingItem": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "录像文件名，一般为 yyyyMMdd_HHmmss.mp4",
+            "example": "20260910_143000.mp4"
+          },
+          "recordTime": {
+            "type": "integer",
+            "description": "录制时刻（毫秒时间戳，从文件名解析）",
+            "example": 1725952200000,
+            "format": "int64"
+          },
+          "size": {
+            "type": "integer",
+            "description": "文件大小，单位：字节",
+            "example": 12345678,
+            "format": "int64"
+          },
+          "path": {
+            "type": "string",
+            "description": "服务器本地绝对路径（内部用，对外可忽略）",
+            "example": "/data/.../20260910_143000.mp4"
+          }
+        },
+        "description": "录像文件信息（管理端，无外链）"
+      },
+      "RecordingWithUrl": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "录像文件名，一般为 yyyyMMdd_HHmmss.mp4",
+            "example": "20260910_143000.mp4"
+          },
+          "recordTime": {
+            "type": "integer",
+            "description": "录制时刻（毫秒时间戳，从文件名解析）",
+            "example": 1725952200000,
+            "format": "int64"
+          },
+          "size": {
+            "type": "integer",
+            "description": "文件大小，单位：字节",
+            "example": 12345678,
+            "format": "int64"
+          },
+          "path": {
+            "type": "string",
+            "description": "服务器本地绝对路径（内部用，对外可忽略）",
+            "example": "/data/.../20260910_143000.mp4"
+          },
+          "videoUrl": {
+            "type": "string",
+            "description": "可直接播放的绝对地址，指向开放接口 /api/open/recordings/{deviceId}/{fileName}，无需 Token",
+            "example": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
+          }
+        },
+        "description": "带播放链接的录像项"
+      },
+      "FolderBase": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "目录主键 ID",
+            "example": 1,
+            "format": "int64"
+          },
+          "parentId": {
+            "type": "integer",
+            "description": "父目录 ID；根节点为 null",
+            "nullable": true,
+            "format": "int64"
+          },
+          "name": {
+            "type": "string",
+            "description": "目录名称",
+            "example": "园区"
+          },
+          "sortNo": {
+            "type": "integer",
+            "description": "同级排序号，越小越靠前",
+            "example": 1
+          },
+          "path": {
+            "type": "string",
+            "description": "目录路径，如 /1/ 或 /1/2/",
+            "example": "/1/"
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "最后更新时间（毫秒时间戳）",
+            "example": 1726560000000,
+            "format": "int64"
+          }
+        },
+        "description": "目录基本信息"
+      },
+      "DeviceRequest": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "【必填】设备业务编码，创建后一般不改",
+            "example": "CAM_EAST_01"
+          },
+          "name": {
+            "type": "string",
+            "description": "设备名称",
+            "example": "东门球机"
+          },
+          "platformId": {
+            "type": "string",
+            "description": "上级/平台 ID，可空",
+            "nullable": true
+          },
+          "folderId": {
+            "type": "integer",
+            "description": "所属目录 ID，可空",
+            "example": 2,
+            "nullable": true,
+            "format": "int64"
+          },
+          "status": {
+            "type": "integer",
+            "description": "人工可写状态：1=已启用 2=已停用（0 不可用仅巡检写入）",
+            "example": 1,
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "manufacturer": {
+            "type": "string",
+            "description": "厂商",
+            "example": "宇视"
+          },
+          "model": {
+            "type": "string",
+            "description": "型号",
+            "example": "IPC-B"
+          },
+          "address": {
+            "type": "string",
+            "description": "安装地址",
+            "example": "小区东门"
+          },
+          "ptzType": {
+            "type": "integer",
+            "description": "云台类型",
+            "example": 1
+          },
+          "gatewayId": {
+            "type": "string",
+            "description": "网关 ID，可空",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "description": "经度，可空",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "description": "纬度，可空",
+            "nullable": true
+          }
+        },
+        "required": [
+          "deviceId"
+        ],
+        "description": "创建设备/更新设备请求体"
+      },
+      "DeviceFolderRequest": {
+        "type": "object",
+        "properties": {
+          "parentId": {
+            "type": "integer",
+            "description": "父目录 ID；不传或 null 表示挂在根下",
+            "example": 1,
+            "nullable": true,
+            "format": "int64"
+          },
+          "name": {
+            "type": "string",
+            "description": "目录名称",
+            "example": "东门"
+          },
+          "sortNo": {
+            "type": "integer",
+            "description": "同级排序号",
+            "example": 1
+          }
+        },
+        "description": "新建/更新目录请求体"
+      },
+      "StreamRegisterRequest": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "【必填】设备编码；不存在时可顺带创建设备",
+            "example": "CAM_EAST_01"
+          },
+          "streamType": {
+            "type": "string",
+            "description": "【必填】码流类型，如 main / sub",
+            "example": "sub"
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "【必填】播放/取流 URL",
+            "example": "http://8.130.74.232:8080/live/cam01_sub.live.flv"
+          },
+          "streamName": {
+            "type": "string",
+            "description": "码流名称，可空",
+            "example": "东门-子码流"
+          },
+          "channelId": {
+            "type": "string",
+            "description": "通道 ID，可空",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "码流状态，如 ON",
+            "example": "ON"
+          },
+          "sortNo": {
+            "type": "integer",
+            "description": "排序号",
+            "example": 2
+          },
+          "liveEnabled": {
+            "type": "boolean",
+            "description": "是否设为业务直播流；true 时同设备其他码流会取消直播标记",
+            "example": true
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "注册时顺带写入/更新的设备名称，可空",
+            "example": "东门球机"
+          }
+        },
+        "required": [
+          "deviceId",
+          "streamType",
+          "streamUrl"
+        ],
+        "description": "码流注册请求体（本接口无需登录）"
+      },
+      "PreviewRequest": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "【必填】设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "streamType": {
+            "type": "string",
+            "description": "码流类型；不传默认 sub（子码流）",
+            "example": "sub"
+          }
+        },
+        "required": [
+          "deviceId"
+        ],
+        "description": "开始预览请求体"
+      },
+      "RespFolderTree": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "目录树根节点数组",
+            "items": {
+              "$ref": "#/components/schemas/FolderNode"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 1,
+              "parentId": null,
+              "name": "园区",
+              "sortNo": 1,
+              "path": "/1/",
+              "deviceCount": 2,
+              "totalDeviceCount": 5,
+              "createdAt": 1726560000000,
+              "updatedAt": 1726560000000,
+              "children": [
+                {
+                  "id": 2,
+                  "parentId": 1,
+                  "name": "东门",
+                  "sortNo": 1,
+                  "path": "/1/2/",
+                  "deviceCount": 3,
+                  "totalDeviceCount": 3,
+                  "createdAt": 1726560000000,
+                  "updatedAt": 1726560000000,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "RespBizDeviceList": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "业务端设备列表",
+            "items": {
+              "$ref": "#/components/schemas/BizDeviceItem"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 1,
+              "deviceId": "CAM_EAST_01",
+              "name": "东门球机",
+              "platformId": null,
+              "folderId": 2,
+              "status": 1,
+              "manufacturer": "宇视",
+              "model": "IPC-B",
+              "address": "小区东门",
+              "ptzType": 1,
+              "gatewayId": null,
+              "longitude": 116.4,
+              "latitude": 39.9,
+              "streamCount": 2,
+              "createdAt": 1726560000000,
+              "updatedAt": 1726646400000,
+              "playable": true,
+              "livePlayable": true
+            }
+          ]
+        }
+      },
+      "RespBizDeviceDetail": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/BizDeviceDetail"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "id": 1,
+            "deviceId": "CAM_EAST_01",
+            "name": "东门球机",
+            "platformId": null,
+            "folderId": 2,
+            "status": 1,
+            "manufacturer": "宇视",
+            "model": "IPC-B",
+            "address": "小区东门",
+            "ptzType": 1,
+            "gatewayId": null,
+            "longitude": 116.4,
+            "latitude": 39.9,
+            "streamCount": 2,
+            "createdAt": 1726560000000,
+            "updatedAt": 1726646400000,
+            "playable": true,
+            "livePlayable": true,
+            "streams": [
+              {
+                "id": 11,
+                "deviceId": "CAM_EAST_01",
+                "streamType": "sub",
+                "channelId": null,
+                "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                "streamName": "东门-子码流",
+                "status": "ON",
+                "sortNo": 2,
+                "liveEnabled": true,
+                "playCount": 1,
+                "createdAt": 1726560000000,
+                "updatedAt": 1726646400000
+              }
+            ],
+            "liveStream": {
+              "id": 11,
+              "streamType": "sub",
+              "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+              "streamName": "东门-子码流",
+              "liveEnabled": true
+            }
+          }
+        }
+      },
+      "RespLiveStart": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LiveStartResult"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "deviceId": "CAM_EAST_01",
+            "streamType": "sub",
+            "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+            "playUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+            "liveEnabled": true,
+            "ref": 1,
+            "countBy": "zlm-hook"
+          }
+        }
+      },
+      "RespRecordingUrlList": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "录像列表（含 videoUrl）",
+            "items": {
+              "$ref": "#/components/schemas/RecordingWithUrl"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "deviceId": "CAM_EAST_01",
+              "fileName": "20260910_143000.mp4",
+              "recordTime": 1725952200000,
+              "size": 12345678,
+              "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
+              "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
+            }
+          ]
+        }
+      },
+      "RespFolderBase": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FolderBase"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "id": 2,
+            "parentId": 1,
+            "name": "东门",
+            "sortNo": 1,
+            "path": "/1/2/",
+            "createdAt": 1726560000000,
+            "updatedAt": 1726560000000
+          }
+        }
+      },
+      "RespVoid": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "nullable": true,
+            "description": "无业务数据，固定为 null",
+            "example": null
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": null
+        }
+      },
+      "RespDeviceList": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "设备列表",
+            "items": {
+              "$ref": "#/components/schemas/DeviceListItem"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 1,
+              "deviceId": "CAM_EAST_01",
+              "name": "东门球机",
+              "platformId": null,
+              "folderId": 2,
+              "status": 1,
+              "manufacturer": "宇视",
+              "model": "IPC-B",
+              "address": "小区东门",
+              "ptzType": 1,
+              "gatewayId": null,
+              "longitude": 116.4,
+              "latitude": 39.9,
+              "streamCount": 2,
+              "createdAt": 1726560000000,
+              "updatedAt": 1726646400000
+            }
+          ]
+        }
+      },
+      "RespDeviceDetail": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DeviceDetail"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "id": 1,
+            "deviceId": "CAM_EAST_01",
+            "name": "东门球机",
+            "platformId": null,
+            "folderId": 2,
+            "status": 1,
+            "manufacturer": "宇视",
+            "model": "IPC-B",
+            "address": "小区东门",
+            "ptzType": 1,
+            "gatewayId": null,
+            "longitude": 116.4,
+            "latitude": 39.9,
+            "streamCount": 2,
+            "createdAt": 1726560000000,
+            "updatedAt": 1726646400000,
+            "streams": [
+              {
+                "id": 11,
+                "deviceId": "CAM_EAST_01",
+                "streamType": "sub",
+                "channelId": null,
+                "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                "streamName": "东门-子码流",
+                "status": "ON",
+                "sortNo": 2,
+                "liveEnabled": true,
+                "playCount": 1,
+                "createdAt": 1726560000000,
+                "updatedAt": 1726646400000
+              }
+            ]
+          }
+        }
+      },
+      "RespStream": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StreamView"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "id": 11,
+            "deviceId": "CAM_EAST_01",
+            "streamType": "sub",
+            "channelId": null,
+            "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+            "streamName": "东门-子码流",
+            "status": "ON",
+            "sortNo": 2,
+            "liveEnabled": true,
+            "playCount": 1,
+            "createdAt": 1726560000000,
+            "updatedAt": 1726646400000
+          }
+        }
+      },
+      "RespStreamList": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "码流列表",
+            "items": {
+              "$ref": "#/components/schemas/StreamView"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 11,
+              "deviceId": "CAM_EAST_01",
+              "streamType": "sub",
+              "channelId": null,
+              "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+              "streamName": "东门-子码流",
+              "status": "ON",
+              "sortNo": 2,
+              "liveEnabled": true,
+              "playCount": 1,
+              "createdAt": 1726560000000,
+              "updatedAt": 1726646400000
+            }
+          ]
+        }
+      },
+      "RespRecordingList": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "录像列表（无 videoUrl）",
+            "items": {
+              "$ref": "#/components/schemas/RecordingItem"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "deviceId": "CAM_EAST_01",
+              "fileName": "20260910_143000.mp4",
+              "recordTime": 1725952200000,
+              "size": 12345678,
+              "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4"
+            }
+          ]
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "【必填】登录用户名",
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "description": "【必填】登录密码",
+            "example": "admin123"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "description": "登录请求体"
+      },
+      "UserView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "用户主键 ID",
+            "example": 1,
+            "format": "int64"
+          },
+          "username": {
+            "type": "string",
+            "description": "登录用户名",
+            "example": "admin"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "昵称/显示名，可空",
+            "example": "管理员",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "description": "账号状态：1=启用 0=禁用",
+            "example": 1,
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "lastLoginAt": {
+            "type": "integer",
+            "description": "最近一次登录时间（毫秒时间戳）；从未登录为 null",
+            "example": 1726560000000,
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "description": "当前用户信息"
+      },
+      "LoginResult": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "会话 JWT，后续请求放 Authorization: Bearer {token}",
+            "example": "eyJhbGciOi..."
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "令牌类型，固定 Bearer",
+            "example": "Bearer"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "有效期秒数",
+            "example": 86400
+          },
+          "user": {
+            "description": "登录用户基本信息",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserView"
+              }
+            ]
+          }
+        },
+        "description": "登录成功返回 data"
+      },
+      "RespLogin": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginResult"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "token": "eyJhbGciOiJIUzI1NiJ9.example",
+            "tokenType": "Bearer",
+            "expiresIn": 86400,
+            "user": {
+              "id": 1,
+              "username": "admin",
+              "nickname": "管理员",
+              "status": 1,
+              "lastLoginAt": 1726646400000
+            }
+          }
+        }
+      },
+      "RespUser": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserView"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "id": 1,
+            "username": "admin",
+            "nickname": "管理员",
+            "status": 1,
+            "lastLoginAt": 1726646400000
+          }
+        }
+      },
+      "RespRecordingDays": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "某月内有录像的日期列表（升序）",
+            "items": {
+              "type": "string",
+              "description": "有录像的日期 yyyy-MM-dd",
+              "example": "2026-09-17"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            "2026-09-10",
+            "2026-09-15",
+            "2026-09-17"
+          ]
+        }
+      },
+      "HealthDeps": {
+        "type": "object",
+        "properties": {
+          "mysql": {
+            "type": "string",
+            "description": "MySQL 连通性：UP 或 DOWN: 错误信息",
+            "example": "UP"
+          },
+          "redis": {
+            "type": "string",
+            "description": "Redis 连通性：UP 或 DOWN: 错误信息",
+            "example": "UP"
+          },
+          "zlm": {
+            "type": "string",
+            "description": "ZLMediaKit 连通性：UP 或 DOWN",
+            "example": "UP"
+          },
+          "status": {
+            "type": "string",
+            "description": "汇总状态：三者都 UP 则为 UP，否则 DOWN",
+            "example": "UP"
+          }
+        },
+        "description": "依赖健康检查结果（非 ApiResponse 包装，直接返回对象）"
+      },
+      "ZlmHookCommonBody": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "description": "ZLM 应用名 app，与码流注册 URL 中的 app 段对应",
+            "example": "live"
+          },
+          "stream": {
+            "type": "string",
+            "description": "ZLM 流 ID stream，与码流注册 URL 中的流名对应",
+            "example": "cam01_sub"
+          },
+          "schema": {
+            "type": "string",
+            "description": "协议，如 rtsp/rtmp/http-flv 等，可空",
+            "example": "http"
+          },
+          "id": {
+            "type": "string",
+            "description": "播放器/会话 ID，用于去重计数，可空",
+            "example": "player-uuid-1"
+          },
+          "ip": {
+            "type": "string",
+            "description": "客户端 IP，可空",
+            "example": "1.2.3.4"
+          },
+          "player": {
+            "type": "boolean",
+            "description": "是否播放端（on_flow_report 使用）：true=播放器断开",
+            "example": true
+          }
+        },
+        "description": "ZLM Hook 回调常见字段（ZLM 还会附带其它字段，服务端按需读取）"
+      },
+      "ZlmHookOk": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "ZLM 约定：0 表示成功",
+            "example": 0
+          },
+          "msg": {
+            "type": "string",
+            "description": "提示信息（注意字段名为 msg，不是 message）",
+            "example": "success"
+          },
+          "close": {
+            "type": "boolean",
+            "description": "仅 on_stream_none_reader 返回：是否关闭流；本服务固定 false（不主动关流）",
+            "example": false
+          }
+        },
+        "description": "返回给 ZLM 的 Hook 响应"
+      }
+    }
+  }
+}

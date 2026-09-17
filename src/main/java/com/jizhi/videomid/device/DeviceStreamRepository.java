@@ -1,5 +1,6 @@
 package com.jizhi.videomid.device;
 
+import com.jizhi.videomid.util.TsUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -7,8 +8,9 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,10 +32,8 @@ public class DeviceStreamRepository {
         } catch (Exception e) {
             s.setLiveEnabled(false);
         }
-        Timestamp c = rs.getTimestamp("created_at");
-        if (c != null) s.setCreatedAt(c.toLocalDateTime());
-        Timestamp u = rs.getTimestamp("updated_at");
-        if (u != null) s.setUpdatedAt(u.toLocalDateTime());
+        s.setCreatedAt(readMillis(rs, "created_at"));
+        s.setUpdatedAt(readMillis(rs, "updated_at"));
         return s;
     };
 
@@ -73,10 +73,11 @@ public class DeviceStreamRepository {
     }
 
     public long insert(DeviceStream s) {
+        long now = TsUtil.nowMillis();
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device_stream (device_id, stream_type, channel_id, stream_url, stream_name, status, sort_no, live_enabled) VALUES (?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device_stream (device_id, stream_type, channel_id, stream_url, stream_name, status, sort_no, live_enabled, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, s.getDeviceId());
             ps.setString(2, s.getStreamType());
@@ -86,27 +87,35 @@ public class DeviceStreamRepository {
             ps.setString(6, s.getStatus() == null ? "OFF" : s.getStatus());
             ps.setInt(7, s.getSortNo() == null ? 0 : s.getSortNo());
             ps.setInt(8, Boolean.TRUE.equals(s.getLiveEnabled()) ? 1 : 0);
+            ps.setLong(9, now);
+            ps.setLong(10, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
+        s.setCreatedAt(now);
+        s.setUpdatedAt(now);
         return key == null ? 0L : key.longValue();
     }
 
     public int update(DeviceStream s) {
+        long now = TsUtil.nowMillis();
+        s.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device_stream SET channel_id=?, stream_url=?, stream_name=?, status=?, sort_no=?, live_enabled=? WHERE id=?",
+                "UPDATE device_stream SET channel_id=?, stream_url=?, stream_name=?, status=?, sort_no=?, live_enabled=?, updated_at=? WHERE id=?",
                 blankToNull(s.getChannelId()), s.getStreamUrl(), s.getStreamName(),
                 s.getStatus(), s.getSortNo() == null ? 0 : s.getSortNo(),
                 Boolean.TRUE.equals(s.getLiveEnabled()) ? 1 : 0,
-                s.getId());
+                now, s.getId());
     }
 
     public int clearLiveByDeviceId(String deviceId) {
-        return jdbc.update("UPDATE device_stream SET live_enabled = 0 WHERE device_id = ?", deviceId);
+        return jdbc.update("UPDATE device_stream SET live_enabled = 0, updated_at = ? WHERE device_id = ?",
+                TsUtil.nowMillis(), deviceId);
     }
 
     public int setLive(Long id, boolean enabled) {
-        return jdbc.update("UPDATE device_stream SET live_enabled = ? WHERE id = ?", enabled ? 1 : 0, id);
+        return jdbc.update("UPDATE device_stream SET live_enabled = ?, updated_at = ? WHERE id = ?",
+                enabled ? 1 : 0, TsUtil.nowMillis(), id);
     }
 
     public int deleteById(Long id) {
@@ -119,5 +128,10 @@ public class DeviceStreamRepository {
 
     private static String blankToNull(String v) {
         return v == null || v.isBlank() ? null : v;
+    }
+
+    private static Long readMillis(ResultSet rs, String col) throws SQLException {
+        long v = rs.getLong(col);
+        return rs.wasNull() ? null : v;
     }
 }

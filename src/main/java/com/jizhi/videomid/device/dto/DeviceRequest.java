@@ -8,7 +8,8 @@ public class DeviceRequest {
     private String name;
     private String platformId;
     private Long folderId;
-    private String status;
+    /** 1=已启用 2=已停用（0 不可用仅系统写入） */
+    private Integer status;
     private String manufacturer;
     private String model;
     private String address;
@@ -25,8 +26,8 @@ public class DeviceRequest {
     public void setPlatformId(String platformId) { this.platformId = platformId; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public Integer getStatus() { return status; }
+    public void setStatus(Integer status) { this.status = status; }
     public String getManufacturer() { return manufacturer; }
     public void setManufacturer(String manufacturer) { this.manufacturer = manufacturer; }
     public String getModel() { return model; }

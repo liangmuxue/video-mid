@@ -1,5 +1,6 @@
 package com.jizhi.videomid.device;
 
+import com.jizhi.videomid.util.TsUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -7,8 +8,9 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +28,7 @@ public class DeviceRepository {
         d.setPlatformId(rs.getString("platform_id"));
         long folderId = rs.getLong("folder_id");
         if (!rs.wasNull()) d.setFolderId(folderId);
-        d.setStatus(rs.getString("status"));
+        d.setStatus(rs.getInt("status"));
         d.setManufacturer(rs.getString("manufacturer"));
         d.setModel(rs.getString("model"));
         d.setAddress(rs.getString("address"));
@@ -36,10 +38,8 @@ public class DeviceRepository {
         if (!rs.wasNull()) d.setLongitude(lon);
         double lat = rs.getDouble("latitude");
         if (!rs.wasNull()) d.setLatitude(lat);
-        Timestamp c = rs.getTimestamp("created_at");
-        if (c != null) d.setCreatedAt(c.toLocalDateTime());
-        Timestamp u = rs.getTimestamp("updated_at");
-        if (u != null) d.setUpdatedAt(u.toLocalDateTime());
+        d.setCreatedAt(readMillis(rs, "created_at"));
+        d.setUpdatedAt(readMillis(rs, "updated_at"));
         return d;
     };
 
@@ -64,17 +64,18 @@ public class DeviceRepository {
     }
 
     public long insert(Device d) {
+        long now = TsUtil.nowMillis();
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device (device_id, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude) " +
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device (device_id, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, created_at, updated_at) " +
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, d.getDeviceId());
             ps.setString(2, d.getName());
             ps.setString(3, d.getPlatformId());
             if (d.getFolderId() == null) ps.setNull(4, Types.BIGINT); else ps.setLong(4, d.getFolderId());
-            ps.setString(5, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
+            ps.setInt(5, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
             ps.setString(6, d.getManufacturer());
             ps.setString(7, d.getModel());
             ps.setString(8, d.getAddress());
@@ -82,21 +83,28 @@ public class DeviceRepository {
             ps.setString(10, d.getGatewayId());
             if (d.getLongitude() == null) ps.setObject(11, null); else ps.setDouble(11, d.getLongitude());
             if (d.getLatitude() == null) ps.setObject(12, null); else ps.setDouble(12, d.getLatitude());
+            ps.setLong(13, now);
+            ps.setLong(14, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
-        return key == null ? 0L : key.longValue();
+        long id = key == null ? 0L : key.longValue();
+        d.setCreatedAt(now);
+        d.setUpdatedAt(now);
+        return id;
     }
 
     public int update(Device d) {
+        long now = TsUtil.nowMillis();
+        d.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device SET name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=? WHERE id=?",
+                "UPDATE device SET name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, updated_at=? WHERE id=?",
                 d.getName(), d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
-                d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(), d.getId());
+                d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(), now, d.getId());
     }
 
-    public int updateStatus(Long id, String status) {
-        return jdbc.update("UPDATE device SET status=? WHERE id=?", status, id);
+    public int updateStatus(Long id, int status) {
+        return jdbc.update("UPDATE device SET status=?, updated_at=? WHERE id=?", status, TsUtil.nowMillis(), id);
     }
 
     public long countInFolder(Long folderId) {
@@ -116,5 +124,10 @@ public class DeviceRepository {
 
     public int deleteById(Long id) {
         return jdbc.update("DELETE FROM device WHERE id = ?", id);
+    }
+
+    private static Long readMillis(ResultSet rs, String col) throws SQLException {
+        long v = rs.getLong(col);
+        return rs.wasNull() ? null : v;
     }
 }

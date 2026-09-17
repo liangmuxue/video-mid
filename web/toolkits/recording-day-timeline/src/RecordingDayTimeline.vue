@@ -1,22 +1,18 @@
 /**
  * RecordingDayTimeline — 全天 24h 历史录像进度条（独立工具包）
- *
- * 样式全部挂在 .rdt-root 下，不污染外部。
- * 不包含起止时间选择框（仅日期）；不写录像增删改。
  */
 <template>
   <div class="rdt-root" data-rdt="recording-day-timeline">
     <div class="rdt-toolbar">
-      <label class="rdt-date">
-        <span class="rdt-label">录像日期</span>
-        <input
-          class="rdt-date-input"
-          type="date"
-          :value="date"
-          :disabled="loading"
-          @change="onDateChange"
-        />
-      </label>
+      <RecordingCalendar
+        :model-value="date"
+        :view-year="viewYear"
+        :view-month="viewMonth"
+        :recording-days="recordingDays"
+        :loading="daysLoading || loading"
+        @update:model-value="onDatePick"
+        @navigate="onMonthNavigate"
+      />
       <div class="rdt-range-hint">{{ date }} 00:00:00 ~ 23:59:59</div>
       <button
         type="button"
@@ -36,11 +32,12 @@
       </button>
     </div>
 
-    <p v-if="error" class="rdt-error">{{ error }}</p>
+    <p v-if="daysLoading" class="rdt-muted">加载录像日历…</p>
+    <p v-else-if="error" class="rdt-error">{{ error }}</p>
     <p v-else-if="loading" class="rdt-muted">加载录像中…</p>
-    <p v-else-if="!segments.length" class="rdt-muted">当天无录像，进度条不可操作</p>
+    <p v-else-if="!recordingDays.length" class="rdt-muted">当前月份无录像，请切换月份</p>
+    <p v-else-if="!segments.length" class="rdt-muted">所选日期无录像，请点选日历中有绿点的日期</p>
 
-    <!-- 播放器壳：画面在上，全天 0-24h 进度条在最底部（替换原生分片进度） -->
     <div class="rdt-player-shell" :class="{ 'rdt-player-shell--empty': !showPlayer }">
       <div v-if="showPlayer" class="rdt-player-stage">
         <OnDemandVideoPlayer
@@ -76,6 +73,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import OnDemandVideoPlayer from './OnDemandVideoPlayer.vue'
 import DayTimelineBar from './DayTimelineBar.vue'
+import RecordingCalendar from './RecordingCalendar.vue'
 import { shouldPrefetchNext } from './onDemandPlay.js'
 import {
   DAY_SECONDS,
@@ -83,30 +81,33 @@ import {
   dayBounds,
   earliestSegment,
   formatClock,
+  formatDateStr,
   hitSegment,
+  monthBounds,
   parseRecordTimestamp,
   pickRecordAt,
-  secondsOfDay
+  secondsOfDay,
+  todayStr
 } from './timeUtils.js'
 
 const props = defineProps({
-  /** 设备编码 */
   deviceId: { type: String, required: true },
-  /** 初始日期 yyyy-MM-dd */
   initialDate: { type: String, default: '' },
-  /** 单段默认时长（秒），接口无 endTime 时使用 */
   clipSeconds: { type: Number, default: 300 },
-  /** (deviceId, { from, to }) => Promise<record[]> */
   fetchRecordings: { type: Function, required: true },
-  /** (deviceId, fileName, record) => string 可播放 URL */
+  /** (deviceId, { year, month }) => Promise<string[]> 有录像的 yyyy-MM-dd */
+  fetchRecordingDays: { type: Function, default: null },
   getVideoUrl: { type: Function, required: true },
-  /** 是否内置 video 播放器 */
   showPlayer: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['play', 'seek', 'loaded', 'error', 'date-change'])
 
 const date = ref(props.initialDate || todayStr())
+const viewYear = ref(parseYear(date.value))
+const viewMonth = ref(parseMonth(date.value))
+const recordingDays = ref([])
+const daysLoading = ref(false)
 const loading = ref(false)
 const error = ref('')
 const records = ref([])
@@ -122,17 +123,97 @@ const segments = computed(() =>
 
 const canPlay = computed(() => segments.value.length > 0)
 
-function todayStr() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+function parseYear(dateStr) {
+  return Number(String(dateStr).slice(0, 4)) || new Date().getFullYear()
+}
+
+function parseMonth(dateStr) {
+  return Number(String(dateStr).slice(5, 7)) || new Date().getMonth() + 1
+}
+
+async function queryRecordingDays(year, month) {
+  if (props.fetchRecordingDays) {
+    const list = await props.fetchRecordingDays(props.deviceId, { year, month })
+    return Array.isArray(list) ? list : []
+  }
+  const { from, to } = monthBounds(year, month)
+  const list = await props.fetchRecordings(props.deviceId, { from, to })
+  const days = new Set()
+  for (const item of list || []) {
+    const dt = parseRecordTimestamp(item.recordTime || item.timestamp)
+    if (dt) days.add(formatDateStr(dt))
+  }
+  return [...days].sort()
+}
+
+async function loadRecordingDays(year, month) {
+  daysLoading.value = true
+  try {
+    recordingDays.value = await queryRecordingDays(year, month)
+  } catch (e) {
+    recordingDays.value = []
+    error.value = e?.message || '加载录像日历失败'
+  } finally {
+    daysLoading.value = false
+  }
+}
+
+function pickBestDate(days) {
+  if (!days?.length) return null
+  const today = todayStr()
+  const eligible = days.filter((d) => d <= today).sort()
+  return eligible.pop() || days.sort().pop()
+}
+
+async function initCalendar() {
+  error.value = ''
+  let y = parseYear(date.value)
+  let m = parseMonth(date.value)
+  viewYear.value = y
+  viewMonth.value = m
+  await loadRecordingDays(y, m)
+  if (recordingDays.value.includes(date.value)) {
+    await reload()
+    return
+  }
+  const picked = pickBestDate(recordingDays.value)
+  if (picked) {
+    date.value = picked
+    emit('date-change', date.value)
+    await reload()
+    return
+  }
+  for (let i = 0; i < 11; i++) {
+    m -= 1
+    if (m < 1) {
+      m = 12
+      y -= 1
+    }
+    await loadRecordingDays(y, m)
+    const back = pickBestDate(recordingDays.value)
+    if (back) {
+      viewYear.value = y
+      viewMonth.value = m
+      date.value = back
+      emit('date-change', date.value)
+      await reload()
+      return
+    }
+  }
+  records.value = []
 }
 
 async function reload() {
   if (!props.deviceId) {
     error.value = '缺少 deviceId'
+    return
+  }
+  if (!recordingDays.value.includes(date.value)) {
+    records.value = []
+    playheadSec.value = null
+    currentUrl.value = ''
+    currentRecord.value = null
+    onDemandRef.value?.stopAndUnload?.()
     return
   }
   loading.value = true
@@ -157,10 +238,17 @@ async function reload() {
   }
 }
 
-function onDateChange(e) {
-  date.value = e.target.value
+function onDatePick(nextDate) {
+  if (!nextDate || nextDate === date.value) return
+  date.value = nextDate
   emit('date-change', date.value)
   reload()
+}
+
+async function onMonthNavigate({ year, month }) {
+  viewYear.value = year
+  viewMonth.value = month
+  await loadRecordingDays(year, month)
 }
 
 function resolveUrl(record) {
@@ -181,7 +269,6 @@ function playAt(daySec, segment) {
   if (!seg) return
   const record = pickRecordAt(seg, daySec)
   if (!record) return
-  // 按需：只解析「当前时段」这一条 URL，不预取其它片段
   const url = resolveUrl(record)
   const fileSeek = seekInFile(record, daySec)
   playheadSec.value = daySec
@@ -260,7 +347,7 @@ function onEnded() {
 watch(
   () => props.deviceId,
   () => {
-    reload()
+    initCalendar()
   }
 )
 
@@ -269,18 +356,19 @@ watch(
   (v) => {
     if (v && v !== date.value) {
       date.value = v
-      reload()
+      viewYear.value = parseYear(v)
+      viewMonth.value = parseMonth(v)
+      initCalendar()
     }
   }
 )
 
-onMounted(reload)
+onMounted(initCalendar)
 
 defineExpose({ reload, playAt, segments, date })
 </script>
 
 <style scoped>
-/* 全部样式限制在工具包根节点，类名统一 rdt- 前缀 */
 .rdt-root {
   --rdt-bg: #0f1a15;
   --rdt-panel: #14241c;
@@ -314,29 +402,12 @@ defineExpose({ reload, playAt, segments, date })
   align-items: flex-end;
 }
 
-.rdt-date {
-  display: grid;
-  gap: 6px;
-}
-
-.rdt-label {
-  font-size: 12px;
-  color: var(--rdt-muted);
-}
-
-.rdt-date-input {
-  border: 1px solid var(--rdt-line);
-  background: rgba(8, 16, 13, 0.65);
-  color: var(--rdt-text);
-  border-radius: 10px;
-  padding: 8px 10px;
-  min-width: 160px;
-}
-
 .rdt-range-hint {
   font-size: 12px;
   color: var(--rdt-muted);
   padding-bottom: 8px;
+  flex: 1;
+  min-width: 160px;
 }
 
 .rdt-play-btn,
@@ -382,7 +453,6 @@ defineExpose({ reload, playAt, segments, date })
   font-size: 13px;
 }
 
-/* 播放器壳：画面 + 底部影视风格时间轴 */
 .rdt-player-shell {
   border: 1px solid var(--rdt-line);
   border-radius: 14px;

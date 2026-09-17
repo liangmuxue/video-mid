@@ -1,15 +1,12 @@
 package com.jizhi.videomid.device;
 
-import java.time.LocalDateTime;
-
 public class Device {
-
     private Long id;
     private String deviceId;
     private String name;
     private String platformId;
     private Long folderId;
-    private String status;
+    private Integer status;
     private String manufacturer;
     private String model;
     private String address;
@@ -17,8 +14,8 @@ public class Device {
     private String gatewayId;
     private Double longitude;
     private Double latitude;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Long createdAt;
+    private Long updatedAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -30,8 +27,8 @@ public class Device {
     public void setPlatformId(String platformId) { this.platformId = platformId; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public Integer getStatus() { return status; }
+    public void setStatus(Integer status) { this.status = status; }
     public String getManufacturer() { return manufacturer; }
     public void setManufacturer(String manufacturer) { this.manufacturer = manufacturer; }
     public String getModel() { return model; }
@@ -46,8 +43,8 @@ public class Device {
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public Double getLatitude() { return latitude; }
     public void setLatitude(Double latitude) { this.latitude = latitude; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public Long getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
+    public Long getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Long updatedAt) { this.updatedAt = updatedAt; }
 }

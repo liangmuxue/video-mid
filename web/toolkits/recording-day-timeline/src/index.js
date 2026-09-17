@@ -3,6 +3,7 @@
  * 视频监控历史录像 · 全天 24 小时进度条（只读）
  */
 export { default as RecordingDayTimeline } from './RecordingDayTimeline.vue'
+export { default as RecordingCalendar } from './RecordingCalendar.vue'
 export { default as OnDemandVideoPlayer } from './OnDemandVideoPlayer.vue'
 export { default as DayTimelineBar } from './DayTimelineBar.vue'
 export {
@@ -12,6 +13,9 @@ export {
 } from './onDemandPlay.js'
 export {
   dayBounds,
+  monthBounds,
+  todayStr,
+  formatDateStr,
   parseRecordTimestamp,
   buildDaySegments,
   secondsOfDay,

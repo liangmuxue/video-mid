@@ -27,7 +27,7 @@ public class RecordFileController {
 
     /**
      * 查询设备录制视频。
-     * from / to 为时间戳筛选，可选；格式：yyyyMMdd_HHmmss 或 yyyy-MM-dd HH:mm:ss
+     * from / to 为毫秒时间戳筛选，可选
      */
     @GetMapping
     public ApiResponse<List<Map<String, Object>>> list(
@@ -35,6 +35,15 @@ public class RecordFileController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         return ApiResponse.ok(recordFileService.list(deviceId, from, to));
+    }
+
+    /** 某月内有录像的日期 yyyy-MM-dd */
+    @GetMapping("/days")
+    public ApiResponse<List<String>> days(
+            @RequestParam String deviceId,
+            @RequestParam int year,
+            @RequestParam int month) {
+        return ApiResponse.ok(recordFileService.listRecordingDays(deviceId, year, month));
     }
 
     /** 下载 / 播放某个录像文件 */

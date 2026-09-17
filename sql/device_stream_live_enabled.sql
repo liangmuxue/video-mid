@@ -3,15 +3,15 @@ USE `video_mid`;
 
 SET @col_exists := (
   SELECT COUNT(1) FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device_stream' AND COLUMN_NAME = 'live_enabled'
+  WHERE TABLE_SCHEMA = 'video_mid' AND TABLE_NAME = 'device_stream' AND COLUMN_NAME = 'live_enabled'
 );
 SET @sql := IF(@col_exists = 0,
-  'ALTER TABLE `device_stream` ADD COLUMN `live_enabled` TINYINT NOT NULL DEFAULT 0 COMMENT ''业务端直播 0/1'' AFTER `sort_no`',
+  'ALTER TABLE `video_mid`.`device_stream` ADD COLUMN `live_enabled` TINYINT NOT NULL DEFAULT 0 COMMENT ''业务端直播 0/1'' AFTER `sort_no`',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 每个设备默认选一路直播：优先 sub，否则 main
-UPDATE device_stream ds
+UPDATE `video_mid`.`device_stream` ds
 INNER JOIN (
   SELECT device_id,
          COALESCE(

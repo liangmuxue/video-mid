@@ -1,5 +1,6 @@
 package com.jizhi.videomid.device;
 
+import com.jizhi.videomid.util.TsUtil;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -7,8 +8,9 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
@@ -24,10 +26,8 @@ public class DeviceFolderRepository {
         f.setName(rs.getString("name"));
         f.setSortNo(rs.getInt("sort_no"));
         f.setPath(rs.getString("path"));
-        Timestamp c = rs.getTimestamp("created_at");
-        if (c != null) f.setCreatedAt(c.toLocalDateTime());
-        Timestamp u = rs.getTimestamp("updated_at");
-        if (u != null) f.setUpdatedAt(u.toLocalDateTime());
+        f.setCreatedAt(readMillis(rs, "created_at"));
+        f.setUpdatedAt(readMillis(rs, "updated_at"));
         return f;
     };
 
@@ -68,10 +68,11 @@ public class DeviceFolderRepository {
     }
 
     public long insert(DeviceFolder f) {
+        long now = TsUtil.nowMillis();
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device_folder (parent_id, name, sort_no, path) VALUES (?,?,?,?)",
+                    "INSERT INTO device_folder (parent_id, name, sort_no, path, created_at, updated_at) VALUES (?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             if (f.getParentId() == null) {
                 ps.setNull(1, Types.BIGINT);
@@ -81,22 +82,28 @@ public class DeviceFolderRepository {
             ps.setString(2, f.getName());
             ps.setInt(3, f.getSortNo() == null ? 0 : f.getSortNo());
             ps.setString(4, f.getPath());
+            ps.setLong(5, now);
+            ps.setLong(6, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
+        f.setCreatedAt(now);
+        f.setUpdatedAt(now);
         return key == null ? 0L : key.longValue();
     }
 
     public int update(DeviceFolder f) {
+        long now = TsUtil.nowMillis();
+        f.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device_folder SET parent_id=?, name=?, sort_no=?, path=? WHERE id=?",
+                "UPDATE device_folder SET parent_id=?, name=?, sort_no=?, path=?, updated_at=? WHERE id=?",
                 f.getParentId(), f.getName(),
                 f.getSortNo() == null ? 0 : f.getSortNo(),
-                f.getPath(), f.getId());
+                f.getPath(), now, f.getId());
     }
 
     public int updatePath(Long id, String path) {
-        return jdbc.update("UPDATE device_folder SET path=? WHERE id=?", path, id);
+        return jdbc.update("UPDATE device_folder SET path=?, updated_at=? WHERE id=?", path, TsUtil.nowMillis(), id);
     }
 
     public int deleteById(Long id) {
@@ -108,5 +115,10 @@ public class DeviceFolderRepository {
         return jdbc.query(
                 "SELECT * FROM device_folder WHERE path LIKE ? ORDER BY path ASC",
                 MAPPER, pathPrefix + "%");
+    }
+
+    private static Long readMillis(ResultSet rs, String col) throws SQLException {
+        long v = rs.getLong(col);
+        return rs.wasNull() ? null : v;
     }
 }

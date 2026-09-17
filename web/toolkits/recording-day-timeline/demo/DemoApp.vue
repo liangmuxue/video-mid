@@ -122,24 +122,27 @@ function client() {
 
 /** 按当天生成几段模拟绿区，方便演示缩放/拖拽滑块 */
 function buildMockRecords(from) {
-  const day = String(from || '').slice(0, 10)
+  const base = typeof from === 'number' ? new Date(from) : new Date(String(from || '').slice(0, 10) + 'T00:00:00')
+  const pad = (n) => String(n).padStart(2, '0')
+  const day = `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`
+  const toMs = (h, m, s = 0) => new Date(`${day}T${pad(h)}:${pad(m)}:${pad(s)}`).getTime()
   return [
     {
       fileName: `${day.replace(/-/g, '')}_091000.mp4`,
-      recordTime: `${day} 09:10:00`,
-      endTime: `${day} 09:25:00`,
+      recordTime: toMs(9, 10),
+      endTime: toMs(9, 25),
       videoUrl: MOCK_VIDEO
     },
     {
       fileName: `${day.replace(/-/g, '')}_140000.mp4`,
-      recordTime: `${day} 14:00:00`,
-      endTime: `${day} 14:40:00`,
+      recordTime: toMs(14, 0),
+      endTime: toMs(14, 40),
       videoUrl: MOCK_VIDEO
     },
     {
       fileName: `${day.replace(/-/g, '')}_183000.mp4`,
-      recordTime: `${day} 18:30:00`,
-      endTime: `${day} 19:05:00`,
+      recordTime: toMs(18, 30),
+      endTime: toMs(19, 5),
       videoUrl: MOCK_VIDEO
     }
   ]
