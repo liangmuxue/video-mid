@@ -1,5 +1,6 @@
 package com.jizhi.videomid.record;
 
+import com.jizhi.videomid.util.FfprobeUtil;
 import com.jizhi.videomid.util.TsUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -19,6 +20,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,6 +36,12 @@ public class RecordFileService {
 
     @Value("${testdata.main-stream-record.output-dir:data/testdata-records}")
     private String outputDir;
+
+    @Value("${record.ffprobe-path:ffprobe}")
+    private String ffprobePath;
+
+    @Value("${record.probe-timeout-seconds:10}")
+    private int probeTimeoutSeconds;
 
     public List<Map<String, Object>> list(String deviceId, String from, String to) {
         String id = requireDeviceId(deviceId);
@@ -57,18 +65,15 @@ public class RecordFileService {
                     continue;
                 }
                 LocalDateTime ts = LocalDateTime.parse(m.group(1), FILE_TS);
-                if (fromTs != null && ts.isBefore(fromTs)) {
+                long startMillis = TsUtil.toMillis(ts);
+                Map<String, Object> row = buildRow(id, name, file, startMillis);
+                Long endTime = (Long) row.get("endTime");
+                long endMillis = endTime != null ? endTime : startMillis;
+                long fromMs = fromTs != null ? TsUtil.toMillis(fromTs) : Long.MIN_VALUE;
+                long toMs = toTs != null ? TsUtil.toMillis(toTs) : Long.MAX_VALUE;
+                if (endMillis < fromMs || startMillis > toMs) {
                     continue;
                 }
-                if (toTs != null && ts.isAfter(toTs)) {
-                    continue;
-                }
-                Map<String, Object> row = new HashMap<>();
-                row.put("deviceId", id);
-                row.put("fileName", name);
-                row.put("recordTime", TsUtil.toMillis(ts));
-                row.put("size", Files.size(file));
-                row.put("path", file.toAbsolutePath().normalize().toString());
                 result.add(row);
             }
         } catch (IOException e) {
@@ -79,13 +84,7 @@ public class RecordFileService {
         return result;
     }
 
-    /**
-     * 对外查询：在 list 结果上附加可直接访问的视频 URL。
-     * @param publicBaseUrl 如 http://host:8090（不含末尾斜杠）
-     */
-    /**
-     * 某月内有录像的日期列表（yyyy-MM-dd，升序）。
-     */
+    /** 某月内有录像的日期列表（yyyy-MM-dd，升序）。 */
     public List<String> listRecordingDays(String deviceId, int year, int month) {
         String id = requireDeviceId(deviceId);
         if (month < 1 || month > 12) {
@@ -153,6 +152,28 @@ public class RecordFileService {
             throw new IllegalArgumentException("录像文件不存在");
         }
         return new FileSystemResource(file);
+    }
+
+    private Map<String, Object> buildRow(String deviceId, String fileName, Path file, long startMillis) throws IOException {
+        Map<String, Object> row = new HashMap<>();
+        row.put("deviceId", deviceId);
+        row.put("fileName", fileName);
+        row.put("recordTime", startMillis);
+        row.put("size", Files.size(file));
+        row.put("path", file.toAbsolutePath().normalize().toString());
+        attachDuration(row, file, startMillis);
+        return row;
+    }
+
+    /** ffprobe 读取真实时长，写入 endTime / durationSeconds（毫秒级结束时间）。 */
+    private void attachDuration(Map<String, Object> row, Path file, long startMillis) {
+        OptionalLong durMs = FfprobeUtil.probeDurationMillis(ffprobePath, file, probeTimeoutSeconds);
+        if (durMs.isEmpty() || durMs.getAsLong() <= 0) {
+            return;
+        }
+        long durationMs = durMs.getAsLong();
+        row.put("durationSeconds", Math.round(durationMs / 1000.0));
+        row.put("endTime", startMillis + durationMs);
     }
 
     private Path deviceDir(String deviceId) {

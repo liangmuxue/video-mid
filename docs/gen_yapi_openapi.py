@@ -72,7 +72,9 @@ STREAM = {
 RECORDING = {
     "deviceId": prop("string", "设备编码", "CAM_EAST_01"),
     "fileName": prop("string", "录像文件名，一般为 yyyyMMdd_HHmmss.mp4", "20260910_143000.mp4"),
-    "recordTime": {**TS_MILLIS, "description": "录制时刻（毫秒时间戳，从文件名解析）", "example": 1725952200000},
+    "recordTime": {**TS_MILLIS, "description": "录制开始时刻（毫秒时间戳，从文件名解析）", "example": 1725952200000},
+    "endTime": {**TS_MILLIS, "description": "录制结束时刻（毫秒时间戳，ffprobe 读取 MP4 时长；失败时不返回）", "example": 1725952500000, "nullable": True},
+    "durationSeconds": prop("number", "录像时长（秒，ffprobe 读取；失败时不返回）", 300, nullable=True),
     "size": prop("integer", "文件大小，单位：字节", 12345678, fmt="int64"),
     "path": prop("string", "服务器本地绝对路径（内部用，对外可忽略）", "/data/.../20260910_143000.mp4"),
 }
@@ -347,6 +349,8 @@ ex_recording_url = {
     "deviceId": "CAM_EAST_01",
     "fileName": "20260910_143000.mp4",
     "recordTime": EX_REC_TIME,
+    "endTime": EX_REC_TIME + 300000,
+    "durationSeconds": 300,
     "size": 12345678,
     "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
     "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4",

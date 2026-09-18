@@ -717,6 +717,8 @@
                       "deviceId": "CAM_EAST_01",
                       "fileName": "20260910_143000.mp4",
                       "recordTime": 1725952200000,
+                      "endTime": 1725952500000,
+                      "durationSeconds": 300,
                       "size": 12345678,
                       "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
                       "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
@@ -1600,6 +1602,8 @@
                       "deviceId": "CAM_EAST_01",
                       "fileName": "20260910_143000.mp4",
                       "recordTime": 1725952200000,
+                      "endTime": 1725952500000,
+                      "durationSeconds": 300,
                       "size": 12345678,
                       "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4"
                     }
@@ -1995,6 +1999,8 @@
                       "deviceId": "CAM_EAST_01",
                       "fileName": "20260910_143000.mp4",
                       "recordTime": 1725952200000,
+                      "endTime": 1725952500000,
+                      "durationSeconds": 300,
                       "size": 12345678,
                       "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
                       "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
@@ -2890,9 +2896,22 @@
           },
           "recordTime": {
             "type": "integer",
-            "description": "录制时刻（毫秒时间戳，从文件名解析）",
+            "description": "录制开始时刻（毫秒时间戳，从文件名解析）",
             "example": 1725952200000,
             "format": "int64"
+          },
+          "endTime": {
+            "type": "integer",
+            "description": "录制结束时刻（毫秒时间戳，ffprobe 读取 MP4 时长；失败时不返回）",
+            "example": 1725952500000,
+            "format": "int64",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "number",
+            "description": "录像时长（秒，ffprobe 读取；失败时不返回）",
+            "example": 300,
+            "nullable": true
           },
           "size": {
             "type": "integer",
@@ -2923,9 +2942,22 @@
           },
           "recordTime": {
             "type": "integer",
-            "description": "录制时刻（毫秒时间戳，从文件名解析）",
+            "description": "录制开始时刻（毫秒时间戳，从文件名解析）",
             "example": 1725952200000,
             "format": "int64"
+          },
+          "endTime": {
+            "type": "integer",
+            "description": "录制结束时刻（毫秒时间戳，ffprobe 读取 MP4 时长；失败时不返回）",
+            "example": 1725952500000,
+            "format": "int64",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "number",
+            "description": "录像时长（秒，ffprobe 读取；失败时不返回）",
+            "example": 300,
+            "nullable": true
           },
           "size": {
             "type": "integer",
@@ -3395,6 +3427,8 @@
               "deviceId": "CAM_EAST_01",
               "fileName": "20260910_143000.mp4",
               "recordTime": 1725952200000,
+              "endTime": 1725952500000,
+              "durationSeconds": 300,
               "size": 12345678,
               "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4",
               "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
@@ -3674,6 +3708,8 @@
               "deviceId": "CAM_EAST_01",
               "fileName": "20260910_143000.mp4",
               "recordTime": 1725952200000,
+              "endTime": 1725952500000,
+              "durationSeconds": 300,
               "size": 12345678,
               "path": "/data/testdata-records/CAM_EAST_01/20260910_143000.mp4"
             }

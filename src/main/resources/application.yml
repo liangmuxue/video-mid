@@ -37,6 +37,11 @@ testdata:
     ffmpeg-path: ffmpeg
     zlm-http-port: 8080
 
+# 录像回放：ffprobe 读取 MP4 真实时长（endTime）
+record:
+  ffprobe-path: /usr/bin/ffprobe
+  probe-timeout-seconds: 10
+
 # 对外接口返回视频绝对地址时使用（可选；不配则按请求 host 自动生成）
 open-api:
   public-base-url: http://8.130.74.232:8090
