@@ -83,7 +83,10 @@
             <header class="live-card-head">
               <div>
                 <strong>{{ s.name || s.deviceId }}</strong>
-                <p class="mono muted">{{ s.deviceId }} · {{ s.streamType }}</p>
+                <p class="mono muted">
+                  {{ s.deviceId }} · {{ s.streamType }}
+                  <span v-if="s.transport" class="transport-tag">{{ s.transport }}</span>
+                </p>
               </div>
               <button type="button" class="ghost sm" @click="uncheckDevice(s.deviceId)">关闭</button>
             </header>
@@ -93,8 +96,18 @@
       </div>
     </div>
 
-    <div v-if="playbackDevice" class="mask" @click.self="playbackDevice = null">
-      <div class="modal playback-modal" @click.stop>
+    <div
+      v-if="playbackDevice"
+      class="mask"
+      @mousedown.self="onPlaybackBackdropDown"
+      @mouseup.self="onPlaybackBackdropUp"
+      @click.self.prevent
+    >
+      <div
+        class="modal playback-modal"
+        @mousedown.stop
+        @mouseup="cancelPlaybackBackdrop"
+      >
         <RecordingPlaybackPanel
           :device-id="playbackDevice.deviceId"
           :device-name="playbackDevice.name || ''"
@@ -114,6 +127,7 @@ import AppShell from '../components/AppShell.vue'
 import BizFolderDeviceTree from '../components/BizFolderDeviceTree.vue'
 import StreamPlayer from '../components/StreamPlayer.vue'
 import RecordingPlaybackPanel from '../components/RecordingPlaybackPanel.vue'
+import { useBackdropClose } from '../composables/useBackdropClose'
 import {
   fetchBizDevices,
   fetchBizFolderTree,
@@ -135,6 +149,13 @@ const loadingLiveIds = ref([])
 const liveSessions = ref([])
 const openFolderIds = reactive({})
 const playbackDevice = ref(null)
+const {
+  onBackdropDown: onPlaybackBackdropDown,
+  onBackdropUp: onPlaybackBackdropUp,
+  cancelBackdrop: cancelPlaybackBackdrop
+} = useBackdropClose(() => {
+  playbackDevice.value = null
+})
 
 function filterDevices(list) {
   const q = keyword.value.trim().toLowerCase()
@@ -222,7 +243,9 @@ async function onToggleCheck({ device, checked }) {
           deviceId: device.deviceId,
           name: device.name,
           streamType: live.streamType,
-          streamUrl: live.playUrl || live.streamUrl
+          streamUrl: live.playUrl || live.streamUrl,
+          transport: live.transport || '',
+          channelId: live.channelId || ''
         }
       ]
     } catch (e) {
@@ -246,6 +269,7 @@ function clearAllLive() {
 }
 
 function openPlayback(d) {
+  cancelPlaybackBackdrop()
   playbackDevice.value = d
 }
 
@@ -344,6 +368,10 @@ h1 { margin: 0; font-family: Syne, sans-serif; font-size: 32px; }
 }
 .live-card-head strong { font-size: 14px; }
 .muted { color: var(--muted); font-size: 11px; margin: 2px 0 0; }
+.transport-tag {
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px;
+  background: rgba(200, 240, 106, 0.15); color: var(--accent-2);
+}
 
 .primary, .ghost, .link { cursor: pointer; }
 .ghost {

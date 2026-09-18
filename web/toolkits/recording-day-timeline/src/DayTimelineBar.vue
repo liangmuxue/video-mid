@@ -282,6 +282,8 @@ function onDragUp(e) {
   const mode = dragMode.value
 
   if (mode === 'scrub') {
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
     scrubAtClientX(e.clientX, { immediate: true })
     scrubSec.value = null
   } else if (mode === 'box' && moved && box.value) {

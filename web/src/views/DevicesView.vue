@@ -150,11 +150,15 @@
     <div
       v-if="playback"
       class="mask"
-      @pointerdown.self="onPlaybackMaskDown"
-      @pointerup.self="onPlaybackMaskUp"
+      @mousedown.self="onPlaybackBackdropDown"
+      @mouseup.self="onPlaybackBackdropUp"
       @click.self.prevent
     >
-      <div class="modal playback-modal" @pointerdown.stop>
+      <div
+        class="modal playback-modal"
+        @mousedown.stop
+        @mouseup="cancelPlaybackBackdrop"
+      >
         <RecordingPlaybackPanel
           :device-id="playback.deviceId"
           :device-name="playback.name || ''"
@@ -187,6 +191,7 @@ import {
   statusClass,
   statusLabel
 } from '../utils/deviceStatus'
+import { useBackdropClose } from '../composables/useBackdropClose'
 
 const devices = ref([])
 const folderTree = ref([])
@@ -217,7 +222,13 @@ const folderFormError = ref('')
 const folderForm = reactive({ name: '', parentId: null, sortNo: 0 })
 
 const playback = ref(null)
-let playbackMaskArmed = false
+const {
+  onBackdropDown: onPlaybackBackdropDown,
+  onBackdropUp: onPlaybackBackdropUp,
+  cancelBackdrop: cancelPlaybackBackdrop
+} = useBackdropClose(() => {
+  playback.value = null
+})
 
 const flatFolderOptions = computed(() => {
   const out = []
@@ -369,21 +380,12 @@ async function onDeleteFolder(node) {
 
 function openPlayback(d) {
   if (!d?.deviceId) return
-  playbackMaskArmed = false
+  cancelPlaybackBackdrop()
   playback.value = { deviceId: d.deviceId, name: d.name || '' }
 }
 
-function onPlaybackMaskDown() {
-  playbackMaskArmed = true
-}
-
-function onPlaybackMaskUp() {
-  if (playbackMaskArmed) closePlayback()
-  playbackMaskArmed = false
-}
-
 function closePlayback() {
-  playbackMaskArmed = false
+  cancelPlaybackBackdrop()
   playback.value = null
 }
 

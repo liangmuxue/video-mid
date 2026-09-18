@@ -2,6 +2,7 @@ package com.jizhi.videomid.device;
 
 import com.jizhi.videomid.device.dto.DeviceRequest;
 import com.jizhi.videomid.device.dto.StreamRegisterRequest;
+import com.jizhi.videomid.gb28181.Gb28181PlayService;
 import com.jizhi.videomid.media.ZlmClient;
 import com.jizhi.videomid.session.PreviewService;
 import org.slf4j.Logger;
@@ -21,17 +22,20 @@ public class DeviceService {
     private final PreviewService previewService;
     private final ZlmClient zlmClient;
     private final DeviceFolderService folderService;
+    private final Gb28181PlayService gb28181PlayService;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
                          PreviewService previewService,
                          ZlmClient zlmClient,
-                         DeviceFolderService folderService) {
+                         DeviceFolderService folderService,
+                         Gb28181PlayService gb28181PlayService) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
         this.zlmClient = zlmClient;
         this.folderService = folderService;
+        this.gb28181PlayService = gb28181PlayService;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -247,29 +251,26 @@ public class DeviceService {
      * 解析设备业务端直播流：已标记优先；否则默认 sub，再退 main，并写回标记。
      */
     public Optional<DeviceStream> resolveLiveStream(String deviceId) {
-        if (deviceId == null || deviceId.isBlank()) {
+        Optional<DeviceStream> found = LiveStreamSupport.resolveByPriority(streamRepository, deviceId);
+        if (found.isEmpty()) {
             return Optional.empty();
         }
-        String id = deviceId.trim();
-        Optional<DeviceStream> marked = streamRepository.findLiveByDeviceId(id);
-        if (marked.isPresent()) {
-            return marked;
+        DeviceStream s = found.get();
+        if (!Boolean.TRUE.equals(s.getLiveEnabled())) {
+            setLiveStream(s.getId());
+            return streamRepository.findById(s.getId());
         }
-        Optional<DeviceStream> sub = streamRepository.findByDeviceIdAndType(id, "sub");
-        if (sub.isPresent()) {
-            setLiveStream(sub.get().getId());
-            return streamRepository.findById(sub.get().getId());
-        }
-        Optional<DeviceStream> main = streamRepository.findByDeviceIdAndType(id, "main");
-        if (main.isPresent()) {
-            setLiveStream(main.get().getId());
-            return streamRepository.findById(main.get().getId());
-        }
-        return Optional.empty();
+        return found;
     }
 
-    /** 业务端：按 live 码流开播 */
+    /** 业务端：优先国标 INVITE（mock/live），否则走已注册 streamUrl */
     public Map<String, Object> startBizLive(String deviceId) {
+        if (gb28181PlayService.preferForBizLive()) {
+            Optional<Map<String, Object>> gb = gb28181PlayService.startLive(deviceId);
+            if (gb.isPresent()) {
+                return gb.get();
+            }
+        }
         DeviceStream stream = resolveLiveStream(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("设备未配置可直播码流"));
         return previewService.start(deviceId, stream.getStreamType());

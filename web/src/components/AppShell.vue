@@ -6,6 +6,8 @@
         <nav>
           <router-link to="/">概览</router-link>
           <router-link to="/devices">设备管理</router-link>
+          <router-link to="/ptz">云台监控</router-link>
+          <router-link to="/gb28181">国标</router-link>
           <router-link to="/biz">业务端</router-link>
         </nav>
       </div>

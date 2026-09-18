@@ -144,6 +144,52 @@ public class ZlmClient {
         }
     }
 
+    /** 国标 live：在 ZLM 开启 RTP 接收（GB28181 PS 流） */
+    public boolean openRtpServer(int port, String streamId, String app) {
+        if (port <= 0 || streamId == null || streamId.isBlank()) {
+            return false;
+        }
+        String rtpApp = (app == null || app.isBlank()) ? "rtp" : app.trim();
+        String url = api("/index/api/openRtpServer")
+                .queryParam("port", port)
+                .queryParam("stream_id", streamId.trim())
+                .queryParam("app", rtpApp)
+                .toUriString();
+        log.info("[本服务→ZLM] openRtpServer port={} streamId={} app={}", port, streamId, rtpApp);
+        try {
+            String body = restTemplate.getForObject(url, String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            int code = resp == null ? -1 : resp.path("code").asInt(-1);
+            if (code == 0) {
+                return true;
+            }
+            log.warn("[GB28181-live] openRtpServer 失败 code={} body={}", code, body);
+            return false;
+        } catch (Exception e) {
+            log.warn("[GB28181-live] openRtpServer 异常 port={} err={}", port, e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean closeRtpServer(String streamId, String app) {
+        if (streamId == null || streamId.isBlank()) {
+            return false;
+        }
+        String rtpApp = (app == null || app.isBlank()) ? "rtp" : app.trim();
+        String url = api("/index/api/closeRtpServer")
+                .queryParam("stream_id", streamId.trim())
+                .queryParam("app", rtpApp)
+                .toUriString();
+        try {
+            String body = restTemplate.getForObject(url, String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            return resp != null && resp.path("code").asInt(-1) == 0;
+        } catch (Exception e) {
+            log.warn("[GB28181-live] closeRtpServer 异常 streamId={} err={}", streamId, e.getMessage());
+            return false;
+        }
+    }
+
     private UriComponentsBuilder api(String path) {
         return UriComponentsBuilder
                 .fromHttpUrl(baseUrl() + path)

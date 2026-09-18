@@ -145,6 +145,10 @@ async function attach() {
 onMounted(attach)
 watch(() => props.url, attach)
 onBeforeUnmount(cleanup)
+
+defineExpose({
+  getVideoElement: () => videoRef.value
+})
 </script>
 
 <style scoped>

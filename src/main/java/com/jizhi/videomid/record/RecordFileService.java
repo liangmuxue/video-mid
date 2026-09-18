@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +44,12 @@ public class RecordFileService {
     @Value("${record.probe-timeout-seconds:10}")
     private int probeTimeoutSeconds;
 
+    @Value("${record.default-clip-seconds:300}")
+    private int defaultClipSeconds;
+
+    /** path + mtime → durationMs，避免重复 ffprobe */
+    private final ConcurrentHashMap<String, CachedDuration> durationCache = new ConcurrentHashMap<>();
+
     public List<Map<String, Object>> list(String deviceId, String from, String to) {
         String id = requireDeviceId(deviceId);
         LocalDateTime fromTs = parseOptional(from);
@@ -52,11 +59,15 @@ public class RecordFileService {
         }
 
         Path dir = deviceDir(id);
-        List<Map<String, Object>> result = new ArrayList<>();
         if (!Files.isDirectory(dir)) {
-            return result;
+            return List.of();
         }
 
+        long fromMs = fromTs != null ? TsUtil.toMillis(fromTs) : Long.MIN_VALUE;
+        long toMs = toTs != null ? TsUtil.toMillis(toTs) : Long.MAX_VALUE;
+        long clipEstimateMs = Math.max(1, defaultClipSeconds) * 1000L;
+
+        List<ScannedFile> candidates = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.mp4")) {
             for (Path file : stream) {
                 String name = file.getFileName().toString();
@@ -66,21 +77,30 @@ public class RecordFileService {
                 }
                 LocalDateTime ts = LocalDateTime.parse(m.group(1), FILE_TS);
                 long startMillis = TsUtil.toMillis(ts);
-                Map<String, Object> row = buildRow(id, name, file, startMillis);
-                Long endTime = (Long) row.get("endTime");
-                long endMillis = endTime != null ? endTime : startMillis;
-                long fromMs = fromTs != null ? TsUtil.toMillis(fromTs) : Long.MIN_VALUE;
-                long toMs = toTs != null ? TsUtil.toMillis(toTs) : Long.MAX_VALUE;
-                if (endMillis < fromMs || startMillis > toMs) {
+                // 先用文件名时间戳粗筛，避免对目录内全部历史文件 ffprobe
+                if (startMillis > toMs) {
                     continue;
                 }
-                result.add(row);
+                if (fromMs != Long.MIN_VALUE && startMillis + clipEstimateMs < fromMs) {
+                    continue;
+                }
+                candidates.add(new ScannedFile(id, name, file, startMillis));
             }
         } catch (IOException e) {
             throw new IllegalStateException("读取录像目录失败: " + e.getMessage(), e);
         }
 
-        result.sort(Comparator.comparing((Map<String, Object> r) -> (Long) r.get("recordTime")).reversed());
+        List<Map<String, Object>> result = candidates.parallelStream()
+                .map(sf -> {
+                    try {
+                        return buildRow(sf.deviceId, sf.fileName, sf.file, sf.startMillis);
+                    } catch (IOException e) {
+                        throw new IllegalStateException("读取录像文件失败: " + sf.fileName, e);
+                    }
+                })
+                .filter(row -> overlapsRange(row, fromMs, toMs, clipEstimateMs))
+                .sorted(Comparator.comparing((Map<String, Object> r) -> (Long) r.get("recordTime")).reversed())
+                .toList();
         return result;
     }
 
@@ -167,13 +187,43 @@ public class RecordFileService {
 
     /** ffprobe 读取真实时长，写入 endTime / durationSeconds（毫秒级结束时间）。 */
     private void attachDuration(Map<String, Object> row, Path file, long startMillis) {
-        OptionalLong durMs = FfprobeUtil.probeDurationMillis(ffprobePath, file, probeTimeoutSeconds);
+        OptionalLong durMs = probeDurationCached(file);
         if (durMs.isEmpty() || durMs.getAsLong() <= 0) {
             return;
         }
         long durationMs = durMs.getAsLong();
         row.put("durationSeconds", Math.round(durationMs / 1000.0));
         row.put("endTime", startMillis + durationMs);
+    }
+
+    private OptionalLong probeDurationCached(Path file) {
+        try {
+            long mtime = Files.getLastModifiedTime(file).toMillis();
+            String key = file.toAbsolutePath().normalize().toString();
+            CachedDuration cached = durationCache.get(key);
+            if (cached != null && cached.mtime == mtime) {
+                return cached.durationMs <= 0 ? OptionalLong.empty() : OptionalLong.of(cached.durationMs);
+            }
+            OptionalLong durMs = FfprobeUtil.probeDurationMillis(ffprobePath, file, probeTimeoutSeconds);
+            long stored = durMs.isEmpty() ? -1L : durMs.getAsLong();
+            durationCache.put(key, new CachedDuration(mtime, stored));
+            return durMs;
+        } catch (IOException e) {
+            return FfprobeUtil.probeDurationMillis(ffprobePath, file, probeTimeoutSeconds);
+        }
+    }
+
+    private static boolean overlapsRange(Map<String, Object> row, long fromMs, long toMs, long clipEstimateMs) {
+        long startMillis = (Long) row.get("recordTime");
+        Long endTime = (Long) row.get("endTime");
+        long endMillis = endTime != null ? endTime : startMillis + clipEstimateMs;
+        return endMillis >= fromMs && startMillis <= toMs;
+    }
+
+    private record ScannedFile(String deviceId, String fileName, Path file, long startMillis) {
+    }
+
+    private record CachedDuration(long mtime, long durationMs) {
     }
 
     private Path deviceDir(String deviceId) {

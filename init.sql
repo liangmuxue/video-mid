@@ -3,6 +3,9 @@
 -- 【推荐】已有库、保留 admin 用户，重建设备相关表 + 演示数据：
 --   sql/rebuild_business_tables.sql
 --
+-- 【新库】4 张表 + 业务演示数据，admin 由应用启动写入（推荐）：
+--   sql/init_full_with_data.sql
+--
 -- 【新库】仅建空表（含 sys_user 结构，无演示数据）：
 --   src/main/resources/init.sql
 --   然后执行 sql/rebuild_business_tables.sql 写入演示数据

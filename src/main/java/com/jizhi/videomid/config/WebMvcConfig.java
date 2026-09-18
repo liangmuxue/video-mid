@@ -33,6 +33,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/auth/login",
                         "/api/streams/register",
                         "/api/open/**",
+                        "/api/gb28181/catalog.xml",
                         "/health/**",
                         "/actuator/**",
                         "/index/hook/**"

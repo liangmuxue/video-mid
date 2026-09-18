@@ -1,0 +1,74 @@
+[
+  {
+    "deviceId": "TIC7632_01",
+    "name": "观测云台-东门（模拟）",
+    "model": "TIC7632-IRL@L-F75-4X56-GB-VH1",
+    "manufacturer": "宇视",
+    "platformId": "34020000002000000001",
+    "gbDeviceId": "34020000002000000001",
+    "address": "小区东门制高点",
+    "ptzType": 1,
+    "longitude": 116.40,
+    "latitude": 39.90,
+    "channels": [
+      {
+        "channelId": "34020000001320000001",
+        "channelType": "visible",
+        "streamType": "main",
+        "streamName": "可见光-主码流",
+        "previewKey": "tic7632_01_visible_main"
+      },
+      {
+        "channelId": "34020000001320000002",
+        "channelType": "visible",
+        "streamType": "sub",
+        "streamName": "可见光-子码流",
+        "previewKey": "tic7632_01_visible_sub"
+      },
+      {
+        "channelId": "34020000001320000003",
+        "channelType": "thermal",
+        "streamType": "main",
+        "streamName": "热成像-主码流",
+        "previewKey": "tic7632_01_thermal_main"
+      }
+    ],
+    "presets": [
+      { "index": 1, "name": "东门全景", "zoom": 1.0 },
+      { "index": 2, "name": "岗卡特写", "zoom": 8.0 },
+      { "index": 3, "name": "热成像周界", "zoom": 1.0, "channelType": "thermal" }
+    ]
+  },
+  {
+    "deviceId": "TIC7632_02",
+    "name": "观测云台-西区（模拟）",
+    "model": "TIC7632-IRL@L-F75-4X56-GB-VH1",
+    "manufacturer": "宇视",
+    "platformId": "34020000002000000001",
+    "gbDeviceId": "34020000002000000002",
+    "address": "西区瞭望塔",
+    "ptzType": 1,
+    "longitude": 116.39,
+    "latitude": 39.91,
+    "channels": [
+      {
+        "channelId": "34020000001320000011",
+        "channelType": "visible",
+        "streamType": "main",
+        "streamName": "可见光-主码流",
+        "previewKey": "tic7632_02_visible_main"
+      },
+      {
+        "channelId": "34020000001320000012",
+        "channelType": "thermal",
+        "streamType": "main",
+        "streamName": "热成像-主码流",
+        "previewKey": "tic7632_02_thermal_main"
+      }
+    ],
+    "presets": [
+      { "index": 1, "name": "西区全景", "zoom": 1.0 },
+      { "index": 2, "name": "停车场入口", "zoom": 12.0 }
+    ]
+  }
+]

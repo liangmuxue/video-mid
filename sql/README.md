@@ -4,6 +4,10 @@
 
 | 场景 | 脚本 |
 |------|------|
+| **全新库：4 张表 + 业务演示数据（admin 由应用启动写入）** | `init_full_with_data.sql` |
+| 宇视 mock 设备（与 mock-devices.json 一致） | `uniview_mock_seed.sql` |
+| 国标 Catalog 与业务库一致性校验 | `GET /api/gb28181/sync-check` |
+| mock 演示推流到 ZLM | `scripts/zlm-demo-push.sh` / `scripts/zlm-demo-push.ps1` |
 | **已有库，重建设备/目录/码流，保留 admin 用户** | `rebuild_business_tables.sql` |
 | 全新空库（仅建表，不含演示数据） | `../src/main/resources/init.sql` |
 | 全新空库（建表 + 演示数据） | `init.sql` 后执行 `rebuild_business_tables.sql` |

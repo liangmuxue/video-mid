@@ -7,7 +7,11 @@
         <div><dt>用户名</dt><dd>{{ auth.user?.username }}</dd></div>
         <div><dt>昵称</dt><dd>{{ auth.user?.nickname || '-' }}</dd></div>
       </dl>
-      <router-link class="cta" to="/devices">进入设备管理 →</router-link>
+      <div class="links">
+        <router-link class="cta" to="/ptz">云台监控（宇视 mock）→</router-link>
+        <router-link class="cta ghost" to="/gb28181">国标 GB28181 →</router-link>
+        <router-link class="cta ghost" to="/devices">设备管理 →</router-link>
+      </div>
     </section>
   </AppShell>
 </template>
@@ -32,9 +36,13 @@ dl > div {
 }
 dt { color: var(--muted); }
 dd { margin: 0; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
 .cta {
   display: inline-flex; padding: 12px 16px; border-radius: 12px;
   background: linear-gradient(135deg, var(--accent), #2f9a65);
   color: #04140c; font-weight: 600;
+}
+.cta.ghost {
+  background: transparent; color: var(--text); border: 1px solid var(--line);
 }
 </style>
