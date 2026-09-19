@@ -72,7 +72,7 @@
             <li v-if="sync.extraDevices?.length">多余设备：{{ sync.extraDevices.join(', ') }}</li>
             <li v-if="sync.extraChannels?.length">多余通道：{{ sync.extraChannels.join(', ') }}</li>
           </ul>
-          <p class="hint">请执行 <code>sql/uniview_mock_seed.sql</code> 与 mock-devices.json 对齐。</p>
+          <p class="hint">对账数据来自 <code>sql/init.sql</code>，与 <code>resources/mock/uniview-devices.json</code> 对齐。</p>
         </article>
 
         <article v-if="!config?.mock && sipSessions.length" class="panel">

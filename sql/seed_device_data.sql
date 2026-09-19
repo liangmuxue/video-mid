@@ -1,2 +1,0 @@
--- 已合并至 rebuild_business_tables.sql
--- 请执行：sql/rebuild_business_tables.sql（重建表 + 初始化数据，保留 sys_user）

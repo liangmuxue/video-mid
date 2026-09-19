@@ -2,7 +2,7 @@
 # =============================================================================
 # ZLM 演示推流（mock 宇视 / 国标页面用）
 #
-# 与 mock-devices.json 中 previewKey 一致，推成功后可在浏览器播放：
+# 【仅 mock】与 resources/mock/uniview-devices.json 中 previewKey 一致：
 #   http://<ZLM_HTTP_HOST>:8080/live/<stream>.live.flv
 #
 # 用法：

@@ -36,12 +36,14 @@
                 <span>可见光 · 主画面</span>
                 <button type="button" class="ghost" @click="captureMain">抓拍</button>
               </div>
-              <StreamPlayer ref="mainPlayerRef" :url="visibleUrl" />
+              <MockPtzPlayer v-if="simEnabled" ref="mainPlayerRef" :url="visibleUrl" :pose="pose" />
+              <StreamPlayer v-else ref="mainPlayerRef" :url="visibleUrl" />
             </div>
 
             <div v-if="thermalUrl" class="panel sub-panel">
-              <div class="panel-title"><span>热成像</span></div>
-              <StreamPlayer :url="thermalUrl" />
+              <div class="panel-title"><span>热成像{{ simEnabled ? '（随云台·模拟）' : '' }}</span></div>
+              <MockPtzPlayer v-if="simEnabled" :url="thermalUrl" :pose="pose" />
+              <StreamPlayer v-else :url="thermalUrl" />
             </div>
           </div>
 
@@ -66,6 +68,7 @@
                 <button type="button" @click="doFocus('near')">近焦</button>
                 <button type="button" @click="doFocus('far')">远焦</button>
               </div>
+              <p v-if="simEnabled" class="pose-readout">{{ poseText }}</p>
               <p v-if="actionMsg" class="action-msg">{{ actionMsg }}</p>
             </div>
 
@@ -115,9 +118,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AppShell from '../components/AppShell.vue'
 import StreamPlayer from '../components/StreamPlayer.vue'
+import MockPtzPlayer from '../mock/MockPtzPlayer.vue'
 import { useBackdropClose } from '../composables/useBackdropClose'
 import {
   fetchUniviewConfig,
@@ -130,6 +134,21 @@ import {
   ptzWideAngle,
   ptzZoom
 } from '../api/uniview'
+import {
+  applyFocus,
+  applyMove,
+  applyWideAngle,
+  applyZoom,
+  captureSimFrame,
+  captureSyntheticFrame,
+  defaultPose,
+  describePose,
+  loadStoredPose,
+  poseFromPreset,
+  saveStoredPose,
+  saveStoredPreset,
+  storedPresetPose
+} from '../mock/ptzSim'
 
 const loading = ref(true)
 const error = ref('')
@@ -170,6 +189,20 @@ function streamUrl(channelType, streamType = 'sub') {
 
 const visibleUrl = computed(() => streamUrl('visible', 'sub') || streamUrl('visible', 'main'))
 const thermalUrl = computed(() => streamUrl('thermal', 'main') || streamUrl('thermal', 'sub'))
+const simEnabled = computed(() => config.value?.mock === true)
+const pose = reactive(defaultPose())
+const poseText = computed(() => describePose(pose))
+
+function commitPose(next) {
+  Object.assign(pose, next)
+  if (activeId.value) saveStoredPose(activeId.value, pose)
+}
+
+function restorePose(deviceId, devicePresets) {
+  const stored = loadStoredPose(deviceId)
+  const first = devicePresets?.[0]
+  Object.assign(pose, stored || poseFromPreset(first) || defaultPose())
+}
 
 let holdTimer = null
 
@@ -199,12 +232,14 @@ async function selectDevice(deviceId) {
     const found = fresh.find((x) => x.deviceId === deviceId)
     if (found) Object.assign(d, found)
   }
+  restorePose(deviceId, devices.value.find((x) => x.deviceId === deviceId)?.presets)
 }
 
-async function runAction(label, fn) {
+async function runAction(label, fn, after) {
   if (!activeId.value) return
   try {
-    await fn()
+    const data = await fn()
+    if (after) after(data)
     actionMsg.value = label + ' 已发送'
   } catch (e) {
     actionMsg.value = e.message || '操作失败'
@@ -213,8 +248,14 @@ async function runAction(label, fn) {
 
 function holdMove(direction) {
   stopHold()
-  runAction('云台 ' + direction, () => ptzMove(activeId.value, direction))
-  holdTimer = setInterval(() => ptzMove(activeId.value, direction).catch(() => {}), 400)
+  runAction('云台 ' + direction, () => ptzMove(activeId.value, direction), () => {
+    commitPose(applyMove(pose, direction))
+  })
+  holdTimer = setInterval(() => {
+    ptzMove(activeId.value, direction)
+      .then(() => commitPose(applyMove(pose, direction)))
+      .catch(() => {})
+  }, 400)
 }
 
 function stopHold() {
@@ -225,19 +266,29 @@ function stopHold() {
 }
 
 function doZoom(action) {
-  runAction('变倍', () => ptzZoom(activeId.value, action))
+  runAction('变倍', () => ptzZoom(activeId.value, action), () => {
+    commitPose(applyZoom(pose, action))
+  })
 }
 
 function doFocus(kind) {
-  runAction('对焦', () => ptzFocus(activeId.value, kind === 'near' ? 'near' : 'far'))
+  const action = kind === 'near' ? 'near' : 'far'
+  runAction('对焦', () => ptzFocus(activeId.value, action), () => {
+    commitPose(applyFocus(pose, action))
+  })
 }
 
 function doWideAngle() {
-  runAction('一键广角', () => ptzWideAngle(activeId.value))
+  runAction('一键广角', () => ptzWideAngle(activeId.value), () => {
+    commitPose(applyWideAngle())
+  })
 }
 
 function gotoPreset(index) {
-  runAction('预置位 ' + index, () => ptzGotoPreset(activeId.value, index))
+  runAction('预置位 ' + index, () => ptzGotoPreset(activeId.value, index), (data) => {
+    const listed = presets.value.find((p) => Number(p.index) === Number(index))
+    commitPose(storedPresetPose(activeId.value, index, data || listed))
+  })
 }
 
 async function savePreset() {
@@ -245,8 +296,19 @@ async function savePreset() {
     actionMsg.value = '请输入预置位名称'
     return
   }
-  await runAction('保存预置位', () =>
-    ptzSetPreset(activeId.value, presetForm.index, presetForm.name.trim(), presetForm.overwrite)
+  await runAction(
+    '保存预置位',
+    () =>
+      ptzSetPreset(
+        activeId.value,
+        presetForm.index,
+        presetForm.name.trim(),
+        presetForm.overwrite,
+        pose.zoom
+      ),
+    () => {
+      saveStoredPreset(activeId.value, presetForm.index, presetForm.name.trim(), pose)
+    }
   )
   const fresh = await fetchPtzDevices()
   devices.value = fresh
@@ -254,14 +316,21 @@ async function savePreset() {
 
 function captureMain() {
   const video = mainPlayerRef.value?.getVideoElement?.()
-  if (!video || !video.videoWidth) {
+  let canvas = null
+  if (video?.videoWidth && simEnabled.value) {
+    canvas = captureSimFrame(video, pose)
+  } else if (video?.videoWidth) {
+    canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0)
+  } else if (simEnabled.value) {
+    canvas = captureSyntheticFrame(pose)
+  }
+  if (!canvas) {
     actionMsg.value = '当前无画面，无法抓拍'
     return
   }
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  canvas.getContext('2d').drawImage(video, 0, 0)
   snapshotDataUrl.value = canvas.toDataURL('image/jpeg', 0.92)
   snapshotFileName.value = `${activeId.value}_${Date.now()}.jpg`
   cancelSnapBackdrop()
@@ -280,6 +349,7 @@ function downloadSnapshot(saveAs) {
 }
 
 onMounted(loadAll)
+onBeforeUnmount(stopHold)
 </script>
 
 <style scoped>
@@ -331,6 +401,7 @@ onMounted(loadAll)
 }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .action-msg { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.pose-readout { font-size: 12px; color: var(--accent-2); margin: 8px 0 0; }
 
 .preset-form { display: grid; gap: 8px; margin-bottom: 12px; }
 .preset-form input[type="text"],

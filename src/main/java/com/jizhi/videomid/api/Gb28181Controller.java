@@ -81,7 +81,7 @@ public class Gb28181Controller {
     @PostMapping("/registry/reload-from-db")
     public ApiResponse<Map<String, Object>> reloadRegistryFromDb() {
         if (props.isMock()) {
-            throw new IllegalStateException("mock 模式无需 registry，Catalog 来自 mock-devices.json");
+            throw new IllegalStateException("mock 模式无需 registry，Catalog 来自 resources/mock/uniview-devices.json");
         }
         int count = dbCatalogSeeder.seedFromDb();
         Map<String, Object> m = new LinkedHashMap<>();
@@ -99,7 +99,7 @@ public class Gb28181Controller {
         m.put("preferForBizLive", props.isPreferForBizLive());
         m.put("sip", sipPort.status());
         m.put("note", props.isMock()
-                ? "mock 模式自动注册模拟设备，Catalog 与 uniview mock-devices.json 一致"
+                ? "mock 模式自动注册模拟设备，Catalog 与 resources/mock/uniview-devices.json 一致"
                 : "live 模式：JAIN-SIP 上级，REGISTER → Catalog → INVITE + ZLM RTP");
         return ApiResponse.ok(m);
     }

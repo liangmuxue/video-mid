@@ -46,7 +46,7 @@ public class UniviewProperties {
         /** 模拟预览流前缀（可指向 ZLM 演示流） */
         private String previewBaseUrl = "http://127.0.0.1:8080/live";
         /** 模拟设备定义文件（classpath） */
-        private String devicesResource = "uniview/mock-devices.json";
+        private String devicesResource = "mock/uniview-devices.json";
 
         public String getPreviewBaseUrl() {
             return previewBaseUrl;

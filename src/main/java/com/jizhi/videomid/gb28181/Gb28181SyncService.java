@@ -4,6 +4,8 @@ import com.jizhi.videomid.device.Device;
 import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
+import com.jizhi.videomid.mock.MockCatalogSyncRules;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -14,20 +16,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** 校验业务库与国标模拟 Catalog 是否一致（任务 2.1） */
+/** 校验业务库与国标 Catalog 是否一致。mock 多余设备规则由 MockCatalogSyncRules 提供。 */
 @Service
 public class Gb28181SyncService {
 
     private final Gb28181CatalogPort catalogPort;
     private final DeviceRepository deviceRepository;
     private final DeviceStreamRepository streamRepository;
+    private final ObjectProvider<MockCatalogSyncRules> mockSyncRules;
 
     public Gb28181SyncService(Gb28181CatalogPort catalogPort,
                               DeviceRepository deviceRepository,
-                              DeviceStreamRepository streamRepository) {
+                              DeviceStreamRepository streamRepository,
+                              ObjectProvider<MockCatalogSyncRules> mockSyncRules) {
         this.catalogPort = catalogPort;
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
+        this.mockSyncRules = mockSyncRules;
     }
 
     public Map<String, Object> verify() {
@@ -67,8 +72,12 @@ public class Gb28181SyncService {
                 missingDevices.add(id);
             }
         }
+        MockCatalogSyncRules mockRules = mockSyncRules.getIfAvailable();
         for (String id : dbDeviceIds) {
-            if (!catalogDeviceIds.contains(id) && id.startsWith("TIC7632")) {
+            if (catalogDeviceIds.contains(id)) {
+                continue;
+            }
+            if (mockRules == null || mockRules.countDbDeviceAsExtra(id)) {
                 extraDevices.add(id);
             }
         }

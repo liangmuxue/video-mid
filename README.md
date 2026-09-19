@@ -18,8 +18,7 @@
 ## 启动
 
 ```bash
-mysql -uroot -p123456 < init.sql
-# 或已有库：mysql -uroot -p123456 < sql/device_and_stream.sql
+mysql -uroot -p123456 < sql/init.sql
 mvn -DskipTests package && java -jar target/video-mid.jar
 cd web && npm install && npm run dev
 ```

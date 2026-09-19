@@ -1,15 +1,14 @@
 -- =============================================================================
--- video-mid 全量初始化：建库 + 4 张表 + 业务演示数据
+-- video-mid 唯一数据库脚本：建库 + 建表 + 初始化数据
 --
--- 包含表：sys_user / device_folder / device / device_stream
+-- 表：sys_user / device_folder / device / device_stream / device_ptz_preset
 -- 设备 status：INT  0=不可用 1=已启用 2=已停用
 -- 时间字段：BIGINT 毫秒时间戳
 --
--- sys_user：仅建表，不写数据；首次启动应用时由 AdminUserInitializer 自动创建
---           默认管理员 admin / admin123
+-- sys_user 不写账号，启动 Java 后自动生成 admin / admin123
 --
--- 用法（Navicat / mysql CLI）：选中或连接后整段执行，然后启动 Java 应用
--- 警告：会 DROP 并重建全部 4 张表，清空所有数据！
+-- 用法：Navicat 选中后整段执行，然后重启 video-mid。
+-- 警告：会 DROP 下列业务表，清空全部数据！
 -- =============================================================================
 
 CREATE DATABASE IF NOT EXISTS `video_mid`
@@ -19,15 +18,13 @@ CREATE DATABASE IF NOT EXISTS `video_mid`
 USE `video_mid`;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `device_ptz_preset`;
 DROP TABLE IF EXISTS `device_stream`;
 DROP TABLE IF EXISTS `device`;
 DROP TABLE IF EXISTS `device_folder`;
 DROP TABLE IF EXISTS `sys_user`;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- ---------------------------------------------------------------------------
--- 1. sys_user 系统用户
--- ---------------------------------------------------------------------------
 CREATE TABLE `sys_user` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `username`      VARCHAR(64)  NOT NULL COMMENT '登录名',
@@ -41,9 +38,6 @@ CREATE TABLE `sys_user` (
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统用户';
 
--- ---------------------------------------------------------------------------
--- 2. device_folder 设备目录
--- ---------------------------------------------------------------------------
 CREATE TABLE `device_folder` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `parent_id`     BIGINT       DEFAULT NULL COMMENT '父目录 ID，根为 NULL',
@@ -57,9 +51,6 @@ CREATE TABLE `device_folder` (
   KEY `idx_path` (`path`(191))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='设备目录';
 
--- ---------------------------------------------------------------------------
--- 3. device 视频设备
--- ---------------------------------------------------------------------------
 CREATE TABLE `device` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `device_id`     VARCHAR(64)  NOT NULL COMMENT '业务设备编码，全局唯一',
@@ -83,14 +74,11 @@ CREATE TABLE `device` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='视频设备';
 
--- ---------------------------------------------------------------------------
--- 4. device_stream 设备码流
--- ---------------------------------------------------------------------------
 CREATE TABLE `device_stream` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `device_id`     VARCHAR(64)  NOT NULL COMMENT '关联 device.device_id',
-  `stream_type`   VARCHAR(16)  NOT NULL COMMENT '码流类型：main / sub',
-  `channel_id`    VARCHAR(64)  DEFAULT NULL COMMENT '国标通道编码（预留）',
+  `stream_type`   VARCHAR(16)  NOT NULL COMMENT '码流类型：main/sub 或 visible_main 等',
+  `channel_id`    VARCHAR(64)  DEFAULT NULL COMMENT '国标通道编码',
   `stream_url`    VARCHAR(512) DEFAULT NULL COMMENT '播放/取流地址',
   `stream_name`   VARCHAR(256) DEFAULT NULL COMMENT '码流名称',
   `status`        VARCHAR(16)  NOT NULL DEFAULT 'OFF' COMMENT 'ON / OFF',
@@ -105,15 +93,24 @@ CREATE TABLE `device_stream` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='设备码流';
 
--- =============================================================================
--- 初始化数据
--- =============================================================================
+CREATE TABLE `device_ptz_preset` (
+  `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `device_id`     VARCHAR(64)  NOT NULL COMMENT '关联 device.device_id',
+  `preset_index`  INT          NOT NULL COMMENT '预置位编号',
+  `name`          VARCHAR(128) NOT NULL COMMENT '业务名称',
+  `zoom`          DOUBLE       DEFAULT NULL COMMENT '记录变倍，姿态以设备为准',
+  `created_at`    BIGINT       NOT NULL COMMENT '创建时间（毫秒时间戳）',
+  `updated_at`    BIGINT       NOT NULL COMMENT '更新时间（毫秒时间戳）',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_device_preset` (`device_id`, `preset_index`),
+  KEY `idx_device_id` (`device_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='云台预置位目录（姿态在设备）';
 
 SET @now_ms = UNIX_TIMESTAMP(NOW(3)) * 1000;
 
--- sys_user 无 SQL 初始化数据，请启动应用后自动写入 admin / admin123
-
--- 目录树：园区 → 东门区域、地下车库
+-- ---------------------------------------------------------------------------
+-- 业务演示数据
+-- ---------------------------------------------------------------------------
 INSERT INTO `device_folder` (`id`, `parent_id`, `name`, `sort_no`, `path`, `created_at`, `updated_at`) VALUES
 (1, NULL, '园区',     1, '/1/',   @now_ms, @now_ms),
 (2, 1,    '东门区域', 1, '/1/2/', @now_ms, @now_ms),
@@ -121,7 +118,6 @@ INSERT INTO `device_folder` (`id`, `parent_id`, `name`, `sort_no`, `path`, `crea
 
 ALTER TABLE `device_folder` AUTO_INCREMENT = 10;
 
--- 设备
 INSERT INTO `device`
   (`device_id`, `name`, `platform_id`, `folder_id`, `status`, `manufacturer`, `model`, `address`, `ptz_type`, `gateway_id`, `longitude`, `latitude`, `created_at`, `updated_at`)
 VALUES
@@ -129,31 +125,53 @@ VALUES
 ('CAM_GATE_02', '岗卡枪机',   '34020000002000000001', 2, 1, '宇视', 'IPC-B系列', '小区岗卡',     0, 'GW_COMMUNITY_01', 116.41, 39.91, @now_ms, @now_ms),
 ('CAM_PARK_03', '停车场半球', '34020000002000000001', 3, 2, '海康', 'DS-2CD',    '地下车库入口', 0, NULL,              116.39, 39.89, @now_ms, @now_ms);
 
--- 码流（默认 live_enabled=1 在 sub 子码流）
 INSERT INTO `device_stream`
   (`device_id`, `stream_type`, `channel_id`, `stream_url`, `stream_name`, `status`, `sort_no`, `live_enabled`, `created_at`, `updated_at`)
 VALUES
-('CAM_EAST_01', 'main', '34020000001320000001',
+('CAM_EAST_01', 'main', '34020000001320000021',
  'http://8.130.74.232:8080/live/cam01_main.live.flv', '东门-主码流', 'ON', 1, 0, @now_ms, @now_ms),
-('CAM_EAST_01', 'sub',  '34020000001320000002',
+('CAM_EAST_01', 'sub',  '34020000001320000022',
  'http://8.130.74.232:8080/live/cam01_sub.live.flv',  '东门-子码流', 'ON', 2, 1, @now_ms, @now_ms),
-('CAM_GATE_02', 'main', '34020000001320000003',
+('CAM_GATE_02', 'main', '34020000001320000023',
  'http://8.130.74.232:8080/live/cam02_main.live.flv', '岗卡-主码流', 'ON', 1, 0, @now_ms, @now_ms),
-('CAM_GATE_02', 'sub',  '34020000001320000004',
+('CAM_GATE_02', 'sub',  '34020000001320000024',
  'http://8.130.74.232:8080/live/cam02_sub.live.flv',  '岗卡-子码流', 'ON', 2, 1, @now_ms, @now_ms),
-('CAM_PARK_03', 'sub',  '34020000001320000005',
+('CAM_PARK_03', 'sub',  '34020000001320000025',
  'http://8.130.74.232:8080/live/cam03_sub.live.flv',  '停车场-子码流', 'ON', 1, 1, @now_ms, @now_ms);
 
--- =============================================================================
--- 校验
--- =============================================================================
-SELECT 'sys_user'       AS tbl, COUNT(*) AS cnt FROM `sys_user`
-UNION ALL SELECT 'device_folder', COUNT(*) FROM `device_folder`
-UNION ALL SELECT 'device',        COUNT(*) FROM `device`
-UNION ALL SELECT 'device_stream', COUNT(*) FROM `device_stream`;
+-- ---------------------------------------------------------------------------
+-- 【仅 mock】开发期模拟云台，上线可删本段及 TIC7632_* 行
+-- 与 resources/mock/uniview-devices.json 一致；通道号避开上面 CAM_* 的 021–025
+-- ---------------------------------------------------------------------------
+INSERT INTO `device`
+  (`device_id`, `name`, `platform_id`, `folder_id`, `status`, `manufacturer`, `model`, `address`, `ptz_type`, `gateway_id`, `longitude`, `latitude`, `created_at`, `updated_at`)
+VALUES
+('TIC7632_01', '观测云台-东门（模拟）', '34020000002000000001', NULL, 1, '宇视', 'TIC7632-IRL@L-F75-4X56-GB-VH1', '小区东门制高点', 1, NULL, 116.40, 39.90, @now_ms, @now_ms),
+('TIC7632_02', '观测云台-西区（模拟）', '34020000002000000001', NULL, 1, '宇视', 'TIC7632-IRL@L-F75-4X56-GB-VH1', '西区瞭望塔',     1, NULL, 116.39, 39.91, @now_ms, @now_ms);
 
-SELECT d.device_id, d.name, d.status, f.name AS folder_name, s.stream_type, s.live_enabled
-FROM `device` d
-LEFT JOIN `device_folder` f ON d.folder_id = f.id
-LEFT JOIN `device_stream` s ON s.device_id = d.device_id
-ORDER BY d.device_id, s.sort_no;
+INSERT INTO `device_stream`
+  (`device_id`, `stream_type`, `channel_id`, `stream_url`, `stream_name`, `status`, `sort_no`, `live_enabled`, `created_at`, `updated_at`)
+VALUES
+('TIC7632_01', 'visible_main', '34020000001320000001',
+ 'http://8.130.74.232:8080/live/tic7632_01_visible_main.live.flv', '可见光-主码流', 'ON', 1, 0, @now_ms, @now_ms),
+('TIC7632_01', 'visible_sub',  '34020000001320000002',
+ 'http://8.130.74.232:8080/live/tic7632_01_visible_sub.live.flv',  '可见光-子码流', 'ON', 2, 1, @now_ms, @now_ms),
+('TIC7632_01', 'thermal_main', '34020000001320000003',
+ 'http://8.130.74.232:8080/live/tic7632_01_thermal_main.live.flv', '热成像-主码流', 'ON', 3, 0, @now_ms, @now_ms),
+('TIC7632_02', 'visible_main', '34020000001320000011',
+ 'http://8.130.74.232:8080/live/tic7632_02_visible_main.live.flv', '可见光-主码流', 'ON', 1, 0, @now_ms, @now_ms),
+('TIC7632_02', 'thermal_main', '34020000001320000012',
+ 'http://8.130.74.232:8080/live/tic7632_02_thermal_main.live.flv', '热成像-主码流', 'ON', 2, 1, @now_ms, @now_ms);
+
+INSERT INTO `device_ptz_preset` (`device_id`, `preset_index`, `name`, `zoom`, `created_at`, `updated_at`) VALUES
+('TIC7632_01', 1, '东门全景',   1.0,  @now_ms, @now_ms),
+('TIC7632_01', 2, '岗卡特写',   8.0,  @now_ms, @now_ms),
+('TIC7632_01', 3, '热成像周界', 1.0,  @now_ms, @now_ms),
+('TIC7632_02', 1, '西区全景',   1.0,  @now_ms, @now_ms),
+('TIC7632_02', 2, '停车场入口', 12.0, @now_ms, @now_ms);
+
+SELECT 'sys_user（空，等启动写入 admin）' AS tbl, COUNT(*) AS cnt FROM `sys_user`
+UNION ALL SELECT 'device_folder', COUNT(*) FROM `device_folder`
+UNION ALL SELECT 'device', COUNT(*) FROM `device`
+UNION ALL SELECT 'device_stream', COUNT(*) FROM `device_stream`
+UNION ALL SELECT 'device_ptz_preset', COUNT(*) FROM `device_ptz_preset`;

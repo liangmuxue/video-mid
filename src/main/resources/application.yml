@@ -26,12 +26,12 @@ zlm:
   secret: "lOGy52moDso1A6pfUODecYcrDNNvyKUV"
   play-count-sync-ms: 5000
 
-# 宇视对接：前期 mock 模拟，联调通过后改 data-source: live
+# 宇视对接：开发 mock，联调改 live。mock 夹具见 resources/mock 与 *.mock 包，上线可整段删除
 uniview:
   data-source: mock
   mock:
     preview-base-url: http://8.130.74.232:8080/live
-    devices-resource: uniview/mock-devices.json
+    devices-resource: mock/uniview-devices.json
   live:
     device-host: ""
     device-port: 80
