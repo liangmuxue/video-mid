@@ -1,8 +1,6 @@
 package com.jizhi.videomid.uniview.live;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.jizhi.videomid.device.DevicePtzPreset;
-import com.jizhi.videomid.device.DevicePtzPresetService;
 import com.jizhi.videomid.uniview.UniviewPtzPort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -18,21 +16,15 @@ import java.util.Map;
 public class LiveUniviewPtzAdapter implements UniviewPtzPort {
 
     private final UniviewLapiClient lapiClient;
-    private final DevicePtzPresetService catalog;
 
-    public LiveUniviewPtzAdapter(UniviewLapiClient lapiClient, DevicePtzPresetService catalog) {
+    public LiveUniviewPtzAdapter(UniviewLapiClient lapiClient) {
         this.lapiClient = lapiClient;
-        this.catalog = catalog;
     }
 
     @Override
     public List<Map<String, Object>> listPtzDevices() {
-        List<Map<String, Object>> devices = lapiClient.parseDevicesFromChannels(
+        return lapiClient.parseDevicesFromChannels(
                 lapiClient.get("/LAPI/V1.0/Channels/System/ChannelDetailInfos"));
-        for (Map<String, Object> d : devices) {
-            d.put("presets", catalog.listMaps(String.valueOf(d.get("deviceId"))));
-        }
-        return devices;
     }
 
     @Override
@@ -65,16 +57,15 @@ public class LiveUniviewPtzAdapter implements UniviewPtzPort {
         body.put("PresetID", presetIndex);
         JsonNode resp = lapiClient.put(
                 "/LAPI/V1.0/Channels/" + channelId + "/PTZ/Preset/" + presetIndex + "/Goto", body);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("deviceId", deviceId);
-        data.put("presetIndex", presetIndex);
-        data.put("response", resp.toString());
-        catalog.find(deviceId, presetIndex).ifPresent(p -> data.putAll(catalog.toMap(p)));
-        return ok("goto-preset", data);
+        return ok("goto-preset", Map.of(
+                "deviceId", deviceId,
+                "presetIndex", presetIndex,
+                "response", resp.toString()
+        ));
     }
 
     @Override
-    public Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite, Double zoom) {
+    public Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite) {
         lapiClient.ensureConfigured();
         String channelId = resolveChannelId(deviceId);
         Map<String, Object> body = new LinkedHashMap<>();
@@ -83,13 +74,13 @@ public class LiveUniviewPtzAdapter implements UniviewPtzPort {
         body.put("Overwrite", overwrite);
         JsonNode resp = lapiClient.put(
                 "/LAPI/V1.0/Channels/" + channelId + "/PTZ/Preset/" + presetIndex, body);
-        DevicePtzPreset saved = catalog.save(deviceId, presetIndex, name, zoom, true);
-        Map<String, Object> data = new LinkedHashMap<>(catalog.toMap(saved));
-        data.put("deviceId", deviceId);
-        data.put("presetIndex", presetIndex);
-        data.put("overwrite", overwrite);
-        data.put("response", resp.toString());
-        return ok("set-preset", data);
+        return ok("set-preset", Map.of(
+                "deviceId", deviceId,
+                "presetIndex", presetIndex,
+                "name", name,
+                "overwrite", overwrite,
+                "response", resp.toString()
+        ));
     }
 
     @Override

@@ -9,11 +9,12 @@
           <router-link to="/ptz">云台监控</router-link>
           <router-link to="/gb28181">国标</router-link>
           <router-link to="/biz">业务端</router-link>
+          <router-link to="/record-clips">片段截取</router-link>
         </nav>
       </div>
       <div class="user">
         <span>{{ displayName }}</span>
-        <button type="button" @click="onLogout">退出</button>
+        <button v-if="authRequired" type="button" @click="onLogout">退出</button>
       </div>
     </header>
     <main><slot /></main>
@@ -27,7 +28,11 @@ import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
-const displayName = computed(() => auth.user?.nickname || auth.user?.username || '用户')
+const authRequired = import.meta.env.VITE_AUTH_REQUIRED === 'true'
+const displayName = computed(() => {
+  if (!authRequired) return '测试模式'
+  return auth.user?.nickname || auth.user?.username || '用户'
+})
 
 async function onLogout() {
   await auth.logout()

@@ -27,11 +27,7 @@ export const ptzWideAngle = (deviceId) =>
 export const ptzGotoPreset = (deviceId, index) =>
   http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/preset/${index}/goto`)
 
-export const ptzSetPreset = (deviceId, index, name, overwrite = false, zoom) =>
+export const ptzSetPreset = (deviceId, index, name, overwrite = false) =>
   http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/preset/${index}`, null, {
-    params: {
-      name,
-      overwrite,
-      ...(zoom != null && Number.isFinite(Number(zoom)) ? { zoom } : {})
-    }
+    params: { name, overwrite }
   })

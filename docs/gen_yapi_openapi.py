@@ -210,6 +210,61 @@ RecordingWithUrl = obj(
     desc="带播放链接的录像项",
 )
 
+RecordClipItemRequest = obj(
+    {
+        "deviceId": prop("string", "【必填】设备业务编码", "CAM_EAST_01"),
+        "at": prop("integer", "【必填】事件时间点，毫秒时间戳（也支持 10 位秒级）", 1730000030000, fmt="int64"),
+        "seconds": prop(
+            "integer",
+            "时间戳前后各取 N 秒；不传默认 30，最大 150",
+            30,
+        ),
+    },
+    required=["deviceId", "at"],
+    desc="批量截取录像：单条请求项",
+)
+
+ClipResult = obj(
+    {
+        "deviceId": prop("string", "设备编码", "CAM_EAST_01"),
+        "at": {**TS_MILLIS, "description": "请求中的事件时间点（毫秒）", "example": 1730000030000},
+        "seconds": prop("integer", "前后各取的秒数", 30),
+        "startTime": {**TS_MILLIS, "description": "片段实际开始时间（毫秒）", "example": 1730000000000},
+        "endTime": {**TS_MILLIS, "description": "片段实际结束时间（毫秒）", "example": 1730000060000},
+        "durationSeconds": prop("number", "片段时长（秒）", 60),
+        "videoUrl": prop(
+            "string",
+            "MP4 播放地址，指向对应环境的 /clip/file 接口",
+            "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+        ),
+        "clipUrl": prop("string", "同 videoUrl，兼容字段", None, nullable=True),
+        "windowStart": {**TS_MILLIS, "description": "请求窗口起始（at - seconds）", "example": 1730000000000},
+        "windowEnd": {**TS_MILLIS, "description": "请求窗口结束（at + seconds）", "example": 1730000060000},
+        "sourceFiles": arr(prop("string", "源录像文件名"), "参与截取的原始 MP4 文件名列表"),
+        "clipFileName": prop("string", "缓存片段文件名", "CAM_EAST_01_1730000030000_30.mp4"),
+        "size": prop("integer", "片段文件大小（字节）", 5242880, fmt="int64"),
+    },
+    desc="录像片段截取结果（单条成功）",
+)
+
+ClipBatchItem = obj(
+    {
+        "deviceId": prop("string", "设备编码", "CAM_EAST_01"),
+        "at": {**TS_MILLIS, "description": "事件时间点（毫秒）", "example": 1730000030000},
+        "seconds": prop("integer", "前后各取的秒数", 30),
+        "ok": prop("boolean", "本条是否成功", True),
+        "error": prop("string", "失败原因；ok=false 时有值", None, nullable=True),
+        "startTime": {**TS_MILLIS, "description": "成功时：片段开始时间", "nullable": True},
+        "endTime": {**TS_MILLIS, "description": "成功时：片段结束时间", "nullable": True},
+        "durationSeconds": prop("number", "成功时：片段时长（秒）", 60, nullable=True),
+        "videoUrl": prop("string", "成功时：MP4 播放地址", None, nullable=True),
+        "sourceFiles": arr(prop("string", "源录像文件名"), "成功时：源文件列表"),
+    },
+    desc="批量截取结果项（含成功/失败）",
+)
+
+GenericMap = obj({}, desc="键值对象，字段随 mock/live 模式变化")
+
 FolderBase = obj(FOLDER_BASE, desc="目录基本信息")
 
 # FolderNode 自引用：先占位再填
@@ -358,6 +413,33 @@ ex_recording_url = {
 
 ex_recording_days = ["2026-09-10", "2026-09-15", "2026-09-17"]
 
+ex_clip = {
+    "deviceId": "CAM_EAST_01",
+    "at": 1730000030000,
+    "seconds": 30,
+    "startTime": 1730000000000,
+    "endTime": 1730000060000,
+    "durationSeconds": 60,
+    "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+    "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+    "windowStart": 1730000000000,
+    "windowEnd": 1730000060000,
+    "sourceFiles": ["20260910_143000.mp4"],
+    "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+    "size": 5242880,
+}
+
+ex_clip_batch = [
+    {**ex_clip, "ok": True},
+    {
+        "deviceId": "CAM_WEST_02",
+        "at": 1730000100000,
+        "seconds": 15,
+        "ok": False,
+        "error": "该时间点无可用录像",
+    },
+]
+
 ex_live = {
     "deviceId": "CAM_EAST_01",
     "streamType": "sub",
@@ -429,6 +511,10 @@ schemas = {
     "LiveStartResult": LiveStart,
     "RecordingItem": RecordingItem,
     "RecordingWithUrl": RecordingWithUrl,
+    "RecordClipItemRequest": RecordClipItemRequest,
+    "ClipResult": ClipResult,
+    "ClipBatchItem": ClipBatchItem,
+    "GenericMap": GenericMap,
     "FolderBase": FolderBase,
     "DeviceRequest": DeviceRequest,
     "DeviceFolderRequest": DeviceFolderRequest,
@@ -547,6 +633,10 @@ schemas = {
         arr(prop("string", "有录像的日期 yyyy-MM-dd", "2026-09-17"), "某月内有录像的日期列表（升序）"),
         ex_recording_days,
     ),
+    "RespClip": resp_schema(ref("ClipResult"), ex_clip),
+    "RespClipBatch": resp_schema(arr(ref("ClipBatchItem"), "批量截取结果"), ex_clip_batch),
+    "RespGenericMap": resp_schema(ref("GenericMap"), {"success": True, "mock": True}),
+    "RespGenericMapList": resp_schema(arr(ref("GenericMap"), "对象列表"), [{"deviceId": "TIC7632_01"}]),
     "HealthDeps": obj(
         {
             "mysql": prop("string", "MySQL 连通性：UP 或 DOWN: 错误信息", "UP"),
@@ -586,14 +676,18 @@ doc = {
     "info": {
         "title": "极知视频中台 API",
         "description": (
-            "分类：业务端 / 设备管理 / 录像回放 / 直播 / 对外开放（无鉴权）/ 系统鉴权 / 运维健康 / 内部回调。\n"
+            "分类：业务端 / 设备管理 / 录像回放 / 录像片段截取 / 直播 / 对外开放 / GB28181 / 宇视 PTZ / 系统鉴权 / 运维 / ZLM Hook。\n"
             "业务接口统一响应 { code, message, data }；code=0 成功。\n"
             "时间字段统一为毫秒时间戳（int64）；设备 status：0=不可用 1=已启用 2=已停用。\n"
             "业务直播默认使用子码流（sub）。\n"
-            "需登录接口请带 Authorization: Bearer {token}；"
-            "/api/open/**、POST /api/streams/register、POST /api/auth/login、/health/**、/index/hook/** 无需鉴权。"
+            "鉴权：配置 auth.enabled=false（当前测试环境）时，全部 /api/** 免登录；"
+            "auth.enabled=true 时需 Authorization: Bearer {token}，"
+            "始终免鉴权：/api/open/**、POST /api/streams/register、POST /api/auth/login、"
+            "/api/gb28181/catalog.xml、/health/**、/index/hook/**。\n"
+            "录像片段：按 deviceId + at（毫秒）+ seconds（前后各 N 秒）截取 MP4；"
+            "支持单条 GET /clip 与批量 POST /clips。"
         ),
-        "version": "1.4.0",
+        "version": "1.5.0",
     },
     "servers": [
         {"url": "http://8.130.74.232:8090", "description": "线上环境"},
@@ -602,9 +696,12 @@ doc = {
     "tags": [
         {"name": "业务端", "description": "业务门户接口，需登录"},
         {"name": "设备管理", "description": "设备/目录/码流管理；码流注册无需登录"},
-        {"name": "录像回放", "description": "管理端与业务端录像查询"},
+        {"name": "录像回放", "description": "管理端与业务端录像查询、整段 MP4 播放"},
+        {"name": "录像片段截取", "description": "按时间点 ± seconds 秒截取 MP4，含批量接口"},
         {"name": "直播", "description": "预览开播、业务直播"},
         {"name": "对外开放（无鉴权）", "description": "/api/open/**，第三方免登录调用"},
+        {"name": "GB28181", "description": "国标 mock/live：Catalog、SIP、INVITE 点播"},
+        {"name": "宇视 PTZ", "description": "宇视 mock/live：设备、云台、预置位、抓拍"},
         {"name": "系统/鉴权", "description": "登录、登出、当前用户"},
         {"name": "运维/健康", "description": "依赖连通性检查"},
         {"name": "内部回调（ZLM Hook）", "description": "仅供 ZLMediaKit 回调，非前端业务接口"},
@@ -896,6 +993,66 @@ doc = {
                 "responses": ok(ref("RespRecordingUrlList"), [ex_recording_url]),
             }
         },
+        "/api/biz/clips": {
+            "post": {
+                "tags": ["录像片段截取", "业务端"],
+                "summary": "业务端-批量截取录像片段",
+                "description": "Body 为 JSON 数组，每项含 deviceId、at（毫秒）、seconds（前后各 N 秒，默认 30）。"
+                "单条失败不影响其它条目（ok=false + error）。单次最多 50 条。status=2 不可回放。",
+                "operationId": "bizClipsBatch",
+                "requestBody": {
+                    "required": True,
+                    "description": "截取参数数组",
+                    "content": {
+                        "application/json": {
+                            "schema": arr(ref("RecordClipItemRequest"), "批量截取请求"),
+                            "example": [
+                                {"deviceId": "CAM_EAST_01", "at": 1730000030000, "seconds": 30},
+                                {"deviceId": "CAM_WEST_02", "at": 1730000100000, "seconds": 15},
+                            ],
+                        }
+                    },
+                },
+                "responses": ok(ref("RespClipBatch"), ex_clip_batch),
+            }
+        },
+        "/api/biz/devices/{deviceId}/clip": {
+            "get": {
+                "tags": ["录像片段截取", "业务端"],
+                "summary": "业务端-单条截取（元数据）",
+                "description": "返回 videoUrl、startTime、endTime；MP4 通过 videoUrl 播放。",
+                "operationId": "bizClip",
+                "parameters": [
+                    path_p("deviceId", "string", "设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】事件时间点，毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30，最大 150", 30),
+                ],
+                "responses": ok(ref("RespClip"), ex_clip),
+            }
+        },
+        "/api/biz/devices/{deviceId}/clip/file": {
+            "get": {
+                "tags": ["录像片段截取", "业务端"],
+                "summary": "业务端-片段 MP4 直链",
+                "description": "返回 video/mp4 二进制流，供 videoUrl 播放。",
+                "operationId": "bizClipFile",
+                "parameters": [
+                    path_p("deviceId", "string", "设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30", 30),
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MP4 文件流",
+                        "content": {
+                            "video/mp4": {
+                                "schema": {"type": "string", "format": "binary", "description": "片段 MP4"}
+                            }
+                        },
+                    }
+                },
+            }
+        },
         "/api/device-folders/tree": {
             "get": {
                 "tags": ["设备管理"],
@@ -1185,6 +1342,63 @@ doc = {
                 "responses": ok(ref("RespRecordingDays"), ex_recording_days),
             }
         },
+        "/api/recordings/clip": {
+            "get": {
+                "tags": ["录像片段截取"],
+                "summary": "管理端-单条截取（元数据）",
+                "description": "按 deviceId + at + seconds 截取前后各 N 秒，返回 videoUrl、startTime、endTime。",
+                "operationId": "recordingsClip",
+                "parameters": [
+                    q("deviceId", "string", True, "【必填】设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】事件时间点，毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30", 30),
+                ],
+                "responses": ok(ref("RespClip"), ex_clip),
+            }
+        },
+        "/api/recordings/clips": {
+            "post": {
+                "tags": ["录像片段截取"],
+                "summary": "管理端-批量截取录像片段",
+                "description": "Body 为 JSON 数组 [{ deviceId, at, seconds }, ...]，单次最多 50 条。",
+                "operationId": "recordingsClipsBatch",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": arr(ref("RecordClipItemRequest"), "批量截取请求"),
+                            "example": [{"deviceId": "CAM_EAST_01", "at": 1730000030000, "seconds": 30}],
+                        }
+                    },
+                },
+                "responses": ok(ref("RespClipBatch"), ex_clip_batch),
+            }
+        },
+        "/api/recordings/clip/file": {
+            "get": {
+                "tags": ["录像片段截取"],
+                "summary": "管理端-片段 MP4 直链",
+                "description": "返回 video/mp4。测试环境 auth.enabled=false 时无需 token；"
+                "否则 video 标签可带 ?token= 或 Header Bearer。",
+                "operationId": "recordingsClipFile",
+                "parameters": [
+                    q("deviceId", "string", True, "【必填】设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30", 30),
+                    q("token", "string", False, "可选：JWT，供 video 标签无法带 Header 时使用", None),
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MP4 文件流",
+                        "content": {
+                            "video/mp4": {
+                                "schema": {"type": "string", "format": "binary", "description": "片段 MP4"}
+                            }
+                        },
+                    }
+                },
+            }
+        },
         "/api/recordings/{deviceId}/{fileName}": {
             "get": {
                 "tags": ["录像回放"],
@@ -1293,6 +1507,353 @@ doc = {
                         },
                     }
                 },
+            }
+        },
+        "/api/open/clips": {
+            "post": {
+                "tags": ["对外开放（无鉴权）", "录像片段截取"],
+                "summary": "开放-批量截取录像片段",
+                "description": "无需登录。Body 为 JSON 数组 [{ deviceId, at, seconds }, ...]。",
+                "operationId": "openClipsBatch",
+                "security": [],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": arr(ref("RecordClipItemRequest"), "批量截取请求"),
+                            "example": [{"deviceId": "CAM_EAST_01", "at": 1730000030000, "seconds": 30}],
+                        }
+                    },
+                },
+                "responses": ok(ref("RespClipBatch"), ex_clip_batch),
+            }
+        },
+        "/api/open/devices/{deviceId}/clip": {
+            "get": {
+                "tags": ["对外开放（无鉴权）", "录像片段截取"],
+                "summary": "开放-单条截取（元数据）",
+                "description": "无需登录。返回 videoUrl、startTime、endTime（毫秒）。",
+                "operationId": "openClip",
+                "security": [],
+                "parameters": [
+                    path_p("deviceId", "string", "设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30", 30),
+                ],
+                "responses": ok(ref("RespClip"), ex_clip),
+            }
+        },
+        "/api/open/devices/{deviceId}/clip/info": {
+            "get": {
+                "tags": ["对外开放（无鉴权）", "录像片段截取"],
+                "summary": "开放-单条截取（同 /clip）",
+                "description": "与 GET /api/open/devices/{deviceId}/clip 相同，保留兼容。",
+                "operationId": "openClipInfo",
+                "security": [],
+                "parameters": [
+                    path_p("deviceId", "string", "设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30", 30),
+                ],
+                "responses": ok(ref("RespClip"), ex_clip),
+            }
+        },
+        "/api/open/devices/{deviceId}/clip/file": {
+            "get": {
+                "tags": ["对外开放（无鉴权）", "录像片段截取"],
+                "summary": "开放-片段 MP4 直链",
+                "description": "无需登录。返回 video/mp4。",
+                "operationId": "openClipFile",
+                "security": [],
+                "parameters": [
+                    path_p("deviceId", "string", "设备业务编码", "CAM_EAST_01"),
+                    q("at", "integer", True, "【必填】毫秒时间戳", 1730000030000, "int64"),
+                    q("seconds", "integer", False, "前后各取秒数，默认 30", 30),
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MP4 文件流",
+                        "content": {
+                            "video/mp4": {
+                                "schema": {"type": "string", "format": "binary", "description": "片段 MP4"}
+                            }
+                        },
+                    }
+                },
+            }
+        },
+        "/api/gb28181/config": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-配置",
+                "description": "返回 enabled、dataSource(mock/live)、upper、media 等配置。",
+                "operationId": "gb28181Config",
+                "responses": ok(ref("RespGenericMap"), {"enabled": True, "dataSource": "mock", "mock": True}),
+            }
+        },
+        "/api/gb28181/status": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-运行状态",
+                "operationId": "gb28181Status",
+                "responses": ok(ref("RespGenericMap"), {"mode": "模拟下级平台", "registeredDevices": 2}),
+            }
+        },
+        "/api/gb28181/catalog": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-Catalog（JSON）",
+                "description": "模拟/真实下级设备与通道目录。",
+                "operationId": "gb28181Catalog",
+                "responses": ok(ref("RespGenericMapList"), [{"deviceId": "34020000001320000001"}]),
+            }
+        },
+        "/api/gb28181/catalog.xml": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-Catalog（XML）",
+                "description": "国标 XML 格式 Catalog；无需鉴权。",
+                "operationId": "gb28181CatalogXml",
+                "security": [],
+                "responses": {
+                    "200": {
+                        "description": "application/xml",
+                        "content": {
+                            "application/xml": {
+                                "schema": {"type": "string", "description": "国标 Catalog XML"}
+                            }
+                        },
+                    }
+                },
+            }
+        },
+        "/api/gb28181/registry": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-live 注册表",
+                "description": "live 模式 SIP 注册设备列表。",
+                "operationId": "gb28181Registry",
+                "responses": ok(ref("RespGenericMapList"), []),
+            }
+        },
+        "/api/gb28181/registry/reload-from-db": {
+            "post": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-从 DB 重载注册表",
+                "description": "live 模式：从 MySQL 重新填充 Catalog 注册表。",
+                "operationId": "gb28181RegistryReload",
+                "responses": ok(ref("RespGenericMap"), {"devices": 2}),
+            }
+        },
+        "/api/gb28181/sip/status": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-SIP 栈状态",
+                "operationId": "gb28181SipStatus",
+                "responses": ok(ref("RespGenericMap"), {"listening": True}),
+            }
+        },
+        "/api/gb28181/sip/sessions": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-SIP REGISTER 会话",
+                "description": "仅 live 模式。",
+                "operationId": "gb28181SipSessions",
+                "responses": ok(ref("RespGenericMapList"), []),
+            }
+        },
+        "/api/gb28181/sip/catalog-query/{deviceId}": {
+            "post": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-发送 Catalog Query",
+                "description": "live 模式：向已注册下级发送 Catalog 查询。",
+                "operationId": "gb28181SipCatalogQuery",
+                "parameters": [path_p("deviceId", "string", "下级设备 ID", "34020000001320000001")],
+                "responses": ok(ref("RespGenericMap"), {"deviceId": "34020000001320000001", "sent": True}),
+            }
+        },
+        "/api/gb28181/devices/{deviceId}/play": {
+            "post": {
+                "tags": ["GB28181", "直播"],
+                "summary": "GB28181-设备点播",
+                "description": "按设备业务 ID 国标点播，逻辑同业务端 /live。",
+                "operationId": "gb28181PlayDevice",
+                "parameters": [path_p("deviceId", "string", "设备业务编码", "CAM_EAST_01")],
+                "responses": ok(ref("RespLiveStart"), ex_live),
+            }
+        },
+        "/api/gb28181/biz-devices": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-业务对齐设备视图",
+                "operationId": "gb28181BizDevices",
+                "responses": ok(ref("RespGenericMapList"), []),
+            }
+        },
+        "/api/gb28181/sync-check": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-Catalog 与 DB 一致性校验",
+                "operationId": "gb28181SyncCheck",
+                "responses": ok(ref("RespGenericMap"), {"ok": True}),
+            }
+        },
+        "/api/gb28181/channels/{channelId}/invite": {
+            "post": {
+                "tags": ["GB28181", "直播"],
+                "summary": "GB28181-通道 INVITE 点播",
+                "description": "mock 返回演示 playUrl；live 接 RTP。",
+                "operationId": "gb28181Invite",
+                "parameters": [path_p("channelId", "string", "国标通道 ID", "34020000001320000002")],
+                "responses": ok(ref("RespGenericMap"), {"playUrl": "http://8.130.74.232:8080/live/xxx.flv"}),
+            }
+        },
+        "/api/gb28181/channels/{channelId}/bye": {
+            "post": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-停止点播（BYE）",
+                "description": "仅 live 模式。",
+                "operationId": "gb28181Bye",
+                "parameters": [path_p("channelId", "string", "国标通道 ID", "34020000001320000002")],
+                "responses": ok(ref("RespGenericMap"), {"stopped": True}),
+            }
+        },
+        "/api/gb28181/invite/sessions": {
+            "get": {
+                "tags": ["GB28181"],
+                "summary": "GB28181-当前 INVITE 会话",
+                "description": "仅 live 模式。",
+                "operationId": "gb28181InviteSessions",
+                "responses": ok(ref("RespGenericMapList"), []),
+            }
+        },
+        "/api/uniview/config": {
+            "get": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-配置",
+                "description": "dataSource: mock / live。",
+                "operationId": "univiewConfig",
+                "responses": ok(ref("RespGenericMap"), {"dataSource": "mock", "mock": True}),
+            }
+        },
+        "/api/uniview/live/readiness": {
+            "get": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-live 联调就绪检查",
+                "operationId": "univiewLiveReadiness",
+                "responses": ok(ref("RespGenericMap"), {"configured": False}),
+            }
+        },
+        "/api/uniview/devices": {
+            "get": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-设备列表",
+                "operationId": "univiewDevices",
+                "responses": ok(ref("RespGenericMapList"), [{"deviceId": "TIC7632_01", "name": "云台1"}]),
+            }
+        },
+        "/api/uniview/devices/{deviceId}": {
+            "get": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-设备详情",
+                "operationId": "univiewDevice",
+                "parameters": [path_p("deviceId", "string", "设备编码", "TIC7632_01")],
+                "responses": ok(ref("RespGenericMap"), {"deviceId": "TIC7632_01"}),
+            }
+        },
+        "/api/uniview/ptz/devices": {
+            "get": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-PTZ 设备列表（含预置位）",
+                "operationId": "univiewPtzDevices",
+                "responses": ok(ref("RespGenericMapList"), [{"deviceId": "TIC7632_01", "presets": []}]),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/move": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-云台方向",
+                "description": "direction: up/down/left/right 等。",
+                "operationId": "univiewPtzMove",
+                "parameters": [
+                    path_p("deviceId", "string", "设备编码", "TIC7632_01"),
+                    q("direction", "string", True, "方向：up/down/left/right", "up"),
+                    q("speed", "integer", False, "速度 1~8，默认 4", 4),
+                ],
+                "responses": ok(ref("RespGenericMap"), {"success": True, "mock": True}),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/zoom": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-变倍",
+                "operationId": "univiewPtzZoom",
+                "parameters": [
+                    path_p("deviceId", "string", "设备编码", "TIC7632_01"),
+                    q("action", "string", True, "in / out", "in"),
+                    q("speed", "integer", False, "速度，默认 4", 4),
+                ],
+                "responses": ok(ref("RespGenericMap"), {"success": True}),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/focus": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-对焦",
+                "operationId": "univiewPtzFocus",
+                "parameters": [
+                    path_p("deviceId", "string", "设备编码", "TIC7632_01"),
+                    q("action", "string", True, "near / far", "near"),
+                    q("speed", "integer", False, "速度，默认 4", 4),
+                ],
+                "responses": ok(ref("RespGenericMap"), {"success": True}),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/wide-angle": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-一键广角",
+                "operationId": "univiewPtzWideAngle",
+                "parameters": [path_p("deviceId", "string", "设备编码", "TIC7632_01")],
+                "responses": ok(ref("RespGenericMap"), {"success": True}),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/preset/{index}/goto": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-调用预置位",
+                "operationId": "univiewPtzGotoPreset",
+                "parameters": [
+                    path_p("deviceId", "string", "设备编码", "TIC7632_01"),
+                    path_p("index", "integer", "预置位编号 1~1024", 1),
+                ],
+                "responses": ok(ref("RespGenericMap"), {"success": True}),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/preset/{index}": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-保存预置位",
+                "operationId": "univiewPtzSetPreset",
+                "parameters": [
+                    path_p("deviceId", "string", "设备编码", "TIC7632_01"),
+                    path_p("index", "integer", "预置位编号", 1),
+                    q("name", "string", True, "预置位名称", "东门"),
+                    q("overwrite", "boolean", False, "是否覆盖已存在预置位，默认 false", False),
+                ],
+                "responses": ok(ref("RespGenericMap"), {"success": True, "index": 1, "name": "东门"}),
+            }
+        },
+        "/api/uniview/ptz/{deviceId}/snapshot": {
+            "post": {
+                "tags": ["宇视 PTZ"],
+                "summary": "宇视-抓拍",
+                "operationId": "univiewPtzSnapshot",
+                "parameters": [
+                    path_p("deviceId", "string", "设备编码", "TIC7632_01"),
+                    q("channelType", "string", False, "visible / thermal，默认 visible", "visible"),
+                ],
+                "responses": ok(ref("RespGenericMap"), {"imageUrl": "/api/uniview/mock/snapshot/TIC7632_01.jpg"}),
             }
         },
     },

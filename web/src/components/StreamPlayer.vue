@@ -23,19 +23,12 @@ const props = defineProps({
   url: { type: String, required: true }
 })
 
-const emit = defineEmits(['error'])
-
 const videoRef = ref(null)
 const hint = ref('')
 const err = ref('')
 
 let hls = null
 let flvPlayer = null
-
-function setError(message) {
-  err.value = message
-  if (message) emit('error', message)
-}
 
 function cleanup() {
   if (hls) {
@@ -75,7 +68,7 @@ function playHls(playUrl, el) {
     })
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (data?.fatal) {
-        setError(`HLS 失败：${data.type} / ${data.details}（地址 ${playUrl}）`)
+        err.value = `HLS 失败：${data.type} / ${data.details}（地址 ${playUrl}）`
       }
     })
     return
@@ -101,7 +94,7 @@ function playFlv(playUrl, el) {
   flvPlayer.load()
   flvPlayer.play().catch(() => {})
   flvPlayer.on(mpegts.Events.ERROR, (type, detail) => {
-    setError(`FLV 失败：${type} / ${detail}（地址 ${playUrl}）`)
+    err.value = `FLV 失败：${type} / ${detail}（地址 ${playUrl}）`
   })
 }
 
@@ -116,9 +109,10 @@ async function attach() {
     if (isRtmp(props.url)) {
       const info = parseRtmpUrl(props.url)
       if (!info) {
-        setError('RTMP 解析失败，示例：rtmp://8.130.74.232/live/cam01_sub')
+        err.value = 'RTMP 解析失败，示例：rtmp://8.130.74.232/live/cam01_sub'
         return
       }
+      // ZLM 的 HLS ts 常要 Cookie，浏览器跨域拉不到 → 优先 HTTP-FLV
       playFlv(info.flvUrl, el)
       return
     }
@@ -139,12 +133,11 @@ async function attach() {
       return
     }
 
-    setError('仅支持 RTMP / HTTP(S) 预览。RTMP 示例：rtmp://8.130.74.232/live/cam01_sub')
+    err.value = '仅支持 RTMP / HTTP(S) 预览。RTMP 示例：rtmp://8.130.74.232/live/cam01_sub'
   } catch (e) {
-    setError(
+    err.value =
       (e.message || '播放失败') +
-        '。请确认流已推到 ZLM，且 HTTP 口为 8080（可用 VITE_ZLM_HTTP_PORT 覆盖）。'
-    )
+      '。请确认流已推到 ZLM，且 HTTP 口为 8080（可用 VITE_ZLM_HTTP_PORT 覆盖）。'
     cleanup()
   }
 }

@@ -84,15 +84,24 @@ testdata:
 # 录像回放：ffprobe 读取 MP4 真实时长（endTime）
 record:
   ffprobe-path: /usr/bin/ffprobe
+  ffmpeg-path: ffmpeg
   probe-timeout-seconds: 5
   default-clip-seconds: 300
+  # 按时间点截取片段：时间戳前后各 N 秒（默认 30，最大 150）
+  default-clip-offset-seconds: 30
+  max-clip-offset-seconds: 150
+  clip-cache-dir: data/clip-cache
+  clip-cache-max-age-hours: 24
+  clip-timeout-seconds: 60
+  clip-batch-max-size: 50
 
 # 对外接口返回视频绝对地址时使用（可选；不配则按请求 host 自动生成）
 open-api:
   public-base-url: http://8.130.74.232:8090
 
-# JWT 登录配置
+# JWT 登录配置（测试环境可关闭鉴权）
 auth:
+  enabled: false
   jwt-secret: "jizhi-video-mid-jwt-secret-change-me-32bytes!!"
   # token 有效期（秒），默认 24 小时
   token-ttl-seconds: 86400

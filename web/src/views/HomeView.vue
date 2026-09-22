@@ -8,9 +8,10 @@
         <div><dt>昵称</dt><dd>{{ auth.user?.nickname || '-' }}</dd></div>
       </dl>
       <div class="links">
-        <router-link class="cta" to="/ptz">云台监控 →</router-link>
+        <router-link class="cta" to="/ptz">云台监控（宇视 mock）→</router-link>
         <router-link class="cta ghost" to="/gb28181">国标 GB28181 →</router-link>
         <router-link class="cta ghost" to="/devices">设备管理 →</router-link>
+        <router-link class="cta ghost" to="/record-clips">录像片段截取 →</router-link>
       </div>
     </section>
   </AppShell>

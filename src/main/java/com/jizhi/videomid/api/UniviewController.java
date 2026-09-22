@@ -107,9 +107,8 @@ public class UniviewController {
     public ApiResponse<Map<String, Object>> setPreset(@PathVariable String deviceId,
                                                       @PathVariable int index,
                                                       @RequestParam String name,
-                                                      @RequestParam(defaultValue = "false") boolean overwrite,
-                                                      @RequestParam(required = false) Double zoom) {
-        return ApiResponse.ok(ptzPort.setPreset(deviceId, index, name, overwrite, zoom));
+                                                      @RequestParam(defaultValue = "false") boolean overwrite) {
+        return ApiResponse.ok(ptzPort.setPreset(deviceId, index, name, overwrite));
     }
 
     @PostMapping("/ptz/{deviceId}/snapshot")

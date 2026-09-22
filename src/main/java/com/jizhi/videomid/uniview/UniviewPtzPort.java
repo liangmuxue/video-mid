@@ -19,7 +19,7 @@ public interface UniviewPtzPort {
 
     Map<String, Object> gotoPreset(String deviceId, int presetIndex);
 
-    Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite, Double zoom);
+    Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite);
 
     Map<String, Object> snapshot(String deviceId, String channelType);
 }

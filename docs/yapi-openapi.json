@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "极知视频中台 API",
-    "description": "分类：业务端 / 设备管理 / 录像回放 / 直播 / 对外开放（无鉴权）/ 系统鉴权 / 运维健康 / 内部回调。\n业务接口统一响应 { code, message, data }；code=0 成功。\n时间字段统一为毫秒时间戳（int64）；设备 status：0=不可用 1=已启用 2=已停用。\n业务直播默认使用子码流（sub）。\n需登录接口请带 Authorization: Bearer {token}；/api/open/**、POST /api/streams/register、POST /api/auth/login、/health/**、/index/hook/** 无需鉴权。",
-    "version": "1.4.0"
+    "description": "分类：业务端 / 设备管理 / 录像回放 / 录像片段截取 / 直播 / 对外开放 / GB28181 / 宇视 PTZ / 系统鉴权 / 运维 / ZLM Hook。\n业务接口统一响应 { code, message, data }；code=0 成功。\n时间字段统一为毫秒时间戳（int64）；设备 status：0=不可用 1=已启用 2=已停用。\n业务直播默认使用子码流（sub）。\n鉴权：配置 auth.enabled=false（当前测试环境）时，全部 /api/** 免登录；auth.enabled=true 时需 Authorization: Bearer {token}，始终免鉴权：/api/open/**、POST /api/streams/register、POST /api/auth/login、/api/gb28181/catalog.xml、/health/**、/index/hook/**。\n录像片段：按 deviceId + at（毫秒）+ seconds（前后各 N 秒）截取 MP4；支持单条 GET /clip 与批量 POST /clips。",
+    "version": "1.5.0"
   },
   "servers": [
     {
@@ -26,7 +26,11 @@
     },
     {
       "name": "录像回放",
-      "description": "管理端与业务端录像查询"
+      "description": "管理端与业务端录像查询、整段 MP4 播放"
+    },
+    {
+      "name": "录像片段截取",
+      "description": "按时间点 ± seconds 秒截取 MP4，含批量接口"
     },
     {
       "name": "直播",
@@ -35,6 +39,14 @@
     {
       "name": "对外开放（无鉴权）",
       "description": "/api/open/**，第三方免登录调用"
+    },
+    {
+      "name": "GB28181",
+      "description": "国标 mock/live：Catalog、SIP、INVITE 点播"
+    },
+    {
+      "name": "宇视 PTZ",
+      "description": "宇视 mock/live：设备、云台、预置位、抓拍"
     },
     {
       "name": "系统/鉴权",
@@ -724,6 +736,234 @@
                       "videoUrl": "http://8.130.74.232:8090/api/open/recordings/CAM_EAST_01/20260910_143000.mp4"
                     }
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/clips": {
+      "post": {
+        "tags": [
+          "录像片段截取",
+          "业务端"
+        ],
+        "summary": "业务端-批量截取录像片段",
+        "description": "Body 为 JSON 数组，每项含 deviceId、at（毫秒）、seconds（前后各 N 秒，默认 30）。单条失败不影响其它条目（ok=false + error）。单次最多 50 条。status=2 不可回放。",
+        "operationId": "bizClipsBatch",
+        "requestBody": {
+          "required": true,
+          "description": "截取参数数组",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "description": "批量截取请求",
+                "items": {
+                  "$ref": "#/components/schemas/RecordClipItemRequest"
+                }
+              },
+              "example": [
+                {
+                  "deviceId": "CAM_EAST_01",
+                  "at": 1730000030000,
+                  "seconds": 30
+                },
+                {
+                  "deviceId": "CAM_WEST_02",
+                  "at": 1730000100000,
+                  "seconds": 15
+                }
+              ]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClipBatch"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "CAM_EAST_01",
+                      "at": 1730000030000,
+                      "seconds": 30,
+                      "startTime": 1730000000000,
+                      "endTime": 1730000060000,
+                      "durationSeconds": 60,
+                      "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                      "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                      "windowStart": 1730000000000,
+                      "windowEnd": 1730000060000,
+                      "sourceFiles": [
+                        "20260910_143000.mp4"
+                      ],
+                      "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                      "size": 5242880,
+                      "ok": true
+                    },
+                    {
+                      "deviceId": "CAM_WEST_02",
+                      "at": 1730000100000,
+                      "seconds": 15,
+                      "ok": false,
+                      "error": "该时间点无可用录像"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}/clip": {
+      "get": {
+        "tags": [
+          "录像片段截取",
+          "业务端"
+        ],
+        "summary": "业务端-单条截取（元数据）",
+        "description": "返回 videoUrl、startTime、endTime；MP4 通过 videoUrl 播放。",
+        "operationId": "bizClip",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】事件时间点，毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】事件时间点，毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30，最大 150",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30，最大 150",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClip"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "at": 1730000030000,
+                    "seconds": 30,
+                    "startTime": 1730000000000,
+                    "endTime": 1730000060000,
+                    "durationSeconds": 60,
+                    "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "windowStart": 1730000000000,
+                    "windowEnd": 1730000060000,
+                    "sourceFiles": [
+                      "20260910_143000.mp4"
+                    ],
+                    "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                    "size": 5242880
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}/clip/file": {
+      "get": {
+        "tags": [
+          "录像片段截取",
+          "业务端"
+        ],
+        "summary": "业务端-片段 MP4 直链",
+        "description": "返回 video/mp4 二进制流，供 videoUrl 播放。",
+        "operationId": "bizClipFile",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 文件流",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "片段 MP4"
                 }
               }
             }
@@ -1684,6 +1924,235 @@
         }
       }
     },
+    "/api/recordings/clip": {
+      "get": {
+        "tags": [
+          "录像片段截取"
+        ],
+        "summary": "管理端-单条截取（元数据）",
+        "description": "按 deviceId + at + seconds 截取前后各 N 秒，返回 videoUrl、startTime、endTime。",
+        "operationId": "recordingsClip",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": true,
+            "description": "【必填】设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "【必填】设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】事件时间点，毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】事件时间点，毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClip"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "at": 1730000030000,
+                    "seconds": 30,
+                    "startTime": 1730000000000,
+                    "endTime": 1730000060000,
+                    "durationSeconds": 60,
+                    "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "windowStart": 1730000000000,
+                    "windowEnd": 1730000060000,
+                    "sourceFiles": [
+                      "20260910_143000.mp4"
+                    ],
+                    "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                    "size": 5242880
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/clips": {
+      "post": {
+        "tags": [
+          "录像片段截取"
+        ],
+        "summary": "管理端-批量截取录像片段",
+        "description": "Body 为 JSON 数组 [{ deviceId, at, seconds }, ...]，单次最多 50 条。",
+        "operationId": "recordingsClipsBatch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "description": "批量截取请求",
+                "items": {
+                  "$ref": "#/components/schemas/RecordClipItemRequest"
+                }
+              },
+              "example": [
+                {
+                  "deviceId": "CAM_EAST_01",
+                  "at": 1730000030000,
+                  "seconds": 30
+                }
+              ]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClipBatch"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "CAM_EAST_01",
+                      "at": 1730000030000,
+                      "seconds": 30,
+                      "startTime": 1730000000000,
+                      "endTime": 1730000060000,
+                      "durationSeconds": 60,
+                      "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                      "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                      "windowStart": 1730000000000,
+                      "windowEnd": 1730000060000,
+                      "sourceFiles": [
+                        "20260910_143000.mp4"
+                      ],
+                      "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                      "size": 5242880,
+                      "ok": true
+                    },
+                    {
+                      "deviceId": "CAM_WEST_02",
+                      "at": 1730000100000,
+                      "seconds": 15,
+                      "ok": false,
+                      "error": "该时间点无可用录像"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/clip/file": {
+      "get": {
+        "tags": [
+          "录像片段截取"
+        ],
+        "summary": "管理端-片段 MP4 直链",
+        "description": "返回 video/mp4。测试环境 auth.enabled=false 时无需 token；否则 video 标签可带 ?token= 或 Header Bearer。",
+        "operationId": "recordingsClipFile",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": true,
+            "description": "【必填】设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "【必填】设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30",
+              "example": 30
+            },
+            "example": 30
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "可选：JWT，供 video 标签无法带 Header 时使用",
+            "schema": {
+              "type": "string",
+              "description": "可选：JWT，供 video 标签无法带 Header 时使用"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 文件流",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "片段 MP4"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/recordings/{deviceId}/{fileName}": {
       "get": {
         "tags": [
@@ -2057,6 +2526,1395 @@
                   "type": "string",
                   "format": "binary",
                   "description": "录像文件二进制内容"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/clips": {
+      "post": {
+        "tags": [
+          "对外开放（无鉴权）",
+          "录像片段截取"
+        ],
+        "summary": "开放-批量截取录像片段",
+        "description": "无需登录。Body 为 JSON 数组 [{ deviceId, at, seconds }, ...]。",
+        "operationId": "openClipsBatch",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "description": "批量截取请求",
+                "items": {
+                  "$ref": "#/components/schemas/RecordClipItemRequest"
+                }
+              },
+              "example": [
+                {
+                  "deviceId": "CAM_EAST_01",
+                  "at": 1730000030000,
+                  "seconds": 30
+                }
+              ]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClipBatch"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "CAM_EAST_01",
+                      "at": 1730000030000,
+                      "seconds": 30,
+                      "startTime": 1730000000000,
+                      "endTime": 1730000060000,
+                      "durationSeconds": 60,
+                      "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                      "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                      "windowStart": 1730000000000,
+                      "windowEnd": 1730000060000,
+                      "sourceFiles": [
+                        "20260910_143000.mp4"
+                      ],
+                      "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                      "size": 5242880,
+                      "ok": true
+                    },
+                    {
+                      "deviceId": "CAM_WEST_02",
+                      "at": 1730000100000,
+                      "seconds": 15,
+                      "ok": false,
+                      "error": "该时间点无可用录像"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices/{deviceId}/clip": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）",
+          "录像片段截取"
+        ],
+        "summary": "开放-单条截取（元数据）",
+        "description": "无需登录。返回 videoUrl、startTime、endTime（毫秒）。",
+        "operationId": "openClip",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClip"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "at": 1730000030000,
+                    "seconds": 30,
+                    "startTime": 1730000000000,
+                    "endTime": 1730000060000,
+                    "durationSeconds": 60,
+                    "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "windowStart": 1730000000000,
+                    "windowEnd": 1730000060000,
+                    "sourceFiles": [
+                      "20260910_143000.mp4"
+                    ],
+                    "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                    "size": 5242880
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices/{deviceId}/clip/info": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）",
+          "录像片段截取"
+        ],
+        "summary": "开放-单条截取（同 /clip）",
+        "description": "与 GET /api/open/devices/{deviceId}/clip 相同，保留兼容。",
+        "operationId": "openClipInfo",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespClip"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "at": 1730000030000,
+                    "seconds": 30,
+                    "startTime": 1730000000000,
+                    "endTime": 1730000060000,
+                    "durationSeconds": 60,
+                    "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+                    "windowStart": 1730000000000,
+                    "windowEnd": 1730000060000,
+                    "sourceFiles": [
+                      "20260910_143000.mp4"
+                    ],
+                    "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+                    "size": 5242880
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/open/devices/{deviceId}/clip/file": {
+      "get": {
+        "tags": [
+          "对外开放（无鉴权）",
+          "录像片段截取"
+        ],
+        "summary": "开放-片段 MP4 直链",
+        "description": "无需登录。返回 video/mp4。",
+        "operationId": "openClipFile",
+        "security": [],
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "【必填】毫秒时间戳",
+            "schema": {
+              "type": "integer",
+              "description": "【必填】毫秒时间戳",
+              "example": 1730000030000,
+              "format": "int64"
+            },
+            "example": 1730000030000
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取秒数，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取秒数，默认 30",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 文件流",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "片段 MP4"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/config": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-配置",
+        "description": "返回 enabled、dataSource(mock/live)、upper、media 等配置。",
+        "operationId": "gb28181Config",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "enabled": true,
+                    "dataSource": "mock",
+                    "mock": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/status": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-运行状态",
+        "operationId": "gb28181Status",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "mode": "模拟下级平台",
+                    "registeredDevices": 2
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/catalog": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-Catalog（JSON）",
+        "description": "模拟/真实下级设备与通道目录。",
+        "operationId": "gb28181Catalog",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "34020000001320000001"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/catalog.xml": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-Catalog（XML）",
+        "description": "国标 XML 格式 Catalog；无需鉴权。",
+        "operationId": "gb28181CatalogXml",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "application/xml",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string",
+                  "description": "国标 Catalog XML"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/registry": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-live 注册表",
+        "description": "live 模式 SIP 注册设备列表。",
+        "operationId": "gb28181Registry",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": []
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/registry/reload-from-db": {
+      "post": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-从 DB 重载注册表",
+        "description": "live 模式：从 MySQL 重新填充 Catalog 注册表。",
+        "operationId": "gb28181RegistryReload",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "devices": 2
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/sip/status": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-SIP 栈状态",
+        "operationId": "gb28181SipStatus",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "listening": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/sip/sessions": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-SIP REGISTER 会话",
+        "description": "仅 live 模式。",
+        "operationId": "gb28181SipSessions",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": []
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/sip/catalog-query/{deviceId}": {
+      "post": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-发送 Catalog Query",
+        "description": "live 模式：向已注册下级发送 Catalog 查询。",
+        "operationId": "gb28181SipCatalogQuery",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "下级设备 ID",
+            "schema": {
+              "type": "string",
+              "description": "下级设备 ID",
+              "example": "34020000001320000001"
+            },
+            "example": "34020000001320000001"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "34020000001320000001",
+                    "sent": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/devices/{deviceId}/play": {
+      "post": {
+        "tags": [
+          "GB28181",
+          "直播"
+        ],
+        "summary": "GB28181-设备点播",
+        "description": "按设备业务 ID 国标点播，逻辑同业务端 /live。",
+        "operationId": "gb28181PlayDevice",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备业务编码",
+            "schema": {
+              "type": "string",
+              "description": "设备业务编码",
+              "example": "CAM_EAST_01"
+            },
+            "example": "CAM_EAST_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespLiveStart"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "CAM_EAST_01",
+                    "streamType": "sub",
+                    "streamUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "playUrl": "http://8.130.74.232:8080/live/cam01_sub.live.flv",
+                    "liveEnabled": true,
+                    "ref": 1,
+                    "countBy": "zlm-hook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/biz-devices": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-业务对齐设备视图",
+        "operationId": "gb28181BizDevices",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": []
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/sync-check": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-Catalog 与 DB 一致性校验",
+        "operationId": "gb28181SyncCheck",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "ok": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/channels/{channelId}/invite": {
+      "post": {
+        "tags": [
+          "GB28181",
+          "直播"
+        ],
+        "summary": "GB28181-通道 INVITE 点播",
+        "description": "mock 返回演示 playUrl；live 接 RTP。",
+        "operationId": "gb28181Invite",
+        "parameters": [
+          {
+            "name": "channelId",
+            "in": "path",
+            "required": true,
+            "description": "国标通道 ID",
+            "schema": {
+              "type": "string",
+              "description": "国标通道 ID",
+              "example": "34020000001320000002"
+            },
+            "example": "34020000001320000002"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "playUrl": "http://8.130.74.232:8080/live/xxx.flv"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/channels/{channelId}/bye": {
+      "post": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-停止点播（BYE）",
+        "description": "仅 live 模式。",
+        "operationId": "gb28181Bye",
+        "parameters": [
+          {
+            "name": "channelId",
+            "in": "path",
+            "required": true,
+            "description": "国标通道 ID",
+            "schema": {
+              "type": "string",
+              "description": "国标通道 ID",
+              "example": "34020000001320000002"
+            },
+            "example": "34020000001320000002"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "stopped": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gb28181/invite/sessions": {
+      "get": {
+        "tags": [
+          "GB28181"
+        ],
+        "summary": "GB28181-当前 INVITE 会话",
+        "description": "仅 live 模式。",
+        "operationId": "gb28181InviteSessions",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": []
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/config": {
+      "get": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-配置",
+        "description": "dataSource: mock / live。",
+        "operationId": "univiewConfig",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "dataSource": "mock",
+                    "mock": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/live/readiness": {
+      "get": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-live 联调就绪检查",
+        "operationId": "univiewLiveReadiness",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "configured": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/devices": {
+      "get": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-设备列表",
+        "operationId": "univiewDevices",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "TIC7632_01",
+                      "name": "云台1"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/devices/{deviceId}": {
+      "get": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-设备详情",
+        "operationId": "univiewDevice",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "TIC7632_01"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/devices": {
+      "get": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-PTZ 设备列表（含预置位）",
+        "operationId": "univiewPtzDevices",
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMapList"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": [
+                    {
+                      "deviceId": "TIC7632_01",
+                      "presets": []
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/move": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-云台方向",
+        "description": "direction: up/down/left/right 等。",
+        "operationId": "univiewPtzMove",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": true,
+            "description": "方向：up/down/left/right",
+            "schema": {
+              "type": "string",
+              "description": "方向：up/down/left/right",
+              "example": "up"
+            },
+            "example": "up"
+          },
+          {
+            "name": "speed",
+            "in": "query",
+            "required": false,
+            "description": "速度 1~8，默认 4",
+            "schema": {
+              "type": "integer",
+              "description": "速度 1~8，默认 4",
+              "example": 4
+            },
+            "example": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true,
+                    "mock": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/zoom": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-变倍",
+        "operationId": "univiewPtzZoom",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": true,
+            "description": "in / out",
+            "schema": {
+              "type": "string",
+              "description": "in / out",
+              "example": "in"
+            },
+            "example": "in"
+          },
+          {
+            "name": "speed",
+            "in": "query",
+            "required": false,
+            "description": "速度，默认 4",
+            "schema": {
+              "type": "integer",
+              "description": "速度，默认 4",
+              "example": 4
+            },
+            "example": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/focus": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-对焦",
+        "operationId": "univiewPtzFocus",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": true,
+            "description": "near / far",
+            "schema": {
+              "type": "string",
+              "description": "near / far",
+              "example": "near"
+            },
+            "example": "near"
+          },
+          {
+            "name": "speed",
+            "in": "query",
+            "required": false,
+            "description": "速度，默认 4",
+            "schema": {
+              "type": "integer",
+              "description": "速度，默认 4",
+              "example": 4
+            },
+            "example": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/wide-angle": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-一键广角",
+        "operationId": "univiewPtzWideAngle",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/preset/{index}/goto": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-调用预置位",
+        "operationId": "univiewPtzGotoPreset",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "description": "预置位编号 1~1024",
+            "schema": {
+              "type": "integer",
+              "description": "预置位编号 1~1024",
+              "example": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/preset/{index}": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-保存预置位",
+        "operationId": "univiewPtzSetPreset",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "description": "预置位编号",
+            "schema": {
+              "type": "integer",
+              "description": "预置位编号",
+              "example": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "description": "预置位名称",
+            "schema": {
+              "type": "string",
+              "description": "预置位名称",
+              "example": "东门"
+            },
+            "example": "东门"
+          },
+          {
+            "name": "overwrite",
+            "in": "query",
+            "required": false,
+            "description": "是否覆盖已存在预置位，默认 false",
+            "schema": {
+              "type": "boolean",
+              "description": "是否覆盖已存在预置位，默认 false",
+              "example": false
+            },
+            "example": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true,
+                    "index": 1,
+                    "name": "东门"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uniview/ptz/{deviceId}/snapshot": {
+      "post": {
+        "tags": [
+          "宇视 PTZ"
+        ],
+        "summary": "宇视-抓拍",
+        "operationId": "univiewPtzSnapshot",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "TIC7632_01"
+            },
+            "example": "TIC7632_01"
+          },
+          {
+            "name": "channelType",
+            "in": "query",
+            "required": false,
+            "description": "visible / thermal，默认 visible",
+            "schema": {
+              "type": "string",
+              "description": "visible / thermal，默认 visible",
+              "example": "visible"
+            },
+            "example": "visible"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespGenericMap"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "imageUrl": "/api/uniview/mock/snapshot/TIC7632_01.jpg"
+                  }
                 }
               }
             }
@@ -2977,6 +4835,182 @@
           }
         },
         "description": "带播放链接的录像项"
+      },
+      "RecordClipItemRequest": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "【必填】设备业务编码",
+            "example": "CAM_EAST_01"
+          },
+          "at": {
+            "type": "integer",
+            "description": "【必填】事件时间点，毫秒时间戳（也支持 10 位秒级）",
+            "example": 1730000030000,
+            "format": "int64"
+          },
+          "seconds": {
+            "type": "integer",
+            "description": "时间戳前后各取 N 秒；不传默认 30，最大 150",
+            "example": 30
+          }
+        },
+        "required": [
+          "deviceId",
+          "at"
+        ],
+        "description": "批量截取录像：单条请求项"
+      },
+      "ClipResult": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "at": {
+            "type": "integer",
+            "description": "请求中的事件时间点（毫秒）",
+            "example": 1730000030000,
+            "format": "int64"
+          },
+          "seconds": {
+            "type": "integer",
+            "description": "前后各取的秒数",
+            "example": 30
+          },
+          "startTime": {
+            "type": "integer",
+            "description": "片段实际开始时间（毫秒）",
+            "example": 1730000000000,
+            "format": "int64"
+          },
+          "endTime": {
+            "type": "integer",
+            "description": "片段实际结束时间（毫秒）",
+            "example": 1730000060000,
+            "format": "int64"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "description": "片段时长（秒）",
+            "example": 60
+          },
+          "videoUrl": {
+            "type": "string",
+            "description": "MP4 播放地址，指向对应环境的 /clip/file 接口",
+            "example": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30"
+          },
+          "clipUrl": {
+            "type": "string",
+            "description": "同 videoUrl，兼容字段",
+            "nullable": true
+          },
+          "windowStart": {
+            "type": "integer",
+            "description": "请求窗口起始（at - seconds）",
+            "example": 1730000000000,
+            "format": "int64"
+          },
+          "windowEnd": {
+            "type": "integer",
+            "description": "请求窗口结束（at + seconds）",
+            "example": 1730000060000,
+            "format": "int64"
+          },
+          "sourceFiles": {
+            "type": "array",
+            "description": "参与截取的原始 MP4 文件名列表",
+            "items": {
+              "type": "string",
+              "description": "源录像文件名"
+            }
+          },
+          "clipFileName": {
+            "type": "string",
+            "description": "缓存片段文件名",
+            "example": "CAM_EAST_01_1730000030000_30.mp4"
+          },
+          "size": {
+            "type": "integer",
+            "description": "片段文件大小（字节）",
+            "example": 5242880,
+            "format": "int64"
+          }
+        },
+        "description": "录像片段截取结果（单条成功）"
+      },
+      "ClipBatchItem": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码",
+            "example": "CAM_EAST_01"
+          },
+          "at": {
+            "type": "integer",
+            "description": "事件时间点（毫秒）",
+            "example": 1730000030000,
+            "format": "int64"
+          },
+          "seconds": {
+            "type": "integer",
+            "description": "前后各取的秒数",
+            "example": 30
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "本条是否成功",
+            "example": true
+          },
+          "error": {
+            "type": "string",
+            "description": "失败原因；ok=false 时有值",
+            "nullable": true
+          },
+          "startTime": {
+            "type": "integer",
+            "description": "成功时：片段开始时间",
+            "example": 1726560000000,
+            "format": "int64",
+            "nullable": true
+          },
+          "endTime": {
+            "type": "integer",
+            "description": "成功时：片段结束时间",
+            "example": 1726560000000,
+            "format": "int64",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "number",
+            "description": "成功时：片段时长（秒）",
+            "example": 60,
+            "nullable": true
+          },
+          "videoUrl": {
+            "type": "string",
+            "description": "成功时：MP4 播放地址",
+            "nullable": true
+          },
+          "sourceFiles": {
+            "type": "array",
+            "description": "成功时：源文件列表",
+            "items": {
+              "type": "string",
+              "description": "源录像文件名"
+            }
+          }
+        },
+        "description": "批量截取结果项（含成功/失败）"
+      },
+      "GenericMap": {
+        "type": "object",
+        "properties": {},
+        "description": "键值对象，字段随 mock/live 模式变化"
       },
       "FolderBase": {
         "type": "object",
@@ -3900,6 +5934,159 @@
             "2026-09-10",
             "2026-09-15",
             "2026-09-17"
+          ]
+        }
+      },
+      "RespClip": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ClipResult"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "deviceId": "CAM_EAST_01",
+            "at": 1730000030000,
+            "seconds": 30,
+            "startTime": 1730000000000,
+            "endTime": 1730000060000,
+            "durationSeconds": 60,
+            "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+            "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+            "windowStart": 1730000000000,
+            "windowEnd": 1730000060000,
+            "sourceFiles": [
+              "20260910_143000.mp4"
+            ],
+            "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+            "size": 5242880
+          }
+        }
+      },
+      "RespClipBatch": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "批量截取结果",
+            "items": {
+              "$ref": "#/components/schemas/ClipBatchItem"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "deviceId": "CAM_EAST_01",
+              "at": 1730000030000,
+              "seconds": 30,
+              "startTime": 1730000000000,
+              "endTime": 1730000060000,
+              "durationSeconds": 60,
+              "videoUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+              "clipUrl": "http://8.130.74.232:8090/api/open/devices/CAM_EAST_01/clip/file?at=1730000030000&seconds=30",
+              "windowStart": 1730000000000,
+              "windowEnd": 1730000060000,
+              "sourceFiles": [
+                "20260910_143000.mp4"
+              ],
+              "clipFileName": "CAM_EAST_01_1730000030000_30.mp4",
+              "size": 5242880,
+              "ok": true
+            },
+            {
+              "deviceId": "CAM_WEST_02",
+              "at": 1730000100000,
+              "seconds": 15,
+              "ok": false,
+              "error": "该时间点无可用录像"
+            }
+          ]
+        }
+      },
+      "RespGenericMap": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GenericMap"
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": {
+            "success": true,
+            "mock": true
+          }
+        }
+      },
+      "RespGenericMapList": {
+        "type": "object",
+        "description": "统一 JSON 响应：code/message/data",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "业务状态码：0=成功，非0=失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "提示信息：成功一般为 success，失败为错误原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "array",
+            "description": "对象列表",
+            "items": {
+              "$ref": "#/components/schemas/GenericMap"
+            }
+          }
+        },
+        "example": {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "deviceId": "TIC7632_01"
+            }
           ]
         }
       },

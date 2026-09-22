@@ -42,3 +42,40 @@ export const recordingFileUrl = (deviceId, fileName) => {
   return `${base}/api/recordings/${encodeURIComponent(deviceId)}/${encodeURIComponent(fileName)}${q}`
 }
 
+/** 按时间点截取录像：时间戳前后各 seconds 秒，返回 videoUrl / startTime / endTime */
+export const fetchRecordingClip = (deviceId, at, seconds = 30) =>
+  http.get('/api/recordings/clip', {
+    params: { deviceId, at, seconds },
+    ...recordingHttpOpts
+  })
+export const fetchOpenRecordingClip = (deviceId, at, seconds = 30) =>
+  http.get(`/api/open/devices/${encodeURIComponent(deviceId)}/clip`, {
+    params: { at, seconds },
+    ...recordingHttpOpts
+  })
+/** 批量截取：items = [{ deviceId, at, seconds }, ...] */
+export const fetchRecordingClipsBatch = (items) =>
+  http.post('/api/recordings/clips', items, recordingHttpOpts)
+export const fetchOpenRecordingClipsBatch = (items) =>
+  http.post('/api/open/clips', items, recordingHttpOpts)
+/** 片段 MP4 直链（供 video 标签播放） */
+export const recordingClipFileUrl = (deviceId, at, seconds = 30) => {
+  const base = (http.defaults.baseURL || '').replace(/\/$/, '')
+  const params = new URLSearchParams({
+    deviceId,
+    at: String(at),
+    seconds: String(seconds)
+  })
+  const token = localStorage.getItem('video_mid_token')
+  if (token) params.set('token', token)
+  return `${base}/api/recordings/clip/file?${params}`
+}
+
+/** 为 video 标签播放追加 token（管理端 clip/file 需鉴权） */
+export const authRecordingVideoUrl = (url) => {
+  if (!url) return ''
+  const token = localStorage.getItem('video_mid_token')
+  if (!token) return url
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+}
+

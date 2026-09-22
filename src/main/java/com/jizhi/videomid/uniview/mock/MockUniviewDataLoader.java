@@ -3,8 +3,6 @@ package com.jizhi.videomid.uniview.mock;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jizhi.videomid.config.UniviewProperties;
-import com.jizhi.videomid.mock.MockSupport;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -14,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-@ConditionalOnExpression(MockSupport.FIXTURES_ENABLED)
 public class MockUniviewDataLoader {
 
     private final UniviewProperties props;

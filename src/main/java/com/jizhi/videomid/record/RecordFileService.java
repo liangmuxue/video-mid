@@ -164,6 +164,11 @@ public class RecordFileService {
     }
 
     public Resource openFile(String deviceId, String fileName) {
+        return new FileSystemResource(resolveFilePath(deviceId, fileName));
+    }
+
+    /** 解析录像文件路径（含存在性校验）。 */
+    public Path resolveFilePath(String deviceId, String fileName) {
         String id = requireDeviceId(deviceId);
         String name = requireFileName(fileName);
         Path file = deviceDir(id).resolve(name).normalize();
@@ -171,7 +176,7 @@ public class RecordFileService {
         if (!file.startsWith(root) || !Files.isRegularFile(file)) {
             throw new IllegalArgumentException("录像文件不存在");
         }
-        return new FileSystemResource(file);
+        return file;
     }
 
     private Map<String, Object> buildRow(String deviceId, String fileName, Path file, long startMillis) throws IOException {

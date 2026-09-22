@@ -1,6 +1,5 @@
 package com.jizhi.videomid.uniview.mock;
 
-import com.jizhi.videomid.device.DevicePtzPreset;
 import com.jizhi.videomid.device.DevicePtzPresetService;
 import com.jizhi.videomid.uniview.UniviewPtzPort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,27 +14,22 @@ import java.util.Map;
 public class MockUniviewPtzAdapter implements UniviewPtzPort {
 
     private final MockUniviewDataLoader dataLoader;
-    private final DevicePtzPresetService catalog;
-    private final MockPresetCatalogSeeder seeder;
+    private final DevicePtzPresetService presetService;
 
-    public MockUniviewPtzAdapter(MockUniviewDataLoader dataLoader,
-                                 DevicePtzPresetService catalog,
-                                 MockPresetCatalogSeeder seeder) {
+    public MockUniviewPtzAdapter(MockUniviewDataLoader dataLoader, DevicePtzPresetService presetService) {
         this.dataLoader = dataLoader;
-        this.catalog = catalog;
-        this.seeder = seeder;
+        this.presetService = presetService;
     }
 
     @Override
     public List<Map<String, Object>> listPtzDevices() {
-        seeder.ensureAll();
         return dataLoader.devices().stream().map(d -> {
             String deviceId = String.valueOf(d.get("deviceId"));
             Map<String, Object> m = new HashMap<>();
             m.put("deviceId", deviceId);
             m.put("name", d.get("name"));
             m.put("model", d.get("model"));
-            m.put("presets", catalog.listMaps(deviceId));
+            m.put("presets", presetService.listMaps(deviceId));
             return m;
         }).toList();
     }
@@ -82,19 +76,17 @@ public class MockUniviewPtzAdapter implements UniviewPtzPort {
     @Override
     public Map<String, Object> gotoPreset(String deviceId, int presetIndex) {
         dataLoader.requireDevice(deviceId);
-        seeder.ensureSeeded(deviceId);
-        DevicePtzPreset preset = catalog.require(deviceId, presetIndex);
-        Map<String, Object> data = new HashMap<>(catalog.toMap(preset));
-        data.put("deviceId", deviceId);
-        data.put("presetIndex", presetIndex);
-        return ok("mock-goto-preset", data);
+        return ok("mock-goto-preset", Map.of(
+                "deviceId", deviceId,
+                "presetIndex", presetIndex
+        ));
     }
 
     @Override
-    public Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite, Double zoom) {
+    public Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite) {
         dataLoader.requireDevice(deviceId);
-        DevicePtzPreset preset = catalog.save(deviceId, presetIndex, name, zoom, overwrite);
-        Map<String, Object> data = new HashMap<>(catalog.toMap(preset));
+        Map<String, Object> data = new HashMap<>(presetService.toMap(
+                presetService.save(deviceId, presetIndex, name, null, overwrite)));
         data.put("deviceId", deviceId);
         data.put("presetIndex", presetIndex);
         data.put("overwrite", overwrite);
