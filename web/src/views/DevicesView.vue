@@ -116,6 +116,12 @@
         <label><span>安装地址</span><input v-model.trim="form.address" /></label>
         <label><span>网关ID</span><input v-model.trim="form.gatewayId" /></label>
         <label><span>平台ID</span><input v-model.trim="form.platformId" /></label>
+        <label><span>宇视 IP</span><input v-model.trim="form.host" placeholder="留空表示非宇视设备" /></label>
+        <label><span>端口</span><input v-model.number="form.port" type="number" min="1" max="65535" /></label>
+        <label><span>用户名</span><input v-model.trim="form.username" autocomplete="off" /></label>
+        <label><span>密码</span><input v-model="form.password" type="password" autocomplete="new-password" placeholder="编辑时留空则不修改" /></label>
+        <label><span>通道号</span><input v-model.trim="form.accessChannel" placeholder="IPC 一般为 0" /></label>
+        <p class="tip">保存时向摄像机查询实际启用的码流，再写入码流表。有人播放才拉流，没人看就停。</p>
         <p v-if="formError" class="error">{{ formError }}</p>
         <div class="form-actions">
           <button type="button" class="ghost" @click="formOpen = false">取消</button>
@@ -213,7 +219,12 @@ const form = reactive({
   model: '',
   address: '',
   gatewayId: '',
-  platformId: ''
+  platformId: '',
+  host: '',
+  port: null,
+  username: '',
+  password: '',
+  accessChannel: '0'
 })
 
 const folderFormOpen = ref(false)
@@ -310,7 +321,12 @@ function openDevice(d = null) {
     model: d?.model || '',
     address: d?.address || '',
     gatewayId: d?.gatewayId || '',
-    platformId: d?.platformId || ''
+    platformId: d?.platformId || '',
+    host: d?.host || '',
+    port: d?.port ?? null,
+    username: d?.username || '',
+    password: '',
+    accessChannel: d?.accessChannel || '0'
   })
   formOpen.value = true
 }
@@ -341,6 +357,13 @@ async function save() {
   formError.value = ''
   try {
     const payload = { ...form, folderId: form.folderId ?? null }
+    if (payload.port === '' || Number.isNaN(payload.port)) payload.port = null
+    if (!payload.host) {
+      payload.port = null
+      payload.username = null
+      payload.password = null
+      payload.accessChannel = null
+    }
     if (editingId.value) await updateDevice(editingId.value, payload)
     else await createDevice(payload)
     formOpen.value = false
@@ -462,7 +485,7 @@ th { color: var(--muted); font-size: 13px; font-weight: 500; }
 .error { color: var(--danger); }
 .empty { color: var(--muted); text-align: center; }
 .mask { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 20px; z-index: 40; }
-.modal { width: min(460px, 100%); background: #102019; border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: grid; gap: 12px; box-shadow: var(--shadow); }
+.modal { width: min(460px, 100%); max-height: min(86vh, 820px); overflow: auto; background: #102019; border: 1px solid var(--line); border-radius: 18px; padding: 22px; display: grid; gap: 12px; box-shadow: var(--shadow); }
 .playback-modal { width: min(960px, 100%); max-height: min(92vh, 960px); overflow: auto; padding: 18px 20px 20px; }
 .modal h2 { margin: 0; font-family: Syne, sans-serif; }
 .modal label { display: grid; gap: 6px; }

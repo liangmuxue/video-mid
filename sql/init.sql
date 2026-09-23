@@ -65,10 +65,18 @@ CREATE TABLE `device` (
   `gateway_id`    VARCHAR(64)  DEFAULT NULL COMMENT '边缘网关 ID',
   `longitude`     DOUBLE       DEFAULT NULL COMMENT '经度',
   `latitude`      DOUBLE       DEFAULT NULL COMMENT '纬度',
+  `host`          VARCHAR(128) DEFAULT NULL COMMENT '宇视设备 IP',
+  `port`          INT          DEFAULT NULL COMMENT '宇视设备端口',
+  `username`      VARCHAR(64)  DEFAULT NULL COMMENT '宇视登录用户名',
+  `password`      VARCHAR(128) DEFAULT NULL COMMENT '宇视登录密码',
+  `access_channel` VARCHAR(32) DEFAULT NULL COMMENT 'LAPI 通道号，IPC 一般为 0',
+  `access_status` VARCHAR(32)  NOT NULL DEFAULT 'unknown' COMMENT 'unknown/online/offline/auth_failed',
+  `access_error`  VARCHAR(512) DEFAULT NULL COMMENT '最近一次登录或拉流失败原因',
   `created_at`    BIGINT       NOT NULL COMMENT '创建时间（毫秒时间戳）',
   `updated_at`    BIGINT       NOT NULL COMMENT '更新时间（毫秒时间戳）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_id` (`device_id`),
+  UNIQUE KEY `uk_device_login` (`host`, `port`, `access_channel`),
   KEY `idx_platform_id` (`platform_id`),
   KEY `idx_folder_id` (`folder_id`),
   KEY `idx_status` (`status`)
@@ -84,6 +92,9 @@ CREATE TABLE `device_stream` (
   `status`        VARCHAR(16)  NOT NULL DEFAULT 'OFF' COMMENT 'ON / OFF',
   `sort_no`       INT          NOT NULL DEFAULT 0 COMMENT '排序',
   `live_enabled`  TINYINT      NOT NULL DEFAULT 0 COMMENT '业务端直播标记 0/1，同设备仅一条为 1',
+  `stream_index`  INT          DEFAULT NULL COMMENT 'LAPI 码流序号，主码流 0，子码流 1',
+  `zlm_app`       VARCHAR(64)  DEFAULT NULL COMMENT 'ZLM app，宇视拉流为 live',
+  `zlm_stream`    VARCHAR(128) DEFAULT NULL COMMENT 'ZLM stream，宇视拉流标识',
   `created_at`    BIGINT       NOT NULL COMMENT '创建时间（毫秒时间戳）',
   `updated_at`    BIGINT       NOT NULL COMMENT '更新时间（毫秒时间戳）',
   PRIMARY KEY (`id`),
@@ -118,57 +129,22 @@ INSERT INTO `device_folder` (`id`, `parent_id`, `name`, `sort_no`, `path`, `crea
 
 ALTER TABLE `device_folder` AUTO_INCREMENT = 10;
 
+-- 宇视设备。播放地址先写好，有人看才拉流，没人看则停。
 INSERT INTO `device`
-  (`device_id`, `name`, `platform_id`, `folder_id`, `status`, `manufacturer`, `model`, `address`, `ptz_type`, `gateway_id`, `longitude`, `latitude`, `created_at`, `updated_at`)
+  (`device_id`, `name`, `folder_id`, `status`, `manufacturer`, `model`, `address`, `ptz_type`,
+   `host`, `port`, `username`, `password`, `access_channel`, `access_status`, `created_at`, `updated_at`)
 VALUES
-('CAM_EAST_01', '东门球机',   '34020000002000000001', 2, 1, '宇视', 'IPC-B系列', '小区东门',     1, 'GW_COMMUNITY_01', 116.40, 39.90, @now_ms, @now_ms),
-('CAM_GATE_02', '岗卡枪机',   '34020000002000000001', 2, 1, '宇视', 'IPC-B系列', '小区岗卡',     0, 'GW_COMMUNITY_01', 116.41, 39.91, @now_ms, @now_ms),
-('CAM_PARK_03', '停车场半球', '34020000002000000001', 3, 2, '海康', 'DS-2CD',    '地下车库入口', 0, NULL,              116.39, 39.89, @now_ms, @now_ms);
+('UV_10135', '演示球机', 2, 1, '宇视', 'IPC-S6424-IR@P-X25-VF', '宇视在线调试', 1,
+ '39.185.236.176', 10135, 'guest', '*Guest321', '0', 'unknown', @now_ms, @now_ms);
 
 INSERT INTO `device_stream`
-  (`device_id`, `stream_type`, `channel_id`, `stream_url`, `stream_name`, `status`, `sort_no`, `live_enabled`, `created_at`, `updated_at`)
+  (`device_id`, `stream_type`, `stream_url`, `stream_name`, `status`, `sort_no`, `live_enabled`,
+   `stream_index`, `zlm_app`, `zlm_stream`, `created_at`, `updated_at`)
 VALUES
-('CAM_EAST_01', 'main', '34020000001320000021',
- 'http://8.130.74.232:8080/live/cam01_main.live.flv', '东门-主码流', 'ON', 1, 0, @now_ms, @now_ms),
-('CAM_EAST_01', 'sub',  '34020000001320000022',
- 'http://8.130.74.232:8080/live/cam01_sub.live.flv',  '东门-子码流', 'ON', 2, 1, @now_ms, @now_ms),
-('CAM_GATE_02', 'main', '34020000001320000023',
- 'http://8.130.74.232:8080/live/cam02_main.live.flv', '岗卡-主码流', 'ON', 1, 0, @now_ms, @now_ms),
-('CAM_GATE_02', 'sub',  '34020000001320000024',
- 'http://8.130.74.232:8080/live/cam02_sub.live.flv',  '岗卡-子码流', 'ON', 2, 1, @now_ms, @now_ms),
-('CAM_PARK_03', 'sub',  '34020000001320000025',
- 'http://8.130.74.232:8080/live/cam03_sub.live.flv',  '停车场-子码流', 'ON', 1, 1, @now_ms, @now_ms);
-
--- ---------------------------------------------------------------------------
--- 【仅 mock】开发期模拟云台，上线可删本段及 TIC7632_* 行
--- 与 resources/mock/uniview-devices.json 一致；通道号避开上面 CAM_* 的 021–025
--- ---------------------------------------------------------------------------
-INSERT INTO `device`
-  (`device_id`, `name`, `platform_id`, `folder_id`, `status`, `manufacturer`, `model`, `address`, `ptz_type`, `gateway_id`, `longitude`, `latitude`, `created_at`, `updated_at`)
-VALUES
-('TIC7632_01', '观测云台-东门（模拟）', '34020000002000000001', NULL, 1, '宇视', 'TIC7632-IRL@L-F75-4X56-GB-VH1', '小区东门制高点', 1, NULL, 116.40, 39.90, @now_ms, @now_ms),
-('TIC7632_02', '观测云台-西区（模拟）', '34020000002000000001', NULL, 1, '宇视', 'TIC7632-IRL@L-F75-4X56-GB-VH1', '西区瞭望塔',     1, NULL, 116.39, 39.91, @now_ms, @now_ms);
-
-INSERT INTO `device_stream`
-  (`device_id`, `stream_type`, `channel_id`, `stream_url`, `stream_name`, `status`, `sort_no`, `live_enabled`, `created_at`, `updated_at`)
-VALUES
-('TIC7632_01', 'visible_main', '34020000001320000001',
- 'http://8.130.74.232:8080/live/tic7632_01_visible_main.live.flv', '可见光-主码流', 'ON', 1, 0, @now_ms, @now_ms),
-('TIC7632_01', 'visible_sub',  '34020000001320000002',
- 'http://8.130.74.232:8080/live/tic7632_01_visible_sub.live.flv',  '可见光-子码流', 'ON', 2, 1, @now_ms, @now_ms),
-('TIC7632_01', 'thermal_main', '34020000001320000003',
- 'http://8.130.74.232:8080/live/tic7632_01_thermal_main.live.flv', '热成像-主码流', 'ON', 3, 0, @now_ms, @now_ms),
-('TIC7632_02', 'visible_main', '34020000001320000011',
- 'http://8.130.74.232:8080/live/tic7632_02_visible_main.live.flv', '可见光-主码流', 'ON', 1, 0, @now_ms, @now_ms),
-('TIC7632_02', 'thermal_main', '34020000001320000012',
- 'http://8.130.74.232:8080/live/tic7632_02_thermal_main.live.flv', '热成像-主码流', 'ON', 2, 1, @now_ms, @now_ms);
-
-INSERT INTO `device_ptz_preset` (`device_id`, `preset_index`, `name`, `zoom`, `created_at`, `updated_at`) VALUES
-('TIC7632_01', 1, '东门全景',   1.0,  @now_ms, @now_ms),
-('TIC7632_01', 2, '岗卡特写',   8.0,  @now_ms, @now_ms),
-('TIC7632_01', 3, '热成像周界', 1.0,  @now_ms, @now_ms),
-('TIC7632_02', 1, '西区全景',   1.0,  @now_ms, @now_ms),
-('TIC7632_02', 2, '停车场入口', 12.0, @now_ms, @now_ms);
+('UV_10135', 'main', 'http://8.130.74.232:8080/live/uv_UV_10135_main.live.flv', '主码流', 'OFF', 1, 0,
+ 0, 'live', 'uv_UV_10135_main', @now_ms, @now_ms),
+('UV_10135', 'sub',  'http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv',  '子码流', 'OFF', 2, 1,
+ 1, 'live', 'uv_UV_10135_sub', @now_ms, @now_ms);
 
 SELECT 'sys_user（空，等启动写入 admin）' AS tbl, COUNT(*) AS cnt FROM `sys_user`
 UNION ALL SELECT 'device_folder', COUNT(*) FROM `device_folder`

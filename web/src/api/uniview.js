@@ -7,27 +7,19 @@ export const fetchUniviewDevice = (deviceId) =>
 export const fetchPtzDevices = () => http.get('/api/uniview/ptz/devices')
 
 export const ptzMove = (deviceId, direction, speed = 4) =>
-  http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/move`, null, {
-    params: { direction, speed }
-  })
+  http.post('/api/uniview/ptz/move', { deviceId, direction, speed })
 
 export const ptzZoom = (deviceId, action, speed = 4) =>
-  http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/zoom`, null, {
-    params: { action, speed }
-  })
+  http.post('/api/uniview/ptz/zoom', { deviceId, action, speed })
 
 export const ptzFocus = (deviceId, action, speed = 4) =>
-  http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/focus`, null, {
-    params: { action, speed }
-  })
+  http.post('/api/uniview/ptz/focus', { deviceId, action, speed })
 
 export const ptzWideAngle = (deviceId) =>
-  http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/wide-angle`)
+  http.post('/api/uniview/ptz/wide-angle', { deviceId })
 
 export const ptzGotoPreset = (deviceId, index) =>
-  http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/preset/${index}/goto`)
+  http.post('/api/uniview/ptz/preset/goto', { deviceId, index })
 
 export const ptzSetPreset = (deviceId, index, name, overwrite = false) =>
-  http.post(`/api/uniview/ptz/${encodeURIComponent(deviceId)}/preset/${index}`, null, {
-    params: { name, overwrite }
-  })
+  http.post('/api/uniview/ptz/preset/save', { deviceId, index, name, overwrite })

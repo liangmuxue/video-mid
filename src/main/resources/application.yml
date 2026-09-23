@@ -28,15 +28,15 @@ zlm:
 
 # 宇视对接：开发 mock，联调改 live。mock 夹具见 resources/mock 与 *.mock 包，上线可整段删除
 uniview:
-  data-source: mock
+  data-source: live
   mock:
     preview-base-url: http://8.130.74.232:8080/live
     devices-resource: mock/uniview-devices.json
   live:
-    device-host: ""
-    device-port: 80
-    username: admin
-    password: ""
+    device-host: 39.185.236.176
+    device-port: 10135
+    username: guest
+    password: "*Guest321"
     api-type: lapi
 
 # 国标 GB28181：前期 mock 模拟下级，live 接真实 SIP（不用 RTSP）

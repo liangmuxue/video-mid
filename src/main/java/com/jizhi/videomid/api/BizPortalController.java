@@ -1,6 +1,10 @@
 package com.jizhi.videomid.api;
 
 import com.jizhi.videomid.auth.dto.ApiResponse;
+import com.jizhi.videomid.biz.dto.BizDeviceIdRequest;
+import com.jizhi.videomid.biz.dto.BizDeviceListRequest;
+import com.jizhi.videomid.biz.dto.BizRecordingDaysRequest;
+import com.jizhi.videomid.biz.dto.BizRecordingsRequest;
 import com.jizhi.videomid.device.DeviceFolderService;
 import com.jizhi.videomid.device.DeviceService;
 import com.jizhi.videomid.device.DeviceStatus;
@@ -50,91 +54,52 @@ public class BizPortalController {
         return ApiResponse.ok(folderService.tree());
     }
 
-    @GetMapping("/devices")
-    public ApiResponse<List<Map<String, Object>>> devices(
-            @RequestParam(required = false) Long folderId,
-            @RequestParam(required = false, defaultValue = "true") boolean includeChildren) {
-        List<Map<String, Object>> list = deviceService.listDevices(folderId, includeChildren);
-        for (Map<String, Object> m : list) {
-            int status = DeviceStatus.normalize(m.get("status"));
-            m.put("playable", !DeviceStatus.isDisabled(status));
-            m.put("livePlayable", DeviceStatus.isEnabled(status));
-        }
-        return ApiResponse.ok(list);
+    @PostMapping("/devices/list")
+    public ApiResponse<List<Map<String, Object>>> devices(@RequestBody(required = false) BizDeviceListRequest req) {
+        Long folderId = req == null ? null : req.getFolderId();
+        boolean includeChildren = req == null || req.getIncludeChildren() == null || req.getIncludeChildren();
+        return ApiResponse.ok(listDevices(folderId, includeChildren));
     }
 
-    @GetMapping("/devices/{deviceId}")
-    public ApiResponse<Map<String, Object>> device(@PathVariable String deviceId) {
-        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        int status = DeviceStatus.normalize(detail.get("status"));
-        detail.put("playable", !DeviceStatus.isDisabled(status));
-        detail.put("livePlayable", DeviceStatus.isEnabled(status));
-        DeviceStream live = deviceService.resolveLiveStream(deviceId).orElse(null);
-        if (live != null) {
-            Map<String, Object> liveView = new HashMap<>();
-            liveView.put("id", live.getId());
-            liveView.put("streamType", live.getStreamType());
-            liveView.put("streamUrl", live.getStreamUrl());
-            liveView.put("streamName", live.getStreamName());
-            liveView.put("liveEnabled", true);
-            detail.put("liveStream", liveView);
-        } else {
-            detail.put("liveStream", null);
-        }
-        return ApiResponse.ok(detail);
+    @PostMapping("/devices/detail")
+    public ApiResponse<Map<String, Object>> device(@RequestBody BizDeviceIdRequest req) {
+        return ApiResponse.ok(deviceDetail(requireDeviceId(req == null ? null : req.getDeviceId())));
     }
 
-    @PostMapping("/devices/{deviceId}/live")
-    public ApiResponse<Map<String, Object>> startLive(@PathVariable String deviceId) {
-        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        int status = DeviceStatus.normalize(detail.get("status"));
-        if (!DeviceStatus.isEnabled(status)) {
-            throw new IllegalArgumentException("仅「已启用」设备可直播");
-        }
-        return ApiResponse.ok(deviceService.startBizLive(deviceId));
+    @PostMapping("/devices/live")
+    public ApiResponse<Map<String, Object>> startLive(@RequestBody BizDeviceIdRequest req) {
+        return ApiResponse.ok(startLiveById(requireDeviceId(req == null ? null : req.getDeviceId())));
     }
 
-    /** 某月内有录像的日期 yyyy-MM-dd */
-    @GetMapping("/devices/{deviceId}/recording-days")
-    public ApiResponse<List<String>> recordingDays(
-            @PathVariable String deviceId,
-            @RequestParam int year,
-            @RequestParam int month) {
-        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        int status = DeviceStatus.normalize(detail.get("status"));
-        if (DeviceStatus.isDisabled(status)) {
-            throw new IllegalArgumentException("设备已停用，无法回放");
+    @PostMapping("/devices/recording-days")
+    public ApiResponse<List<String>> recordingDays(@RequestBody BizRecordingDaysRequest req) {
+        if (req == null) {
+            throw new IllegalArgumentException("请求体不能为空");
         }
-        return ApiResponse.ok(recordFileService.listRecordingDays(deviceId, year, month));
+        if (req.getYear() == null) {
+            throw new IllegalArgumentException("year 不能为空");
+        }
+        if (req.getMonth() == null) {
+            throw new IllegalArgumentException("month 不能为空");
+        }
+        return ApiResponse.ok(recordingDaysById(requireDeviceId(req.getDeviceId()), req.getYear(), req.getMonth()));
     }
 
-    /** from / to 为毫秒时间戳（可选） */
-    @GetMapping("/devices/{deviceId}/recordings")
-    public ApiResponse<List<Map<String, Object>>> recordings(
-            @PathVariable String deviceId,
-            @RequestParam(required = false) String from,
-            @RequestParam(required = false) String to,
-            HttpServletRequest request) {
-        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        int status = DeviceStatus.normalize(detail.get("status"));
-        if (DeviceStatus.isDisabled(status)) {
-            throw new IllegalArgumentException("设备已停用，无法回放");
+    @PostMapping("/devices/recordings")
+    public ApiResponse<List<Map<String, Object>>> recordings(@RequestBody BizRecordingsRequest req,
+                                                             HttpServletRequest request) {
+        if (req == null) {
+            throw new IllegalArgumentException("请求体不能为空");
         }
-        String base = publicBaseUrl == null || publicBaseUrl.isBlank()
-                ? request.getScheme() + "://" + request.getServerName()
-                + ((request.getServerPort() == 80 || request.getServerPort() == 443) ? "" : ":" + request.getServerPort())
-                : publicBaseUrl.replaceAll("/$", "");
-        return ApiResponse.ok(recordFileService.listWithVideoUrls(deviceId, from, to, base));
+        return ApiResponse.ok(recordingsById(requireDeviceId(req.getDeviceId()),
+                req.fromAsString(), req.toAsString(), request));
     }
 
     /** 批量截取录像片段（JSON 数组） */
     @PostMapping("/clips")
     public ApiResponse<List<Map<String, Object>>> clipsBatch(@RequestBody List<RecordClipItemRequest> items,
                                                             HttpServletRequest request) {
-        String base = publicBaseUrl == null || publicBaseUrl.isBlank()
-                ? request.getScheme() + "://" + request.getServerName()
-                + ((request.getServerPort() == 80 || request.getServerPort() == 443) ? "" : ":" + request.getServerPort())
-                : publicBaseUrl.replaceAll("/$", "");
+        String base = publicBaseUrl(request);
         String finalBase = base;
         return ApiResponse.ok(recordClipService.clipInfoBatch(items,
                 (deviceId, at, seconds) -> finalBase + "/api/biz/devices/" + encodePath(deviceId) + "/clip/file"
@@ -150,10 +115,7 @@ public class BizPortalController {
                                                  @RequestParam(required = false) Integer seconds,
                                                  HttpServletRequest request) {
         assertDeviceEnabled(deviceId);
-        String base = publicBaseUrl == null || publicBaseUrl.isBlank()
-                ? request.getScheme() + "://" + request.getServerName()
-                + ((request.getServerPort() == 80 || request.getServerPort() == 443) ? "" : ":" + request.getServerPort())
-                : publicBaseUrl.replaceAll("/$", "");
+        String base = publicBaseUrl(request);
         String videoUrl = base + "/api/biz/devices/" + encodePath(deviceId) + "/clip/file"
                 + "?at=" + encodeQuery(at)
                 + (seconds != null ? "&seconds=" + seconds : "");
@@ -174,12 +136,85 @@ public class BizPortalController {
                 .body(resource);
     }
 
+    private List<Map<String, Object>> listDevices(Long folderId, boolean includeChildren) {
+        List<Map<String, Object>> list = deviceService.listDevices(folderId, includeChildren);
+        for (Map<String, Object> m : list) {
+            int status = DeviceStatus.normalize(m.get("status"));
+            m.put("playable", !DeviceStatus.isDisabled(status));
+            m.put("livePlayable", DeviceStatus.isEnabled(status));
+        }
+        return list;
+    }
+
+    private Map<String, Object> deviceDetail(String deviceId) {
+        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
+        int status = DeviceStatus.normalize(detail.get("status"));
+        detail.put("playable", !DeviceStatus.isDisabled(status));
+        detail.put("livePlayable", DeviceStatus.isEnabled(status));
+        DeviceStream live = deviceService.resolveLiveStream(deviceId).orElse(null);
+        if (live != null) {
+            Map<String, Object> liveView = new HashMap<>();
+            liveView.put("id", live.getId());
+            liveView.put("streamType", live.getStreamType());
+            liveView.put("streamUrl", live.getStreamUrl());
+            liveView.put("streamName", live.getStreamName());
+            liveView.put("liveEnabled", true);
+            detail.put("liveStream", liveView);
+        } else {
+            detail.put("liveStream", null);
+        }
+        return detail;
+    }
+
+    private Map<String, Object> startLiveById(String deviceId) {
+        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
+        int status = DeviceStatus.normalize(detail.get("status"));
+        if (!DeviceStatus.isEnabled(status)) {
+            throw new IllegalArgumentException("仅「已启用」设备可直播");
+        }
+        return deviceService.startBizLive(deviceId);
+    }
+
+    private List<String> recordingDaysById(String deviceId, int year, int month) {
+        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
+        int status = DeviceStatus.normalize(detail.get("status"));
+        if (DeviceStatus.isDisabled(status)) {
+            throw new IllegalArgumentException("设备已停用，无法回放");
+        }
+        return recordFileService.listRecordingDays(deviceId, year, month);
+    }
+
+    private List<Map<String, Object>> recordingsById(String deviceId, String from, String to,
+                                                     HttpServletRequest request) {
+        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
+        int status = DeviceStatus.normalize(detail.get("status"));
+        if (DeviceStatus.isDisabled(status)) {
+            throw new IllegalArgumentException("设备已停用，无法回放");
+        }
+        return recordFileService.listWithVideoUrls(deviceId, from, to, publicBaseUrl(request));
+    }
+
+    private String publicBaseUrl(HttpServletRequest request) {
+        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+            return request.getScheme() + "://" + request.getServerName()
+                    + ((request.getServerPort() == 80 || request.getServerPort() == 443) ? "" : ":" + request.getServerPort());
+        }
+        return publicBaseUrl.replaceAll("/$", "");
+    }
+
     private void assertDeviceEnabled(String deviceId) {
         Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
         int status = DeviceStatus.normalize(detail.get("status"));
         if (DeviceStatus.isDisabled(status)) {
             throw new IllegalArgumentException("设备已停用，无法回放");
         }
+    }
+
+    private static String requireDeviceId(String deviceId) {
+        if (deviceId == null || deviceId.isBlank()) {
+            throw new IllegalArgumentException("deviceId 不能为空");
+        }
+        return deviceId.trim();
     }
 
     private static String encodePath(String raw) {

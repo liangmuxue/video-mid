@@ -5,6 +5,9 @@ import com.jizhi.videomid.device.dto.StreamRegisterRequest;
 import com.jizhi.videomid.gb28181.Gb28181PlayService;
 import com.jizhi.videomid.media.ZlmClient;
 import com.jizhi.videomid.session.PreviewService;
+import com.jizhi.videomid.uniview.live.UniviewStreamDiscovery;
+import com.jizhi.videomid.uniview.live.UniviewStreamIds;
+import com.jizhi.videomid.uniview.live.UniviewVideoStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,19 +26,22 @@ public class DeviceService {
     private final ZlmClient zlmClient;
     private final DeviceFolderService folderService;
     private final Gb28181PlayService gb28181PlayService;
+    private final UniviewStreamDiscovery streamDiscovery;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
                          PreviewService previewService,
                          ZlmClient zlmClient,
                          DeviceFolderService folderService,
-                         Gb28181PlayService gb28181PlayService) {
+                         Gb28181PlayService gb28181PlayService,
+                         UniviewStreamDiscovery streamDiscovery) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
         this.zlmClient = zlmClient;
         this.folderService = folderService;
         this.gb28181PlayService = gb28181PlayService;
+        this.streamDiscovery = streamDiscovery;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -145,8 +151,10 @@ public class DeviceService {
             throw new IllegalArgumentException("deviceId 已存在");
         }
         Device d = fromDeviceRequest(req);
+        assertLoginFree(d, null);
         long id = deviceRepository.insert(d);
         d.setId(id);
+        syncUniviewStreams(d);
         return toDeviceView(d);
     }
 
@@ -157,7 +165,33 @@ public class DeviceService {
         Device d = fromDeviceRequest(req);
         d.setId(existing.getId());
         d.setDeviceId(existing.getDeviceId());
+        if (d.getHost() == null) {
+            d.setPassword(null);
+            d.setUsername(null);
+            d.setPort(null);
+            d.setAccessChannel(null);
+        } else if (d.getPassword() == null || d.getPassword().isBlank()) {
+            d.setPassword(existing.getPassword());
+        }
+        boolean loginChanged = !sameText(existing.getHost(), d.getHost())
+                || !Objects.equals(existing.getPort(), d.getPort())
+                || !sameText(existing.getUsername(), d.getUsername())
+                || !sameText(existing.getAccessChannel(), d.getAccessChannel())
+                || (req.getPassword() != null && !req.getPassword().isBlank());
+        if (loginChanged) {
+            d.setAccessStatus("unknown");
+            d.setAccessError(null);
+        } else {
+            d.setAccessStatus(existing.getAccessStatus());
+            d.setAccessError(existing.getAccessError());
+        }
+        assertLoginFree(d, existing.getId());
         deviceRepository.update(d);
+        if (hasUniviewLogin(d)) {
+            syncUniviewStreams(d);
+        } else {
+            removePullStreams(d.getDeviceId());
+        }
         return toDeviceView(deviceRepository.findById(id).orElse(d));
     }
 
@@ -263,8 +297,14 @@ public class DeviceService {
         return found;
     }
 
-    /** 业务端：优先国标 INVITE（mock/live），否则走已注册 streamUrl */
+    /** 业务端：宇视设备按观看拉流；其余仍优先国标 INVITE，否则走已注册 streamUrl */
     public Map<String, Object> startBizLive(String deviceId) {
+        Optional<Device> device = deviceRepository.findByDeviceId(deviceId);
+        if (device.isPresent() && hasUniviewLogin(device.get())) {
+            DeviceStream stream = resolveLiveStream(deviceId)
+                    .orElseThrow(() -> new IllegalArgumentException("设备未配置可直播码流"));
+            return previewService.start(deviceId, stream.getStreamType());
+        }
         if (gb28181PlayService.preferForBizLive()) {
             Optional<Map<String, Object>> gb = gb28181PlayService.startLive(deviceId);
             if (gb.isPresent()) {
@@ -310,7 +350,119 @@ public class DeviceService {
         d.setGatewayId(req.getGatewayId());
         d.setLongitude(req.getLongitude());
         d.setLatitude(req.getLatitude());
+        d.setHost(blank(req.getHost()));
+        d.setPort(req.getPort());
+        d.setUsername(blank(req.getUsername()));
+        d.setPassword(req.getPassword());
+        if (d.getHost() == null) {
+            d.setPort(null);
+            d.setUsername(null);
+            d.setPassword(null);
+            d.setAccessChannel(null);
+        } else {
+            String channel = blank(req.getAccessChannel());
+            d.setAccessChannel(channel == null ? "0" : channel);
+            if (d.getPort() == null) {
+                d.setPort(80);
+            }
+        }
+        d.setAccessStatus("unknown");
         return d;
+    }
+
+    private void assertLoginFree(Device d, Long excludeId) {
+        if (!hasUniviewLogin(d) || d.getPort() == null) {
+            return;
+        }
+        deviceRepository.findOtherByLogin(d.getHost(), d.getPort(), d.getAccessChannel(), excludeId)
+                .ifPresent(other -> {
+                    throw new IllegalArgumentException("该 IP、端口和通道已被设备 " + other.getDeviceId() + " 使用");
+                });
+    }
+
+    /** 按摄像机当前启用的码流重写码流表：有的更新，多的补上，没有的删掉。 */
+    private void syncUniviewStreams(Device d) {
+        List<UniviewVideoStream> streams = streamDiscovery.listEnabled(d);
+        deviceRepository.updateAccess(d.getId(), "online", null);
+        d.setAccessStatus("online");
+        d.setAccessError(null);
+        Set<String> keep = new HashSet<>();
+        for (UniviewVideoStream stream : streams) {
+            keep.add(stream.streamType());
+            upsertUniviewStream(d, stream);
+        }
+        for (DeviceStream existing : streamRepository.findByDeviceId(d.getDeviceId())) {
+            if (!UniviewStreamIds.isPull(existing) || keep.contains(existing.getStreamType())) {
+                continue;
+            }
+            zlmClient.delStreamProxy(existing.getZlmApp(), existing.getZlmStream());
+            streamRepository.deleteById(existing.getId());
+        }
+        if (streamRepository.findLiveByDeviceId(d.getDeviceId()).isEmpty()) {
+            String liveType = "sub";
+            if (streams.stream().noneMatch(s -> "sub".equals(s.streamType()))) {
+                liveType = streams.stream().anyMatch(s -> "main".equals(s.streamType()))
+                        ? "main" : streams.get(0).streamType();
+            }
+            streamRepository.findByDeviceIdAndType(d.getDeviceId(), liveType)
+                    .ifPresent(s -> setLiveStream(s.getId()));
+        }
+    }
+
+    private void removePullStreams(String deviceId) {
+        for (DeviceStream existing : streamRepository.findByDeviceId(deviceId)) {
+            if (!UniviewStreamIds.isPull(existing)) {
+                continue;
+            }
+            zlmClient.delStreamProxy(existing.getZlmApp(), existing.getZlmStream());
+            streamRepository.deleteById(existing.getId());
+        }
+    }
+
+    private void upsertUniviewStream(Device d, UniviewVideoStream stream) {
+        String zlmStream = UniviewStreamIds.zlmStream(d.getDeviceId(), stream.streamType());
+        String playUrl = UniviewStreamIds.playUrl(zlmClient.mediaBaseUrl(), zlmStream);
+        Optional<DeviceStream> existing = streamRepository.findByDeviceIdAndType(d.getDeviceId(), stream.streamType());
+        if (existing.isPresent()) {
+            DeviceStream s = existing.get();
+            s.setStreamName(stream.streamName());
+            s.setStreamIndex(stream.id());
+            s.setSortNo(stream.id() + 1);
+            s.setZlmApp(UniviewStreamIds.APP);
+            s.setZlmStream(zlmStream);
+            s.setStreamUrl(playUrl);
+            streamRepository.update(s);
+            return;
+        }
+        DeviceStream s = new DeviceStream();
+        s.setDeviceId(d.getDeviceId());
+        s.setStreamType(stream.streamType());
+        s.setStreamName(stream.streamName());
+        s.setStreamUrl(playUrl);
+        s.setStatus("OFF");
+        s.setSortNo(stream.id() + 1);
+        s.setLiveEnabled(false);
+        s.setStreamIndex(stream.id());
+        s.setZlmApp(UniviewStreamIds.APP);
+        s.setZlmStream(zlmStream);
+        streamRepository.insert(s);
+    }
+
+    private static boolean hasUniviewLogin(Device d) {
+        return d.getHost() != null && !d.getHost().isBlank();
+    }
+
+    private static String blank(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private static boolean sameText(String a, String b) {
+        String left = a == null ? "" : a.trim();
+        String right = b == null ? "" : b.trim();
+        return left.equals(right);
     }
 
     /**
@@ -323,6 +475,9 @@ public class DeviceService {
         for (Device d : devices) {
             int current = DeviceStatus.normalize(d.getStatus());
             if (DeviceStatus.isDisabled(current)) {
+                continue;
+            }
+            if (hasUniviewLogin(d)) {
                 continue;
             }
             Boolean online = isDevicePushing(d.getDeviceId());
@@ -392,6 +547,13 @@ public class DeviceService {
         m.put("gatewayId", d.getGatewayId());
         m.put("longitude", d.getLongitude());
         m.put("latitude", d.getLatitude());
+        m.put("host", d.getHost());
+        m.put("port", d.getPort());
+        m.put("username", d.getUsername());
+        m.put("passwordSet", d.getPassword() != null && !d.getPassword().isBlank());
+        m.put("accessChannel", d.getAccessChannel());
+        m.put("accessStatus", d.getAccessStatus() == null ? "unknown" : d.getAccessStatus());
+        m.put("accessError", d.getAccessError());
         m.put("createdAt", d.getCreatedAt());
         m.put("updatedAt", d.getUpdatedAt());
         return m;
@@ -408,6 +570,9 @@ public class DeviceService {
         m.put("status", s.getStatus());
         m.put("sortNo", s.getSortNo());
         m.put("liveEnabled", Boolean.TRUE.equals(s.getLiveEnabled()));
+        m.put("streamIndex", s.getStreamIndex());
+        m.put("zlmApp", s.getZlmApp());
+        m.put("zlmStream", s.getZlmStream());
         m.put("createdAt", s.getCreatedAt());
         m.put("updatedAt", s.getUpdatedAt());
         return m;

@@ -14,6 +14,13 @@ public class Device {
     private String gatewayId;
     private Double longitude;
     private Double latitude;
+    private String host;
+    private Integer port;
+    private String username;
+    private String password;
+    private String accessChannel;
+    private String accessStatus;
+    private String accessError;
     private Long createdAt;
     private Long updatedAt;
 
@@ -43,6 +50,20 @@ public class Device {
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public Double getLatitude() { return latitude; }
     public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public String getHost() { return host; }
+    public void setHost(String host) { this.host = host; }
+    public Integer getPort() { return port; }
+    public void setPort(Integer port) { this.port = port; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getAccessChannel() { return accessChannel; }
+    public void setAccessChannel(String accessChannel) { this.accessChannel = accessChannel; }
+    public String getAccessStatus() { return accessStatus; }
+    public void setAccessStatus(String accessStatus) { this.accessStatus = accessStatus; }
+    public String getAccessError() { return accessError; }
+    public void setAccessError(String accessError) { this.accessError = accessError; }
     public Long getCreatedAt() { return createdAt; }
     public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
     public Long getUpdatedAt() { return updatedAt; }

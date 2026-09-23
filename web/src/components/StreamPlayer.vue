@@ -29,6 +29,7 @@ const err = ref('')
 
 let hls = null
 let flvPlayer = null
+let flvAudioRetried = false
 
 function cleanup() {
   if (hls) {
@@ -37,17 +38,7 @@ function cleanup() {
     hls.destroy()
     hls = null
   }
-  if (flvPlayer) {
-    try {
-      flvPlayer.pause()
-      flvPlayer.unload()
-      flvPlayer.detachMediaElement()
-      flvPlayer.destroy()
-    } catch (_) {
-      /* ignore */
-    }
-    flvPlayer = null
-  }
+  destroyFlvPlayer()
   const el = videoRef.value
   if (el) {
     el.pause()
@@ -81,24 +72,48 @@ function playHls(playUrl, el) {
   throw new Error('当前浏览器不支持 HLS')
 }
 
-function playFlv(playUrl, el) {
-  hint.value = `HTTP-FLV 播放：${playUrl}`
+function destroyFlvPlayer() {
+  if (!flvPlayer) return
+  const current = flvPlayer
+  flvPlayer = null
+  try {
+    current.pause()
+    current.unload()
+    current.detachMediaElement()
+    current.destroy()
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function playFlv(playUrl, el, withAudio = true) {
+  hint.value = withAudio
+    ? `HTTP-FLV 播放：${playUrl}`
+    : `HTTP-FLV 播放（已跳过不支持的音频）：${playUrl}`
   if (!mpegts.getFeatureList().mseLivePlayback) {
     throw new Error('当前浏览器不支持 MSE/FLV 直播')
   }
   flvPlayer = mpegts.createPlayer(
-    { type: 'flv', url: playUrl, isLive: true, hasAudio: true, hasVideo: true },
+    { type: 'flv', url: playUrl, isLive: true, hasAudio: withAudio, hasVideo: true },
     { enableStashBuffer: false, stashInitialSize: 128, lazyLoad: false }
   )
   flvPlayer.attachMediaElement(el)
   flvPlayer.load()
   flvPlayer.play().catch(() => {})
   flvPlayer.on(mpegts.Events.ERROR, (type, detail) => {
+    const unsupported = String(detail || '').includes('CodecUnsupported')
+    if (withAudio && unsupported && !flvAudioRetried) {
+      flvAudioRetried = true
+      destroyFlvPlayer()
+      playFlv(playUrl, el, false)
+      return
+    }
     err.value = `FLV 失败：${type} / ${detail}（地址 ${playUrl}）`
   })
 }
 
 async function attach() {
+  flvAudioRetried = false
   cleanup()
   err.value = ''
   hint.value = ''

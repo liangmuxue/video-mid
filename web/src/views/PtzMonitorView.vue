@@ -5,7 +5,7 @@
         <div>
           <h1>云台监控</h1>
           <p class="sub">
-            TIC7632 双光谱云台 ·
+            {{ config?.mock ? 'TIC7632 双光谱云台' : (activeDevice?.name || '宇视云台') }} ·
             <span v-if="config?.mock" class="badge mock">模拟数据</span>
             <span v-else class="badge live">真实宇视</span>
           </p>
@@ -49,13 +49,13 @@
             <div class="panel">
               <h3>云台控制</h3>
               <div class="pad">
-                <button type="button" @mousedown="holdMove('up')" @mouseup="stopHold" @mouseleave="stopHold">上</button>
+                <button type="button" @pointerdown="(e) => holdMove('up', e)" @pointerup="stopHold" @pointercancel="stopHold">上</button>
                 <div class="pad-mid">
-                  <button type="button" @mousedown="holdMove('left')" @mouseup="stopHold" @mouseleave="stopHold">左</button>
+                  <button type="button" @pointerdown="(e) => holdMove('left', e)" @pointerup="stopHold" @pointercancel="stopHold">左</button>
                   <span class="pad-center">●</span>
-                  <button type="button" @mousedown="holdMove('right')" @mouseup="stopHold" @mouseleave="stopHold">右</button>
+                  <button type="button" @pointerdown="(e) => holdMove('right', e)" @pointerup="stopHold" @pointercancel="stopHold">右</button>
                 </div>
-                <button type="button" @mousedown="holdMove('down')" @mouseup="stopHold" @mouseleave="stopHold">下</button>
+                <button type="button" @pointerdown="(e) => holdMove('down', e)" @pointerup="stopHold" @pointercancel="stopHold">下</button>
               </div>
               <div class="btn-row">
                 <button type="button" @click="doZoom('in')">变倍+</button>
@@ -115,10 +115,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import AppShell from '../components/AppShell.vue'
 import StreamPlayer from '../components/StreamPlayer.vue'
 import { useBackdropClose } from '../composables/useBackdropClose'
+import { previewStart } from '../api/device'
 import {
   fetchUniviewConfig,
   fetchUniviewDevice,
@@ -168,10 +169,12 @@ function streamUrl(channelType, streamType = 'sub') {
   return hit?.streamUrl || ''
 }
 
-const visibleUrl = computed(() => streamUrl('visible', 'sub') || streamUrl('visible', 'main'))
+const playedUrl = ref('')
+const visibleUrl = computed(() => playedUrl.value || streamUrl('visible', 'sub') || streamUrl('visible', 'main'))
 const thermalUrl = computed(() => streamUrl('thermal', 'main') || streamUrl('thermal', 'sub'))
 
 let holdTimer = null
+let holding = false
 
 async function loadAll() {
   loading.value = true
@@ -192,12 +195,26 @@ async function loadAll() {
 async function selectDevice(deviceId) {
   activeId.value = deviceId
   actionMsg.value = ''
-  detail.value = await fetchUniviewDevice(deviceId)
-  const d = devices.value.find((x) => x.deviceId === deviceId)
-  if (d) {
-    const fresh = await fetchPtzDevices()
-    const found = fresh.find((x) => x.deviceId === deviceId)
-    if (found) Object.assign(d, found)
+  playedUrl.value = ''
+  error.value = ''
+  try {
+    detail.value = await fetchUniviewDevice(deviceId)
+    if (!config.value?.mock) {
+      const streams = detail.value?.streams || []
+      const prefer = streams.find((s) => s.streamType === 'sub')
+        || streams.find((s) => s.streamType === 'main')
+        || streams[0]
+      const play = await previewStart({ deviceId, streamType: prefer?.streamType || 'sub' })
+      playedUrl.value = play.playUrl || play.streamUrl || ''
+    }
+    const d = devices.value.find((x) => x.deviceId === deviceId)
+    if (d) {
+      const fresh = await fetchPtzDevices()
+      const found = fresh.find((x) => x.deviceId === deviceId)
+      if (found) Object.assign(d, found)
+    }
+  } catch (e) {
+    error.value = e.message || '打开设备失败'
   }
 }
 
@@ -211,16 +228,36 @@ async function runAction(label, fn) {
   }
 }
 
-function holdMove(direction) {
-  stopHold()
-  runAction('云台 ' + direction, () => ptzMove(activeId.value, direction))
-  holdTimer = setInterval(() => ptzMove(activeId.value, direction).catch(() => {}), 400)
-}
-
-function stopHold() {
+function holdMove(direction, event) {
+  const target = event?.currentTarget
+  if (target?.setPointerCapture && event.pointerId != null) {
+    try {
+      target.setPointerCapture(event.pointerId)
+    } catch (_) {
+      /* ignore */
+    }
+  }
   if (holdTimer) {
     clearInterval(holdTimer)
     holdTimer = null
+  }
+  holding = true
+  const deviceId = activeId.value
+  runAction('云台 ' + direction, () => ptzMove(deviceId, direction))
+  holdTimer = setInterval(() => {
+    if (activeId.value) ptzMove(activeId.value, direction).catch(() => {})
+  }, 400)
+}
+
+function stopHold() {
+  const wasHolding = holding
+  holding = false
+  if (holdTimer) {
+    clearInterval(holdTimer)
+    holdTimer = null
+  }
+  if (wasHolding && activeId.value) {
+    ptzMove(activeId.value, 'stop').catch(() => {})
   }
 }
 
@@ -279,7 +316,15 @@ function downloadSnapshot(saveAs) {
   if (!saveAs) snapshotOpen.value = false
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  window.addEventListener('pointerup', stopHold)
+  loadAll()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pointerup', stopHold)
+  stopHold()
+})
 </script>
 
 <style scoped>

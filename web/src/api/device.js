@@ -18,22 +18,22 @@ export const previewStart = (data) => http.post('/api/preview/start', data)
 
 /** 业务端 */
 export const fetchBizFolderTree = () => http.get('/api/biz/folders/tree')
-export const fetchBizDevices = (params = {}) => http.get('/api/biz/devices', { params })
+export const fetchBizDevices = (params = {}) => http.post('/api/biz/devices/list', params)
 export const fetchBizDevice = (deviceId) =>
-  http.get(`/api/biz/devices/${encodeURIComponent(deviceId)}`)
+  http.post('/api/biz/devices/detail', { deviceId })
 export const startBizLive = (deviceId) =>
-  http.post(`/api/biz/devices/${encodeURIComponent(deviceId)}/live`)
+  http.post('/api/biz/devices/live', { deviceId })
 /** 录像列表/日历数据量大，单独放宽超时 */
 const recordingHttpOpts = { timeout: 60000 }
 
 export const fetchBizRecordings = (deviceId, params = {}) =>
-  http.get(`/api/biz/devices/${encodeURIComponent(deviceId)}/recordings`, { params, ...recordingHttpOpts })
+  http.post('/api/biz/devices/recordings', { deviceId, ...params }, recordingHttpOpts)
 export const fetchRecordings = (deviceId, params = {}) =>
   http.get('/api/recordings', { params: { deviceId, ...params }, ...recordingHttpOpts })
 export const fetchRecordingDays = (deviceId, params = {}) =>
   http.get('/api/recordings/days', { params: { deviceId, ...params }, ...recordingHttpOpts })
 export const fetchBizRecordingDays = (deviceId, params = {}) =>
-  http.get(`/api/biz/devices/${encodeURIComponent(deviceId)}/recording-days`, { params, ...recordingHttpOpts })
+  http.post('/api/biz/devices/recording-days', { deviceId, ...params }, recordingHttpOpts)
 export const recordingFileUrl = (deviceId, fileName) => {
   const base = (http.defaults.baseURL || '').replace(/\/$/, '')
   const token = localStorage.getItem('video_mid_token')

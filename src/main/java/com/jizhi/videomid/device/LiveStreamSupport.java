@@ -7,7 +7,7 @@ import java.util.Optional;
 public final class LiveStreamSupport {
 
     public static final List<String> PRIORITY = List.of(
-            "visible_sub", "sub", "visible_main", "main", "thermal_main", "thermal_sub"
+            "visible_sub", "sub", "visible_main", "main", "third", "thermal_main", "thermal_sub"
     );
 
     private LiveStreamSupport() {

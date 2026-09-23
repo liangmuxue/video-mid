@@ -17,6 +17,11 @@ public class DeviceRequest {
     private String gatewayId;
     private Double longitude;
     private Double latitude;
+    private String host;
+    private Integer port;
+    private String username;
+    private String password;
+    private String accessChannel;
 
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
@@ -42,4 +47,14 @@ public class DeviceRequest {
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public Double getLatitude() { return latitude; }
     public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public String getHost() { return host; }
+    public void setHost(String host) { this.host = host; }
+    public Integer getPort() { return port; }
+    public void setPort(Integer port) { this.port = port; }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getAccessChannel() { return accessChannel; }
+    public void setAccessChannel(String accessChannel) { this.accessChannel = accessChannel; }
 }

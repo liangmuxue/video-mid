@@ -10,6 +10,9 @@ public class DeviceStream {
     private String status;
     private Integer sortNo;
     private Boolean liveEnabled;
+    private Integer streamIndex;
+    private String zlmApp;
+    private String zlmStream;
     private Long createdAt;
     private Long updatedAt;
 
@@ -31,6 +34,12 @@ public class DeviceStream {
     public void setSortNo(Integer sortNo) { this.sortNo = sortNo; }
     public Boolean getLiveEnabled() { return liveEnabled; }
     public void setLiveEnabled(Boolean liveEnabled) { this.liveEnabled = liveEnabled; }
+    public Integer getStreamIndex() { return streamIndex; }
+    public void setStreamIndex(Integer streamIndex) { this.streamIndex = streamIndex; }
+    public String getZlmApp() { return zlmApp; }
+    public void setZlmApp(String zlmApp) { this.zlmApp = zlmApp; }
+    public String getZlmStream() { return zlmStream; }
+    public void setZlmStream(String zlmStream) { this.zlmStream = zlmStream; }
     public Long getCreatedAt() { return createdAt; }
     public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
     public Long getUpdatedAt() { return updatedAt; }

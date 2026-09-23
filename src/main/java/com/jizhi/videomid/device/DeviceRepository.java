@@ -38,6 +38,14 @@ public class DeviceRepository {
         if (!rs.wasNull()) d.setLongitude(lon);
         double lat = rs.getDouble("latitude");
         if (!rs.wasNull()) d.setLatitude(lat);
+        d.setHost(rs.getString("host"));
+        int port = rs.getInt("port");
+        if (!rs.wasNull()) d.setPort(port);
+        d.setUsername(rs.getString("username"));
+        d.setPassword(rs.getString("password"));
+        d.setAccessChannel(rs.getString("access_channel"));
+        d.setAccessStatus(rs.getString("access_status"));
+        d.setAccessError(rs.getString("access_error"));
         d.setCreatedAt(readMillis(rs, "created_at"));
         d.setUpdatedAt(readMillis(rs, "updated_at"));
         return d;
@@ -68,8 +76,8 @@ public class DeviceRepository {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device (device_id, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, created_at, updated_at) " +
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device (device_id, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, host, port, username, password, access_channel, access_status, access_error, created_at, updated_at) " +
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, d.getDeviceId());
             ps.setString(2, d.getName());
@@ -83,8 +91,15 @@ public class DeviceRepository {
             ps.setString(10, d.getGatewayId());
             if (d.getLongitude() == null) ps.setObject(11, null); else ps.setDouble(11, d.getLongitude());
             if (d.getLatitude() == null) ps.setObject(12, null); else ps.setDouble(12, d.getLatitude());
-            ps.setLong(13, now);
-            ps.setLong(14, now);
+            ps.setString(13, d.getHost());
+            if (d.getPort() == null) ps.setNull(14, Types.INTEGER); else ps.setInt(14, d.getPort());
+            ps.setString(15, d.getUsername());
+            ps.setString(16, d.getPassword());
+            ps.setString(17, d.getAccessChannel());
+            ps.setString(18, d.getAccessStatus() == null || d.getAccessStatus().isBlank() ? "unknown" : d.getAccessStatus());
+            ps.setString(19, d.getAccessError());
+            ps.setLong(20, now);
+            ps.setLong(21, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
@@ -98,9 +113,29 @@ public class DeviceRepository {
         long now = TsUtil.nowMillis();
         d.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device SET name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, updated_at=? WHERE id=?",
+                "UPDATE device SET name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, host=?, port=?, username=?, password=?, access_channel=?, access_status=?, access_error=?, updated_at=? WHERE id=?",
                 d.getName(), d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
-                d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(), now, d.getId());
+                d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(),
+                d.getHost(), d.getPort(), d.getUsername(), d.getPassword(), d.getAccessChannel(),
+                d.getAccessStatus() == null || d.getAccessStatus().isBlank() ? "unknown" : d.getAccessStatus(),
+                d.getAccessError(), now, d.getId());
+    }
+
+    public int updateAccess(Long id, String status, String error) {
+        return jdbc.update(
+                "UPDATE device SET access_status=?, access_error=?, updated_at=? WHERE id=?",
+                status == null || status.isBlank() ? "unknown" : status,
+                error,
+                TsUtil.nowMillis(),
+                id);
+    }
+
+    public Optional<Device> findOtherByLogin(String host, int port, String channel, Long excludeId) {
+        String sql = "SELECT * FROM device WHERE host = ? AND port = ? AND access_channel = ?";
+        List<Device> list = excludeId == null
+                ? jdbc.query(sql, MAPPER, host, port, channel)
+                : jdbc.query(sql + " AND id <> ?", MAPPER, host, port, channel, excludeId);
+        return list.stream().findFirst();
     }
 
     public int updateStatus(Long id, int status) {

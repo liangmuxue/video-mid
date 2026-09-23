@@ -1,8 +1,12 @@
 package com.jizhi.videomid.session;
 
+import com.jizhi.videomid.device.Device;
+import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
 import com.jizhi.videomid.media.ZlmClient;
+import com.jizhi.videomid.uniview.live.UniviewStreamIds;
+import com.jizhi.videomid.uniview.live.UniviewStreamKeeper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -26,19 +30,32 @@ public class PreviewService {
     private static final Logger log = LoggerFactory.getLogger(PreviewService.class);
 
     private final DeviceStreamRepository streamRepository;
+    private final DeviceRepository deviceRepository;
     private final StringRedisTemplate redis;
     private final ZlmClient zlmClient;
+    private final UniviewStreamKeeper univiewStreamKeeper;
 
-    public PreviewService(DeviceStreamRepository streamRepository, StringRedisTemplate redis, ZlmClient zlmClient) {
+    public PreviewService(DeviceStreamRepository streamRepository,
+                          DeviceRepository deviceRepository,
+                          StringRedisTemplate redis,
+                          ZlmClient zlmClient,
+                          UniviewStreamKeeper univiewStreamKeeper) {
         this.streamRepository = streamRepository;
+        this.deviceRepository = deviceRepository;
         this.redis = redis;
         this.zlmClient = zlmClient;
+        this.univiewStreamKeeper = univiewStreamKeeper;
     }
 
     public Map<String, Object> start(String deviceId, String streamType) {
         String type = normalize(streamType);
         DeviceStream stream = streamRepository.findByDeviceIdAndType(deviceId, type)
                 .orElseThrow(() -> new IllegalArgumentException("码流未注册: " + deviceId + "/" + type));
+        if (UniviewStreamIds.isPull(stream)) {
+            Device device = deviceRepository.findByDeviceId(deviceId)
+                    .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
+            stream = univiewStreamKeeper.ensure(device, stream);
+        }
         if (stream.getStreamUrl() == null || stream.getStreamUrl().isBlank()) {
             throw new IllegalArgumentException("码流地址为空，请先注册 streamUrl");
         }
@@ -105,7 +122,9 @@ public class PreviewService {
         }
         DeviceStream s = found.get();
         clearPlayerSessions(s.getDeviceId(), s.getStreamType());
-        return setRef(s.getDeviceId(), s.getStreamType(), 0);
+        long ref = setRef(s.getDeviceId(), s.getStreamType(), 0);
+        univiewStreamKeeper.stopIfIdle(s);
+        return ref;
     }
 
     /** 按 ZLM getMediaList 把已注册码流的 Redis 人数对齐（关掉播放器后的兜底）。 */
@@ -126,6 +145,7 @@ public class PreviewService {
             }
             if (actual <= 0) {
                 clearPlayerSessions(s.getDeviceId(), s.getStreamType());
+                univiewStreamKeeper.stopIfIdle(s);
             }
         }
     }

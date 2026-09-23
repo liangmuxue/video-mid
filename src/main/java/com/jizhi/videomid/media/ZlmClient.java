@@ -25,6 +25,7 @@ public class ZlmClient {
 
     private final ZlmProperties props;
     private final RestTemplate restTemplate;
+    private final RestTemplate proxyRestTemplate;
     private final ObjectMapper objectMapper;
 
     public ZlmClient(ZlmProperties props, ObjectMapper objectMapper) {
@@ -34,6 +35,10 @@ public class ZlmClient {
         factory.setConnectTimeout(2000);
         factory.setReadTimeout(2000);
         this.restTemplate = new RestTemplate(factory);
+        SimpleClientHttpRequestFactory proxyFactory = new SimpleClientHttpRequestFactory();
+        proxyFactory.setConnectTimeout(3000);
+        proxyFactory.setReadTimeout(20000);
+        this.proxyRestTemplate = new RestTemplate(proxyFactory);
     }
 
     @PostConstruct
@@ -144,6 +149,71 @@ public class ZlmClient {
         }
     }
 
+    /**
+     * 让 ZLM 拉一路外部地址并转成可播放流。流已存在视为成功。
+     * 使用独立超时，避免拉流握手拖住 getMediaList 的短超时客户端。
+     */
+    public boolean addStreamProxy(String app, String stream, String sourceUrl) {
+        if (app == null || app.isBlank() || stream == null || stream.isBlank()
+                || sourceUrl == null || sourceUrl.isBlank()) {
+            return false;
+        }
+        String url = api("/index/api/addStreamProxy")
+                .queryParam("vhost", "__defaultVhost__")
+                .queryParam("app", app.trim())
+                .queryParam("stream", stream.trim())
+                .queryParam("url", sourceUrl.trim())
+                .queryParam("retry_count", -1)
+                .queryParam("rtp_type", 0)
+                .queryParam("timeout_sec", 15)
+                .queryParam("enable_hls", 1)
+                .queryParam("enable_rtmp", 1)
+                .toUriString();
+        log.info("[本服务→ZLM] addStreamProxy app={} stream={}", app, stream);
+        try {
+            String body = proxyRestTemplate.getForObject(url, String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            int code = resp == null ? -1 : resp.path("code").asInt(-1);
+            String msg = resp == null ? "" : resp.path("msg").asText("");
+            if (code == 0 || msg.toLowerCase().contains("exist")) {
+                log.info("[本服务→ZLM] addStreamProxy 成功 app={} stream={} code={} msg={}", app, stream, code, msg);
+                return true;
+            }
+            log.warn("[本服务→ZLM] addStreamProxy 失败 app={} stream={} code={} msg={}", app, stream, code, msg);
+            return false;
+        } catch (Exception e) {
+            log.warn("[本服务→ZLM] addStreamProxy 异常 app={} stream={} error={}", app, stream, e.getMessage());
+            return false;
+        }
+    }
+
+    /** 停止 addStreamProxy 建立的拉流。代理已不存在视为成功。 */
+    public boolean delStreamProxy(String app, String stream) {
+        if (app == null || app.isBlank() || stream == null || stream.isBlank()) {
+            return false;
+        }
+        String key = "__defaultVhost__/" + app.trim() + "/" + stream.trim();
+        String url = api("/index/api/delStreamProxy")
+                .queryParam("key", key)
+                .toUriString();
+        log.info("[本服务→ZLM] delStreamProxy app={} stream={}", app, stream);
+        try {
+            String body = proxyRestTemplate.getForObject(url, String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            int code = resp == null ? -1 : resp.path("code").asInt(-1);
+            String msg = resp == null ? "" : resp.path("msg").asText("");
+            if (code == 0 || msg.toLowerCase().contains("not found") || msg.toLowerCase().contains("no such")) {
+                log.info("[本服务→ZLM] delStreamProxy 成功 app={} stream={} code={} msg={}", app, stream, code, msg);
+                return true;
+            }
+            log.warn("[本服务→ZLM] delStreamProxy 失败 app={} stream={} code={} msg={}", app, stream, code, msg);
+            return false;
+        } catch (Exception e) {
+            log.warn("[本服务→ZLM] delStreamProxy 异常 app={} stream={} error={}", app, stream, e.getMessage());
+            return false;
+        }
+    }
+
     /** 国标 live：在 ZLM 开启 RTP 接收（GB28181 PS 流） */
     public boolean openRtpServer(int port, String streamId, String app) {
         if (port <= 0 || streamId == null || streamId.isBlank()) {
@@ -194,6 +264,10 @@ public class ZlmClient {
         return UriComponentsBuilder
                 .fromHttpUrl(baseUrl() + path)
                 .queryParam("secret", props.getSecret());
+    }
+
+    public String mediaBaseUrl() {
+        return baseUrl();
     }
 
     private String baseUrl() {
