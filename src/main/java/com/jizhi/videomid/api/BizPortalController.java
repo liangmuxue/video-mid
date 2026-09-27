@@ -11,7 +11,7 @@ import com.jizhi.videomid.device.DeviceStatus;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.record.RecordClipItemRequest;
 import com.jizhi.videomid.record.RecordClipService;
-import com.jizhi.videomid.record.RecordFileService;
+import com.jizhi.videomid.uniview.nvr.RecordingCatalog;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -33,7 +33,7 @@ public class BizPortalController {
 
     private final DeviceFolderService folderService;
     private final DeviceService deviceService;
-    private final RecordFileService recordFileService;
+    private final RecordingCatalog recordingCatalog;
     private final RecordClipService recordClipService;
 
     @Value("${open-api.public-base-url:}")
@@ -41,11 +41,11 @@ public class BizPortalController {
 
     public BizPortalController(DeviceFolderService folderService,
                                DeviceService deviceService,
-                               RecordFileService recordFileService,
+                               RecordingCatalog recordingCatalog,
                                RecordClipService recordClipService) {
         this.folderService = folderService;
         this.deviceService = deviceService;
-        this.recordFileService = recordFileService;
+        this.recordingCatalog = recordingCatalog;
         this.recordClipService = recordClipService;
     }
 
@@ -137,33 +137,38 @@ public class BizPortalController {
     }
 
     private List<Map<String, Object>> listDevices(Long folderId, boolean includeChildren) {
-        List<Map<String, Object>> list = deviceService.listDevices(folderId, includeChildren);
-        for (Map<String, Object> m : list) {
-            int status = DeviceStatus.normalize(m.get("status"));
-            m.put("playable", !DeviceStatus.isDisabled(status));
-            m.put("livePlayable", DeviceStatus.isEnabled(status));
+        List<Map<String, Object>> slim = new java.util.ArrayList<>();
+        for (Map<String, Object> m : deviceService.listDevices(folderId, includeChildren)) {
+            slim.add(bizDevice(m));
         }
-        return list;
+        return slim;
     }
 
     private Map<String, Object> deviceDetail(String deviceId) {
-        Map<String, Object> detail = deviceService.getDeviceByDeviceId(deviceId);
-        int status = DeviceStatus.normalize(detail.get("status"));
-        detail.put("playable", !DeviceStatus.isDisabled(status));
-        detail.put("livePlayable", DeviceStatus.isEnabled(status));
+        Map<String, Object> detail = bizDevice(deviceService.getDeviceByDeviceId(deviceId));
         DeviceStream live = deviceService.resolveLiveStream(deviceId).orElse(null);
         if (live != null) {
             Map<String, Object> liveView = new HashMap<>();
-            liveView.put("id", live.getId());
             liveView.put("streamType", live.getStreamType());
             liveView.put("streamUrl", live.getStreamUrl());
-            liveView.put("streamName", live.getStreamName());
-            liveView.put("liveEnabled", true);
             detail.put("liveStream", liveView);
         } else {
             detail.put("liveStream", null);
         }
         return detail;
+    }
+
+    private Map<String, Object> bizDevice(Map<String, Object> source) {
+        int status = DeviceStatus.normalize(source.get("status"));
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("deviceId", source.get("deviceId"));
+        row.put("name", source.get("name"));
+        row.put("address", source.get("address"));
+        row.put("folderId", source.get("folderId"));
+        row.put("status", status);
+        row.put("playable", !DeviceStatus.isDisabled(status));
+        row.put("livePlayable", DeviceStatus.isEnabled(status));
+        return row;
     }
 
     private Map<String, Object> startLiveById(String deviceId) {
@@ -181,7 +186,7 @@ public class BizPortalController {
         if (DeviceStatus.isDisabled(status)) {
             throw new IllegalArgumentException("设备已停用，无法回放");
         }
-        return recordFileService.listRecordingDays(deviceId, year, month);
+        return recordingCatalog.listRecordingDays(deviceId, year, month);
     }
 
     private List<Map<String, Object>> recordingsById(String deviceId, String from, String to,
@@ -191,7 +196,7 @@ public class BizPortalController {
         if (DeviceStatus.isDisabled(status)) {
             throw new IllegalArgumentException("设备已停用，无法回放");
         }
-        return recordFileService.listWithVideoUrls(deviceId, from, to, publicBaseUrl(request));
+        return recordingCatalog.listWithVideoUrls(deviceId, from, to, publicBaseUrl(request));
     }
 
     private String publicBaseUrl(HttpServletRequest request) {

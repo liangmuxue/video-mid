@@ -8,6 +8,8 @@ import com.jizhi.videomid.session.PreviewService;
 import com.jizhi.videomid.uniview.live.UniviewStreamDiscovery;
 import com.jizhi.videomid.uniview.live.UniviewStreamIds;
 import com.jizhi.videomid.uniview.live.UniviewVideoStream;
+import com.jizhi.videomid.uniview.nvr.NvrRecordingService;
+import com.jizhi.videomid.uniview.nvr.RecordDevice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ public class DeviceService {
     private final DeviceFolderService folderService;
     private final Gb28181PlayService gb28181PlayService;
     private final UniviewStreamDiscovery streamDiscovery;
+    private final NvrRecordingService nvrRecordingService;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
@@ -34,7 +37,8 @@ public class DeviceService {
                          ZlmClient zlmClient,
                          DeviceFolderService folderService,
                          Gb28181PlayService gb28181PlayService,
-                         UniviewStreamDiscovery streamDiscovery) {
+                         UniviewStreamDiscovery streamDiscovery,
+                         NvrRecordingService nvrRecordingService) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
@@ -42,6 +46,7 @@ public class DeviceService {
         this.folderService = folderService;
         this.gb28181PlayService = gb28181PlayService;
         this.streamDiscovery = streamDiscovery;
+        this.nvrRecordingService = nvrRecordingService;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -123,7 +128,12 @@ public class DeviceService {
                     continue;
                 }
             }
-            Map<String, Object> m = toDeviceView(d);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("deviceId", d.getDeviceId());
+            m.put("name", d.getName());
+            m.put("status", DeviceStatus.normalize(d.getStatus()));
+            m.put("address", d.getAddress());
+            m.put("folderId", d.getFolderId());
             m.put("streamCount", streamRepository.findByDeviceId(d.getDeviceId()).size());
             result.add(m);
         }
@@ -152,9 +162,13 @@ public class DeviceService {
         }
         Device d = fromDeviceRequest(req);
         assertLoginFree(d, null);
+        bindRecord(d, null);
         long id = deviceRepository.insert(d);
         d.setId(id);
-        syncUniviewStreams(d);
+        deviceRepository.saveUniview(d);
+        if (hasUniviewLogin(d)) {
+            syncUniviewStreams(d);
+        }
         return toDeviceView(d);
     }
 
@@ -186,7 +200,9 @@ public class DeviceService {
             d.setAccessError(existing.getAccessError());
         }
         assertLoginFree(d, existing.getId());
+        bindRecord(d, existing.getId());
         deviceRepository.update(d);
+        deviceRepository.saveUniview(d);
         if (hasUniviewLogin(d)) {
             syncUniviewStreams(d);
         } else {
@@ -354,7 +370,12 @@ public class DeviceService {
         d.setPort(req.getPort());
         d.setUsername(blank(req.getUsername()));
         d.setPassword(req.getPassword());
-        if (d.getHost() == null) {
+        d.setLanIp(blank(req.getLanIp()));
+        d.setRecordDeviceId(req.getRecordDeviceId());
+        d.setVendor(resolveVendor(req, d).name());
+        if (!AccessVendor.UNIVIEW.name().equals(d.getVendor())) {
+            clearUniview(d);
+        } else if (d.getHost() == null) {
             d.setPort(null);
             d.setUsername(null);
             d.setPassword(null);
@@ -368,6 +389,55 @@ public class DeviceService {
         }
         d.setAccessStatus("unknown");
         return d;
+    }
+
+    private static AccessVendor resolveVendor(DeviceRequest req, Device d) {
+        String raw = req.getVendor();
+        if (raw != null && !raw.isBlank()) {
+            try {
+                return AccessVendor.from(raw);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION");
+            }
+        }
+        if (d.getHost() != null || d.getLanIp() != null || d.getRecordDeviceId() != null) {
+            return AccessVendor.UNIVIEW;
+        }
+        return AccessVendor.MOCK;
+    }
+
+    private static void clearUniview(Device d) {
+        d.setHost(null);
+        d.setPort(null);
+        d.setUsername(null);
+        d.setPassword(null);
+        d.setAccessChannel(null);
+        d.setLanIp(null);
+        d.setRecordDeviceId(null);
+        d.setRecordChannel(null);
+        d.setRecordChannelName(null);
+    }
+
+    private void bindRecord(Device d, Long excludeId) {
+        boolean hasIp = d.getLanIp() != null;
+        boolean hasRecorder = d.getRecordDeviceId() != null;
+        if (!hasIp && !hasRecorder) {
+            d.setRecordChannel(null);
+            d.setRecordChannelName(null);
+            return;
+        }
+        if (!hasIp || !hasRecorder) {
+            throw new IllegalArgumentException("内网 IP 和录像设备需要一起填写");
+        }
+        RecordDevice recorder = nvrRecordingService.requireRecorder(d.getRecordDeviceId());
+        NvrRecordingService.LanChannel channel = nvrRecordingService.matchLanIp(recorder, d.getLanIp());
+        deviceRepository.findOtherByRecordChannel(recorder.getId(), channel.channelId(), excludeId)
+                .ifPresent(other -> {
+                    throw new IllegalArgumentException("该录像通道已被设备 " + other.getDeviceId() + " 使用");
+                });
+        d.setRecordDeviceId(recorder.getId());
+        d.setRecordChannel(channel.channelId());
+        d.setRecordChannelName(channel.name());
     }
 
     private void assertLoginFree(Device d, Long excludeId) {
@@ -538,43 +608,32 @@ public class DeviceService {
         m.put("deviceId", d.getDeviceId());
         m.put("name", d.getName());
         m.put("platformId", d.getPlatformId());
+        m.put("vendor", d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
         m.put("folderId", d.getFolderId());
         m.put("status", DeviceStatus.normalize(d.getStatus()));
         m.put("manufacturer", d.getManufacturer());
         m.put("model", d.getModel());
         m.put("address", d.getAddress());
-        m.put("ptzType", d.getPtzType());
         m.put("gatewayId", d.getGatewayId());
-        m.put("longitude", d.getLongitude());
-        m.put("latitude", d.getLatitude());
         m.put("host", d.getHost());
         m.put("port", d.getPort());
         m.put("username", d.getUsername());
-        m.put("passwordSet", d.getPassword() != null && !d.getPassword().isBlank());
         m.put("accessChannel", d.getAccessChannel());
-        m.put("accessStatus", d.getAccessStatus() == null ? "unknown" : d.getAccessStatus());
-        m.put("accessError", d.getAccessError());
-        m.put("createdAt", d.getCreatedAt());
-        m.put("updatedAt", d.getUpdatedAt());
+        m.put("lanIp", d.getLanIp());
+        m.put("recordDeviceId", d.getRecordDeviceId());
+        m.put("recordChannel", d.getRecordChannel());
+        m.put("recordChannelName", d.getRecordChannelName());
         return m;
     }
 
     private Map<String, Object> toStreamView(DeviceStream s) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", s.getId());
-        m.put("deviceId", s.getDeviceId());
         m.put("streamType", s.getStreamType());
-        m.put("channelId", s.getChannelId());
         m.put("streamUrl", s.getStreamUrl());
         m.put("streamName", s.getStreamName());
         m.put("status", s.getStatus());
-        m.put("sortNo", s.getSortNo());
         m.put("liveEnabled", Boolean.TRUE.equals(s.getLiveEnabled()));
-        m.put("streamIndex", s.getStreamIndex());
-        m.put("zlmApp", s.getZlmApp());
-        m.put("zlmStream", s.getZlmStream());
-        m.put("createdAt", s.getCreatedAt());
-        m.put("updatedAt", s.getUpdatedAt());
         return m;
     }
 }

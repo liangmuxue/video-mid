@@ -3,7 +3,7 @@ package com.jizhi.videomid.gb28181.live;
 import com.jizhi.videomid.config.Gb28181Properties;
 import com.jizhi.videomid.gb28181.Gb28181CatalogPort;
 import com.jizhi.videomid.gb28181.Gb28181CatalogXmlBuilder;
-import com.jizhi.videomid.sip.live.Gb28181SipOutboundClient;
+import com.jizhi.videomid.gb28181.sip.live.Gb28181SipOutboundClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 

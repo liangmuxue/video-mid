@@ -5,6 +5,8 @@ public class Device {
     private String deviceId;
     private String name;
     private String platformId;
+    /** MOCK / UNIVIEW / HIKVISION。一台设备只对应一个平台。 */
+    private String vendor;
     private Long folderId;
     private Integer status;
     private String manufacturer;
@@ -21,6 +23,10 @@ public class Device {
     private String accessChannel;
     private String accessStatus;
     private String accessError;
+    private String lanIp;
+    private Long recordDeviceId;
+    private Integer recordChannel;
+    private String recordChannelName;
     private Long createdAt;
     private Long updatedAt;
 
@@ -32,6 +38,8 @@ public class Device {
     public void setName(String name) { this.name = name; }
     public String getPlatformId() { return platformId; }
     public void setPlatformId(String platformId) { this.platformId = platformId; }
+    public String getVendor() { return vendor; }
+    public void setVendor(String vendor) { this.vendor = vendor; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
     public Integer getStatus() { return status; }
@@ -64,6 +72,14 @@ public class Device {
     public void setAccessStatus(String accessStatus) { this.accessStatus = accessStatus; }
     public String getAccessError() { return accessError; }
     public void setAccessError(String accessError) { this.accessError = accessError; }
+    public String getLanIp() { return lanIp; }
+    public void setLanIp(String lanIp) { this.lanIp = lanIp; }
+    public Long getRecordDeviceId() { return recordDeviceId; }
+    public void setRecordDeviceId(Long recordDeviceId) { this.recordDeviceId = recordDeviceId; }
+    public Integer getRecordChannel() { return recordChannel; }
+    public void setRecordChannel(Integer recordChannel) { this.recordChannel = recordChannel; }
+    public String getRecordChannelName() { return recordChannelName; }
+    public void setRecordChannelName(String recordChannelName) { this.recordChannelName = recordChannelName; }
     public Long getCreatedAt() { return createdAt; }
     public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
     public Long getUpdatedAt() { return updatedAt; }

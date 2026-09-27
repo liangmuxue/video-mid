@@ -47,12 +47,6 @@ public class LiveUniviewPtzAdapter implements UniviewPtzPort {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("deviceId", device.getDeviceId());
             item.put("name", device.getName());
-            item.put("manufacturer", device.getManufacturer());
-            item.put("model", device.getModel());
-            item.put("ptzType", device.getPtzType());
-            item.put("host", device.getHost());
-            item.put("port", device.getPort());
-            item.put("accessChannel", channelOf(device));
             item.put("presets", loadPresets(device));
             devices.add(item);
         }

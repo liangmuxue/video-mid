@@ -18,18 +18,53 @@
 
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
+import mpegts from 'mpegts.js'
 import { loadAndPlayOne, unloadVideo } from './onDemandPlay.js'
 
 const emit = defineEmits(['timeupdate', 'ended', 'play', 'pause'])
 const el = ref(null)
+let flvPlayer = null
+
+function isNvrPlayback(url) {
+  return /\/playback\.flv(\?|$)/.test(url || '')
+}
+
+function destroyFlv() {
+  if (!flvPlayer) return
+  const current = flvPlayer
+  flvPlayer = null
+  try {
+    current.pause()
+    current.unload()
+    current.detachMediaElement()
+    current.destroy()
+  } catch (_) {
+    /* ignore */
+  }
+}
 
 async function playOne(url, seekSeconds = 0) {
   const video = el.value
   if (!video || !url) return
+  if (isNvrPlayback(url)) {
+    destroyFlv()
+    unloadVideo(video)
+    if (!mpegts.getFeatureList().mseLivePlayback) return
+    flvPlayer = mpegts.createPlayer(
+      { type: 'flv', url, isLive: true, hasAudio: true, hasVideo: true },
+      { enableWorker: false, lazyLoad: false }
+    )
+    flvPlayer.attachMediaElement(video)
+    flvPlayer.load()
+    flvPlayer.play().catch(() => {})
+    return
+  }
+  destroyFlv()
   await loadAndPlayOne(video, { url, seekSeconds })
 }
 
 function stopAndUnload() {
+  destroyFlv()
   unloadVideo(el.value)
 }
 

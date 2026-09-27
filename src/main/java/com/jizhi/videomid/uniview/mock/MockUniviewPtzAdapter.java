@@ -28,7 +28,6 @@ public class MockUniviewPtzAdapter implements UniviewPtzPort {
             Map<String, Object> m = new HashMap<>();
             m.put("deviceId", deviceId);
             m.put("name", d.get("name"));
-            m.put("model", d.get("model"));
             m.put("presets", presetService.listMaps(deviceId));
             return m;
         }).toList();

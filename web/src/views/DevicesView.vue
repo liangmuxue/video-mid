@@ -48,6 +48,7 @@
             <input v-model="includeChildren" type="checkbox" @change="loadDevices" />
             含下级目录
           </label>
+          <button type="button" class="ghost" @click="openRecordDevices">录像设备</button>
           <button type="button" class="ghost" :disabled="loading" @click="reloadAll">刷新</button>
         </section>
 
@@ -58,6 +59,7 @@
                 <th>设备ID</th>
                 <th>名称</th>
                 <th>状态</th>
+                <th>平台</th>
                 <th>厂家</th>
                 <th>安装地址</th>
                 <th>码流数</th>
@@ -71,6 +73,7 @@
                 <td>
                   <span class="badge" :class="statusClass(d.status)">{{ statusLabel(d.status) }}</span>
                 </td>
+                <td>{{ vendorLabel(d.vendor) }}</td>
                 <td>{{ d.manufacturer || '-' }}</td>
                 <td>{{ d.address || '-' }}</td>
                 <td>{{ d.streamCount ?? 0 }}</td>
@@ -85,7 +88,7 @@
                 </td>
               </tr>
               <tr v-if="!filtered.length">
-                <td colspan="7" class="empty">暂无设备</td>
+                <td colspan="8" class="empty">暂无设备</td>
               </tr>
             </tbody>
           </table>
@@ -116,12 +119,32 @@
         <label><span>安装地址</span><input v-model.trim="form.address" /></label>
         <label><span>网关ID</span><input v-model.trim="form.gatewayId" /></label>
         <label><span>平台ID</span><input v-model.trim="form.platformId" /></label>
-        <label><span>宇视 IP</span><input v-model.trim="form.host" placeholder="留空表示非宇视设备" /></label>
+        <label><span>接入平台</span>
+          <select v-model="form.vendor">
+            <option value="MOCK">模拟</option>
+            <option value="UNIVIEW">宇视</option>
+            <option value="HIKVISION">海康</option>
+          </select>
+        </label>
+        <p class="tip">一台设备只对接一个平台。海康尚未接入。</p>
+        <template v-if="form.vendor === 'UNIVIEW'">
+        <label><span>宇视 IP</span><input v-model.trim="form.host" placeholder="摄像机地址" /></label>
         <label><span>端口</span><input v-model.number="form.port" type="number" min="1" max="65535" /></label>
         <label><span>用户名</span><input v-model.trim="form.username" autocomplete="off" /></label>
         <label><span>密码</span><input v-model="form.password" type="password" autocomplete="new-password" placeholder="编辑时留空则不修改" /></label>
         <label><span>通道号</span><input v-model.trim="form.accessChannel" placeholder="IPC 一般为 0" /></label>
         <p class="tip">保存时向摄像机查询实际启用的码流，再写入码流表。有人播放才拉流，没人看就停。</p>
+        <label><span>录像设备</span>
+          <select v-model="form.recordDeviceId">
+            <option :value="null">不查 NVR 录像</option>
+            <option v-for="item in recordDevices" :key="item.id" :value="item.id">
+              {{ item.name }}（{{ item.host }}:{{ item.port }}）
+            </option>
+          </select>
+        </label>
+        <label><span>内网 IP</span><input v-model.trim="form.lanIp" placeholder="摄像机在 NVR 上的内网 IP" /></label>
+        <p class="tip">保存时用内网 IP 在所选录像设备上匹配唯一通道。已匹配：{{ recordChannelText }}</p>
+        </template>
         <p v-if="formError" class="error">{{ formError }}</p>
         <div class="form-actions">
           <button type="button" class="ghost" @click="formOpen = false">取消</button>
@@ -148,6 +171,33 @@
         <p v-if="folderFormError" class="error">{{ folderFormError }}</p>
         <div class="form-actions">
           <button type="button" class="ghost" @click="folderFormOpen = false">取消</button>
+          <button type="submit" class="primary">保存</button>
+        </div>
+      </form>
+    </div>
+
+    <div v-if="recordDeviceOpen" class="mask" @click.self="recordDeviceOpen = false">
+      <form class="modal" @submit.prevent="saveRecordDevice">
+        <h2>{{ recordEditingId ? '编辑录像设备' : '录像设备' }}</h2>
+        <p v-if="!recordEditingId && recordDevices.length" class="tip">已有 {{ recordDevices.length }} 台。点名称可编辑。</p>
+        <ul v-if="!recordEditingId" class="record-list">
+          <li v-for="item in recordDevices" :key="item.id">
+            <button type="button" class="link" @click="editRecordDevice(item)">{{ item.name }}</button>
+            <span class="mono">{{ item.host }}:{{ item.port }}</span>
+            <button type="button" class="ghost sm" @click="removeRecordDevice(item)">删除</button>
+          </li>
+          <li v-if="!recordDevices.length">还没有录像设备</li>
+        </ul>
+        <label><span>名称</span><input v-model.trim="recordForm.name" required /></label>
+        <label><span>地址</span><input v-model.trim="recordForm.host" required /></label>
+        <label><span>端口</span><input v-model.number="recordForm.port" type="number" min="1" max="65535" required /></label>
+        <label><span>用户名</span><input v-model.trim="recordForm.username" autocomplete="off" required /></label>
+        <label><span>密码</span><input v-model="recordForm.password" type="password" autocomplete="new-password" placeholder="编辑时留空则不修改" /></label>
+        <p class="tip">NVR 使用 ONVIF 登录。一台摄像机只挂一台录像设备的一个通道。</p>
+        <p v-if="recordFormError" class="error">{{ recordFormError }}</p>
+        <div class="form-actions">
+          <button type="button" class="ghost" @click="recordDeviceOpen = false">关闭</button>
+          <button v-if="recordEditingId" type="button" class="ghost" @click="recordEditingId = null">返回列表</button>
           <button type="submit" class="primary">保存</button>
         </div>
       </form>
@@ -183,12 +233,16 @@ import RecordingPlaybackPanel from '../components/RecordingPlaybackPanel.vue'
 import {
   createDevice,
   createDeviceFolder,
+  createRecordDevice,
+  deleteRecordDevice,
+  fetchRecordDevices,
   deleteDevice,
   deleteDeviceFolder,
   fetchDeviceFolderTree,
   fetchDevices,
   updateDevice,
-  updateDeviceFolder
+  updateDeviceFolder,
+  updateRecordDevice
 } from '../api/device'
 import {
   STATUS_DISABLED,
@@ -198,6 +252,12 @@ import {
   statusLabel
 } from '../utils/deviceStatus'
 import { useBackdropClose } from '../composables/useBackdropClose'
+
+function vendorLabel(vendor) {
+  if (vendor === 'UNIVIEW') return '宇视'
+  if (vendor === 'HIKVISION') return '海康'
+  return '模拟'
+}
 
 const devices = ref([])
 const folderTree = ref([])
@@ -220,11 +280,16 @@ const form = reactive({
   address: '',
   gatewayId: '',
   platformId: '',
+  vendor: 'MOCK',
   host: '',
   port: null,
   username: '',
   password: '',
-  accessChannel: '0'
+  accessChannel: '0',
+  lanIp: '',
+  recordDeviceId: null,
+  recordChannel: null,
+  recordChannelName: ''
 })
 
 const folderFormOpen = ref(false)
@@ -233,6 +298,15 @@ const folderFormError = ref('')
 const folderForm = reactive({ name: '', parentId: null, sortNo: 0 })
 
 const playback = ref(null)
+const recordDevices = ref([])
+const recordDeviceOpen = ref(false)
+const recordEditingId = ref(null)
+const recordFormError = ref('')
+const recordForm = reactive({ name: '', host: '', port: null, username: '', password: '' })
+const recordChannelText = computed(() => {
+  if (!form.recordChannel) return '未匹配'
+  return `通道 ${form.recordChannel}${form.recordChannelName ? ' ' + form.recordChannelName : ''}`
+})
 const {
   onBackdropDown: onPlaybackBackdropDown,
   onBackdropUp: onPlaybackBackdropUp,
@@ -296,9 +370,57 @@ async function reloadAll() {
   error.value = ''
   try {
     await loadFolders()
+    await loadRecordDevices()
     await loadDevices()
   } catch (e) {
     error.value = e.message || '加载失败'
+  }
+}
+
+async function loadRecordDevices() {
+  recordDevices.value = (await fetchRecordDevices()) || []
+}
+
+function openRecordDevices() {
+  recordFormError.value = ''
+  recordEditingId.value = null
+  Object.assign(recordForm, { name: '', host: '', port: null, username: '', password: '' })
+  recordDeviceOpen.value = true
+}
+
+function editRecordDevice(item) {
+  recordFormError.value = ''
+  recordEditingId.value = item.id
+  Object.assign(recordForm, {
+    name: item.name || '',
+    host: item.host || '',
+    port: item.port ?? null,
+    username: item.username || '',
+    password: ''
+  })
+}
+
+async function saveRecordDevice() {
+  recordFormError.value = ''
+  try {
+    const payload = { ...recordForm }
+    if (recordEditingId.value) await updateRecordDevice(recordEditingId.value, payload)
+    else await createRecordDevice(payload)
+    recordEditingId.value = null
+    Object.assign(recordForm, { name: '', host: '', port: null, username: '', password: '' })
+    await loadRecordDevices()
+  } catch (e) {
+    recordFormError.value = e.message || '保存失败'
+  }
+}
+
+async function removeRecordDevice(item) {
+  recordFormError.value = ''
+  try {
+    await deleteRecordDevice(item.id)
+    await loadRecordDevices()
+  } catch (e) {
+    recordFormError.value = e.message || '删除失败'
   }
 }
 
@@ -322,11 +444,16 @@ function openDevice(d = null) {
     address: d?.address || '',
     gatewayId: d?.gatewayId || '',
     platformId: d?.platformId || '',
+    vendor: d?.vendor || (d?.host || d?.recordDeviceId ? 'UNIVIEW' : 'MOCK'),
     host: d?.host || '',
     port: d?.port ?? null,
     username: d?.username || '',
     password: '',
-    accessChannel: d?.accessChannel || '0'
+    accessChannel: d?.accessChannel || '0',
+    lanIp: d?.lanIp || '',
+    recordDeviceId: d?.recordDeviceId ?? null,
+    recordChannel: d?.recordChannel ?? null,
+    recordChannelName: d?.recordChannelName || ''
   })
   formOpen.value = true
 }
@@ -358,7 +485,19 @@ async function save() {
   try {
     const payload = { ...form, folderId: form.folderId ?? null }
     if (payload.port === '' || Number.isNaN(payload.port)) payload.port = null
-    if (!payload.host) {
+    if (!payload.recordDeviceId) payload.recordDeviceId = null
+    if (!payload.lanIp) payload.lanIp = null
+    delete payload.recordChannel
+    delete payload.recordChannelName
+    if (payload.vendor !== 'UNIVIEW') {
+      payload.host = null
+      payload.port = null
+      payload.username = null
+      payload.password = null
+      payload.accessChannel = null
+      payload.lanIp = null
+      payload.recordDeviceId = null
+    } else if (!payload.host) {
       payload.port = null
       payload.username = null
       payload.password = null

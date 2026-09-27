@@ -29,7 +29,7 @@
 
 <script setup>
 import { RecordingDayTimeline } from '../../toolkits/recording-day-timeline/src'
-import { fetchRecordingDays, fetchRecordings, recordingFileUrl } from '../api/device'
+import { fetchRecordingDays, fetchRecordings, nvrPlaybackUrl, recordingFileUrl } from '../api/device'
 
 const props = defineProps({
   deviceId: { type: String, required: true },
@@ -53,8 +53,9 @@ function onFetchDays(id, params) {
   return fetchRecordingDays(id, params)
 }
 
-function onVideoUrl(id, fileName, record) {
-  if (props.getVideoUrl) return props.getVideoUrl(id, fileName, record)
+function onVideoUrl(id, fileName, record, seekSeconds = 0) {
+  if (record?.source === 'nvr') return nvrPlaybackUrl(id, record, seekSeconds)
+  if (props.getVideoUrl) return props.getVideoUrl(id, fileName, record, seekSeconds)
   if (record?.videoUrl) return record.videoUrl
   return recordingFileUrl(id, fileName)
 }

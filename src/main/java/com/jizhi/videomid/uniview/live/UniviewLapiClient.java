@@ -143,9 +143,17 @@ public class UniviewLapiClient {
         return devices;
     }
 
+    private static String abbreviate(String body) {
+        if (body == null) {
+            return "";
+        }
+        String text = body.replaceAll("\\s+", " ").trim();
+        return text.length() <= 1500 ? text : text.substring(0, 1500) + "...";
+    }
+
     private String exchange(LapiEndpoint endpoint, String method, String path, String json) {
         String url = endpoint.baseUrl() + path;
-        log.info("[Uniview-LAPI] {} {}", method, url);
+        log.info("[宇视LAPI] 请求 {} {} body={}", method, url, json == null || json.isBlank() ? "" : json);
         HttpResult first = send(method, url, json, null);
         if (first.status == 401) {
             String challenge = first.header("WWW-Authenticate");
@@ -157,11 +165,14 @@ public class UniviewLapiClient {
             if (second.status < 200 || second.status >= 300) {
                 throw new IllegalStateException("LAPI " + method + " " + path + " HTTP " + second.status + " " + second.body);
             }
+            log.info("[宇视LAPI] 响应 {} {} status={} body={}", method, path, second.status, abbreviate(second.body));
             return second.body;
         }
         if (first.status < 200 || first.status >= 300) {
+            log.warn("[宇视LAPI] 响应 {} {} status={} body={}", method, path, first.status, abbreviate(first.body));
             throw new IllegalStateException("LAPI " + method + " " + path + " HTTP " + first.status + " " + first.body);
         }
+        log.info("[宇视LAPI] 响应 {} {} status={} body={}", method, path, first.status, abbreviate(first.body));
         return first.body;
     }
 

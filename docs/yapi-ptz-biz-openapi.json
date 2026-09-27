@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "视频中台 - 云台监控 / 业务端",
-    "description": "仅含云台控制与业务端（含批量片段截取）。除目录树外，带参接口一律 POST + JSON Body，路径不含变量。\n统一响应 { code, message, data }；code=0 成功。时间字段为毫秒时间戳。\n设备 status：0=不可用 1=已启用 2=已停用。直播仅 status=1；回放/截取 status=2 不可用。\n当前 uniview.data-source=live。云台和直播使用设备表上的 IP、端口、账号，示例设备 UV_10135。密码不出现在响应里。有人看才拉流，无人观看后停止。\n鉴权：auth.enabled=false 时免登录；true 时 Header Authorization: Bearer {token}。批量截取返回的 videoUrl 给 video 标签播时，可在 URL 上加 token。",
+    "description": "仅含云台监控与业务端（目录、设备、直播、录像、录像机回放、片段截取）。\n除目录树、设备详情、录像机回放、片段文件外，带参接口一律 POST + JSON Body。\n统一响应 { code, message, data }；code=0 成功。时间字段为毫秒时间戳。\n设备 status：0=不可用 1=已启用 2=已停用。直播仅 status=1；回放/截取 status=2 不可用。\n返回只有调用方会用到的字段。没有密码、经纬度、创建时间、服务器磁盘路径。\n当前 uniview.data-source=live。云台发给这台摄像机自己的地址；历史录像在它绑定的录像机上。示例设备 UV_10135。\n鉴权：auth.enabled=false 时免登录；true 时 Header Authorization: Bearer {token}。<video> 带不了 Header，URL 上加 token。",
     "version": "1.0.0"
   },
   "servers": [
@@ -18,11 +18,11 @@
   "tags": [
     {
       "name": "云台监控",
-      "description": "真实宇视设备。云台控制 POST + JSON Body。看直播用 /api/preview/start，第一人拉流，无人观看后停止。"
+      "description": "已配置宇视地址的设备。云台控制 POST + JSON Body。看直播用 /api/preview/start。"
     },
     {
       "name": "业务端",
-      "description": "目录树、设备、直播、录像、批量截取片段。"
+      "description": "目录树、设备、直播、录像、录像机回放、片段截取。"
     }
   ],
   "paths": {
@@ -32,7 +32,7 @@
           "云台监控"
         ],
         "summary": "云台-设备列表",
-        "description": "只返回已配置宇视 IP 的设备。presets 为该摄像机当前预置位，连不上时为空数组，不影响列表。不含密码。",
+        "description": "只返回已配置宇视地址的设备。presets 为该摄像机当前预置位，连不上时为空数组，不影响列表。",
         "operationId": "ptzDevices",
         "responses": {
           "200": {
@@ -61,50 +61,18 @@
                         "properties": {
                           "deviceId": {
                             "type": "string",
-                            "description": "设备编码",
+                            "description": "设备编码，如 UV_10135",
                             "example": "UV_10135"
                           },
                           "name": {
                             "type": "string",
-                            "description": "设备名称",
-                            "example": "东门球机"
-                          },
-                          "manufacturer": {
-                            "type": "string",
-                            "description": "厂商",
-                            "example": "宇视",
+                            "description": "名称，可空",
+                            "example": "演示球机",
                             "nullable": true
-                          },
-                          "model": {
-                            "type": "string",
-                            "description": "型号",
-                            "example": "IPC-S6424-IR@P-X25-VF",
-                            "nullable": true
-                          },
-                          "ptzType": {
-                            "type": "integer",
-                            "description": "云台类型",
-                            "example": 1,
-                            "nullable": true
-                          },
-                          "host": {
-                            "type": "string",
-                            "description": "摄像机 IP",
-                            "example": "39.185.236.176"
-                          },
-                          "port": {
-                            "type": "integer",
-                            "description": "LAPI 端口",
-                            "example": 10135
-                          },
-                          "accessChannel": {
-                            "type": "string",
-                            "description": "通道号，IPC 一般为 0",
-                            "example": "0"
                           },
                           "presets": {
                             "type": "array",
-                            "description": "摄像机上的预置位",
+                            "description": "预置位。项为 index、name",
                             "items": {
                               "type": "object",
                               "properties": {
@@ -116,7 +84,7 @@
                                 "name": {
                                   "type": "string",
                                   "description": "预置位名称",
-                                  "example": "东门全景"
+                                  "example": "门口"
                                 }
                               }
                             }
@@ -137,17 +105,11 @@
                   "data": [
                     {
                       "deviceId": "UV_10135",
-                      "name": "东门球机",
-                      "manufacturer": "宇视",
-                      "model": "IPC-S6424-IR@P-X25-VF",
-                      "ptzType": 1,
-                      "host": "39.185.236.176",
-                      "port": 10135,
-                      "accessChannel": "0",
+                      "name": "演示球机",
                       "presets": [
                         {
                           "index": 1,
-                          "name": "东门全景"
+                          "name": "门口"
                         }
                       ]
                     }
@@ -165,7 +127,7 @@
           "云台监控"
         ],
         "summary": "云台-设备详情（含码流，不拉流）",
-        "description": "返回该设备在码流表中的主/辅/第三流及播放地址。本接口不向摄像机拉流。看画面请再调 /api/preview/start。未配置 IP 时失败：设备未配置宇视地址。",
+        "description": "取这台摄像机已启用码流的播放地址。不拉流。要出画面再调 /api/preview/start。未配置宇视地址时失败：设备未配置宇视地址。",
         "operationId": "univiewDevice",
         "parameters": [
           {
@@ -210,71 +172,14 @@
                         },
                         "name": {
                           "type": "string",
-                          "description": "设备名称",
-                          "example": "东门球机"
-                        },
-                        "host": {
-                          "type": "string",
-                          "description": "摄像机 IP",
-                          "example": "39.185.236.176"
-                        },
-                        "port": {
-                          "type": "integer",
-                          "description": "LAPI 端口",
-                          "example": 10135
-                        },
-                        "accessChannel": {
-                          "type": "string",
-                          "description": "通道号",
-                          "example": "0"
-                        },
-                        "accessStatus": {
-                          "type": "string",
-                          "description": "unknown / online / offline / auth_failed",
-                          "example": "online"
-                        },
-                        "streamCount": {
-                          "type": "integer",
-                          "description": "启用的码流路数",
-                          "example": 2
+                          "description": "名称",
+                          "example": "演示球机"
                         },
                         "streams": {
                           "type": "array",
-                          "description": "码流",
+                          "description": "已启用码流",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "channelId": {
-                                "type": "string",
-                                "description": "通道号",
-                                "example": "0"
-                              },
-                              "channelType": {
-                                "type": "string",
-                                "description": "可见光固定 visible",
-                                "example": "visible"
-                              },
-                              "streamType": {
-                                "type": "string",
-                                "description": "main / sub / third",
-                                "example": "sub"
-                              },
-                              "streamName": {
-                                "type": "string",
-                                "description": "主码流 / 辅码流 / 第三流",
-                                "example": "辅码流"
-                              },
-                              "streamUrl": {
-                                "type": "string",
-                                "description": "HTTP-FLV，此时可能尚未拉流",
-                                "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
-                              },
-                              "status": {
-                                "type": "string",
-                                "description": "ON 正在拉流，OFF 未拉流",
-                                "example": "OFF"
-                              }
-                            }
+                            "$ref": "#/components/schemas/CatalogStream"
                           }
                         }
                       }
@@ -283,7 +188,7 @@
                   "example": {
                     "code": 0,
                     "message": "success",
-                    "data": "宇视设备详情"
+                    "data": "云台设备详情"
                   }
                 },
                 "example": {
@@ -291,20 +196,12 @@
                   "message": "success",
                   "data": {
                     "deviceId": "UV_10135",
-                    "name": "东门球机",
-                    "host": "39.185.236.176",
-                    "port": 10135,
-                    "accessChannel": "0",
-                    "accessStatus": "online",
-                    "streamCount": 2,
+                    "name": "演示球机",
                     "streams": [
                       {
-                        "channelId": "0",
                         "channelType": "visible",
                         "streamType": "sub",
-                        "streamName": "辅码流",
-                        "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv",
-                        "status": "OFF"
+                        "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
                       }
                     ]
                   }
@@ -674,9 +571,7 @@
                     "deviceId": "UV_10135",
                     "presetIndex": 1,
                     "overwrite": false,
-                    "index": 1,
-                    "name": "东门全景",
-                    "zoom": 1
+                    "name": "门口"
                   }
                 }
               }
@@ -759,22 +654,16 @@
                       "parentId": null,
                       "name": "园区",
                       "sortNo": 1,
-                      "path": "/1/",
-                      "createdAt": 1726560000000,
-                      "updatedAt": 1726646400000,
-                      "deviceCount": 2,
-                      "totalDeviceCount": 5,
+                      "deviceCount": 0,
+                      "totalDeviceCount": 1,
                       "children": [
                         {
                           "id": 2,
                           "parentId": 1,
-                          "name": "东门",
+                          "name": "东门区域",
                           "sortNo": 1,
-                          "path": "/1/2/",
-                          "createdAt": 1726560000000,
-                          "updatedAt": 1726646400000,
-                          "deviceCount": 2,
-                          "totalDeviceCount": 2,
+                          "deviceCount": 1,
+                          "totalDeviceCount": 1,
                           "children": []
                         }
                       ]
@@ -823,29 +712,11 @@
                   "message": "success",
                   "data": [
                     {
-                      "id": 1,
                       "deviceId": "UV_10135",
-                      "name": "东门球机",
-                      "platformId": null,
+                      "name": "演示球机",
+                      "address": "宇视在线调试",
                       "folderId": 2,
                       "status": 1,
-                      "manufacturer": "宇视",
-                      "model": "IPC-B",
-                      "address": "小区东门",
-                      "ptzType": 1,
-                      "gatewayId": null,
-                      "longitude": 116.4,
-                      "latitude": 39.9,
-                      "host": "39.185.236.176",
-                      "port": 10135,
-                      "username": "guest",
-                      "passwordSet": true,
-                      "accessChannel": "0",
-                      "accessStatus": "online",
-                      "accessError": null,
-                      "createdAt": 1726560000000,
-                      "updatedAt": 1726646400000,
-                      "streamCount": 2,
                       "playable": true,
                       "livePlayable": true
                     }
@@ -863,7 +734,7 @@
           "业务端"
         ],
         "summary": "业务端-设备详情",
-        "description": "含 streams 与 liveStream（业务直播流摘要，未配置为 null）。不存在时 message=设备不存在: {deviceId}。",
+        "description": "单台设备，并带上业务直播流地址。不拉流。没有业务直播流时 liveStream 为 null。不存在时 message=设备不存在: {deviceId}。",
         "operationId": "bizDeviceDetail",
         "requestBody": {
           "required": true,
@@ -891,56 +762,16 @@
                   "code": 0,
                   "message": "success",
                   "data": {
-                    "id": 1,
                     "deviceId": "UV_10135",
-                    "name": "东门球机",
-                    "platformId": null,
+                    "name": "演示球机",
+                    "address": "宇视在线调试",
                     "folderId": 2,
                     "status": 1,
-                    "manufacturer": "宇视",
-                    "model": "IPC-B",
-                    "address": "小区东门",
-                    "ptzType": 1,
-                    "gatewayId": null,
-                    "longitude": 116.4,
-                    "latitude": 39.9,
-                    "host": "39.185.236.176",
-                    "port": 10135,
-                    "username": "guest",
-                    "passwordSet": true,
-                    "accessChannel": "0",
-                    "accessStatus": "online",
-                    "accessError": null,
-                    "createdAt": 1726560000000,
-                    "updatedAt": 1726646400000,
-                    "streamCount": 2,
                     "playable": true,
                     "livePlayable": true,
-                    "streams": [
-                      {
-                        "id": 11,
-                        "deviceId": "UV_10135",
-                        "streamType": "sub",
-                        "streamIndex": 1,
-                        "channelId": null,
-                        "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv",
-                        "streamName": "辅码流",
-                        "status": "OFF",
-                        "zlmApp": "live",
-                        "zlmStream": "uv_UV_10135_sub",
-                        "sortNo": 2,
-                        "liveEnabled": true,
-                        "playCount": 0,
-                        "createdAt": 1726560000000,
-                        "updatedAt": 1726646400000
-                      }
-                    ],
                     "liveStream": {
-                      "id": 11,
                       "streamType": "sub",
-                      "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv",
-                      "streamName": "东门-子码流",
-                      "liveEnabled": true
+                      "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
                     }
                   }
                 }
@@ -1005,7 +836,7 @@
           "业务端"
         ],
         "summary": "业务端-有录像的日期",
-        "description": "返回指定年/月内有录像的日期列表（yyyy-MM-dd，升序），供回放日历。status=2 不可调用。",
+        "description": "给回放日历打点。已绑定录像机的设备查录像机；没绑定的查中台本地 MP4。已停用设备不能查。返回 yyyy-MM-dd，升序。",
         "operationId": "bizRecordingDays",
         "requestBody": {
           "required": true,
@@ -1052,7 +883,7 @@
           "业务端"
         ],
         "summary": "业务端-录像列表",
-        "description": "status=2 不可回放。from/to 为毫秒时间戳（可选），与文件时段有交集即返回，新的在前。videoUrl 指向开放接口，无需登录。",
+        "description": "已停用设备不能查。已绑定录像机的记录带 source=nvr，没有 videoUrl，播放走 GET /api/recordings/playback.flv。没绑定的是本地 MP4，带 durationSeconds 和 videoUrl。",
         "operationId": "bizRecordings",
         "requestBody": {
           "required": true,
@@ -1084,15 +915,205 @@
                   "data": [
                     {
                       "deviceId": "UV_10135",
-                      "fileName": "20260910_143000.mp4",
-                      "recordTime": 1725952200000,
-                      "endTime": 1725952500000,
-                      "durationSeconds": 300,
-                      "size": 12345678,
-                      "path": "/data/testdata-records/UV_10135/20260910_143000.mp4",
-                      "videoUrl": "http://8.130.74.232:8090/api/open/recordings/UV_10135/20260910_143000.mp4"
+                      "fileName": "C1/B1790092800/E1790093684",
+                      "recordTime": 1790092800000,
+                      "endTime": 1790093684000,
+                      "size": 0,
+                      "source": "nvr"
                     }
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/playback.flv": {
+      "get": {
+        "tags": [
+          "业务端"
+        ],
+        "summary": "业务端-录像机回放",
+        "description": "source=nvr 的记录用这个地址播放。服务向录像机取这段时间的流，转成 FLV 再输出。不是 JSON。begin 用列表里的 recordTime，拖动进度时加上偏移毫秒；end 用 endTime。大于 1e10 按毫秒，否则按秒。",
+        "operationId": "nvrPlayback",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "UV_10135"
+            },
+            "example": "UV_10135"
+          },
+          {
+            "name": "begin",
+            "in": "query",
+            "required": true,
+            "description": "开始时间。毫秒或秒都可以，大于 1e10 按毫秒",
+            "schema": {
+              "type": "integer",
+              "description": "开始时间。毫秒或秒都可以，大于 1e10 按毫秒",
+              "example": 1790092800000,
+              "format": "int64"
+            },
+            "example": 1790092800000
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "description": "结束时间，规则同 begin",
+            "schema": {
+              "type": "integer",
+              "description": "结束时间，规则同 begin",
+              "example": 1790093684000,
+              "format": "int64"
+            },
+            "example": 1790093684000
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "auth.enabled=true 时，video 标签把登录 token 放这里",
+            "schema": {
+              "type": "string",
+              "description": "auth.enabled=true 时，video 标签把登录 token 放这里"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "FLV 码流。没绑定录像机：该设备没有绑定录像设备。开始不早于结束：回放开始时间必须早于结束时间。",
+            "content": {
+              "video/x-flv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/biz/devices/{deviceId}/clip": {
+      "get": {
+        "tags": [
+          "业务端"
+        ],
+        "summary": "业务端-按时间点截取",
+        "description": "以 at 为中心，前后各 seconds 秒，从本地 MP4 切出一段。只生成播放地址，文件在访问片段文件接口时才输出。不切录像机上的历史录像。该时间点没有本地录像：该时间点无可用录像。",
+        "operationId": "bizClip",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "UV_10135"
+            },
+            "example": "UV_10135"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "时间点。10 位是秒，11~13 位是毫秒",
+            "schema": {
+              "type": "string",
+              "description": "时间点。10 位是秒，11~13 位是毫秒",
+              "example": "1730000030000"
+            },
+            "example": "1730000030000"
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "前后各取的秒数，默认 30，须大于 0，最大 150",
+            "schema": {
+              "type": "integer",
+              "description": "前后各取的秒数，默认 30，须大于 0，最大 150",
+              "example": 30
+            },
+            "example": 30
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功。失败时 HTTP 多为 400，body 中 code!=0，message 为原因，data 常为 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "统一 JSON 响应：code / message / data",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务状态码：0=成功，非 0=失败（一般为 -1）",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "提示信息：成功一般为 success，失败为错误原因",
+                      "example": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ClipInfo"
+                    }
+                  },
+                  "example": {
+                    "code": 0,
+                    "message": "success",
+                    "data": {
+                      "deviceId": "UV_10135",
+                      "at": 1730000030000,
+                      "seconds": 30,
+                      "startTime": 1730000000000,
+                      "endTime": 1730000060000,
+                      "durationSeconds": 60,
+                      "videoUrl": "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30",
+                      "clipUrl": "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30",
+                      "windowStart": 1730000000000,
+                      "windowEnd": 1730000060000,
+                      "sourceFiles": [
+                        "20260910_143000.mp4"
+                      ],
+                      "clipFileName": "UV_10135_1730000030000_30.mp4",
+                      "size": 5242880,
+                      "ok": true
+                    }
+                  }
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "deviceId": "UV_10135",
+                    "at": 1730000030000,
+                    "seconds": 30,
+                    "startTime": 1730000000000,
+                    "endTime": 1730000060000,
+                    "durationSeconds": 60,
+                    "videoUrl": "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30",
+                    "clipUrl": "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30",
+                    "windowStart": 1730000000000,
+                    "windowEnd": 1730000060000,
+                    "sourceFiles": [
+                      "20260910_143000.mp4"
+                    ],
+                    "clipFileName": "UV_10135_1730000030000_30.mp4",
+                    "size": 5242880
+                  }
                 }
               }
             }
@@ -1106,7 +1127,7 @@
           "业务端"
         ],
         "summary": "业务端-批量截取录像片段",
-        "description": "Body 为 JSON 数组（不是 {items:[]}），每项含 deviceId、at、seconds。以 at 为中心前后各 seconds 秒（默认 30，最大 150）。只切一条时数组放一项即可。单条失败不影响其它（ok=false + error）。整单最多 50 条。成功条的 videoUrl 给播放器直接播放。",
+        "description": "一次切多段本地 MP4，不切录像机历史录像。Body 是 JSON 数组，不是 {items:[]}。最多 50 条。单条失败不影响其它条。成功条带截取结果字段且 ok=true；失败条 ok=false，并有 deviceId、at、seconds、error。",
         "operationId": "bizClipsBatch",
         "requestBody": {
           "required": true,
@@ -1179,6 +1200,77 @@
           }
         }
       }
+    },
+    "/api/biz/devices/{deviceId}/clip/file": {
+      "get": {
+        "tags": [
+          "业务端"
+        ],
+        "summary": "业务端-片段文件",
+        "description": "按时间点截取和批量截取返回的 videoUrl 实际文件。响应是 MP4，不是 JSON。",
+        "operationId": "bizClipFile",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "description": "设备编码",
+            "schema": {
+              "type": "string",
+              "description": "设备编码",
+              "example": "UV_10135"
+            },
+            "example": "UV_10135"
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "description": "与截取时相同的时间点",
+            "schema": {
+              "type": "string",
+              "description": "与截取时相同的时间点",
+              "example": "1730000030000"
+            },
+            "example": "1730000030000"
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "required": false,
+            "description": "与截取时相同，默认 30",
+            "schema": {
+              "type": "integer",
+              "description": "与截取时相同，默认 30",
+              "example": 30
+            },
+            "example": 30
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "开启鉴权时给 video 标签用",
+            "schema": {
+              "type": "string",
+              "description": "开启鉴权时给 video 标签用"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 文件流",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1208,23 +1300,6 @@
             "description": "同级排序号，越小越靠前",
             "example": 1
           },
-          "path": {
-            "type": "string",
-            "description": "目录路径，如 /1/ 或 /1/2/",
-            "example": "/1/"
-          },
-          "createdAt": {
-            "type": "integer",
-            "description": "创建时间（毫秒时间戳）",
-            "example": 1726560000000,
-            "format": "int64"
-          },
-          "updatedAt": {
-            "type": "integer",
-            "description": "最后更新时间（毫秒时间戳）",
-            "example": 1726560000000,
-            "format": "int64"
-          },
           "deviceCount": {
             "type": "integer",
             "description": "本目录直接挂载的设备数量（不含子目录）",
@@ -1248,30 +1323,26 @@
       "BizDeviceItem": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "integer",
-            "description": "设备主键 ID（数据库自增）",
-            "example": 1,
-            "format": "int64"
-          },
           "deviceId": {
             "type": "string",
-            "description": "设备业务编码，全局唯一，后续接口都用这个",
+            "description": "设备业务编码，全局唯一",
             "example": "UV_10135"
           },
           "name": {
             "type": "string",
-            "description": "设备名称",
-            "example": "东门球机"
+            "description": "设备名称，可空",
+            "example": "演示球机",
+            "nullable": true
           },
-          "platformId": {
+          "address": {
             "type": "string",
-            "description": "上级/平台 ID，可空",
+            "description": "安装地址，可空",
+            "example": "宇视在线调试",
             "nullable": true
           },
           "folderId": {
             "type": "integer",
-            "description": "所属设备目录 ID，可空表示未归类",
+            "description": "所属目录 ID，未分组为 null",
             "example": 2,
             "nullable": true,
             "format": "int64"
@@ -1285,104 +1356,6 @@
               1,
               2
             ]
-          },
-          "manufacturer": {
-            "type": "string",
-            "description": "厂商名称，可空",
-            "example": "宇视",
-            "nullable": true
-          },
-          "model": {
-            "type": "string",
-            "description": "设备型号，可空",
-            "example": "IPC-B",
-            "nullable": true
-          },
-          "address": {
-            "type": "string",
-            "description": "安装地址/位置描述，可空",
-            "example": "小区东门",
-            "nullable": true
-          },
-          "ptzType": {
-            "type": "integer",
-            "description": "云台类型：常见 0=无云台，1=球机等，可空",
-            "example": 1,
-            "nullable": true
-          },
-          "gatewayId": {
-            "type": "string",
-            "description": "网关/接入网关 ID，可空",
-            "nullable": true
-          },
-          "longitude": {
-            "type": "number",
-            "description": "经度，可空",
-            "example": 116.4,
-            "nullable": true
-          },
-          "latitude": {
-            "type": "number",
-            "description": "纬度，可空",
-            "example": 39.9,
-            "nullable": true
-          },
-          "host": {
-            "type": "string",
-            "description": "宇视摄像机 IP。有值表示走宇视拉流和该摄像机自己的云台账号，不返回密码",
-            "example": "39.185.236.176",
-            "nullable": true
-          },
-          "port": {
-            "type": "integer",
-            "description": "宇视 LAPI 端口，IPC 常见为映射端口",
-            "example": 10135,
-            "nullable": true
-          },
-          "username": {
-            "type": "string",
-            "description": "宇视登录用户名。密码不下发，只返回 passwordSet",
-            "example": "guest",
-            "nullable": true
-          },
-          "passwordSet": {
-            "type": "boolean",
-            "description": "是否已保存密码。编辑时密码留空表示沿用原密码",
-            "example": true
-          },
-          "accessChannel": {
-            "type": "string",
-            "description": "宇视通道号，IPC 一般为 0",
-            "example": "0",
-            "nullable": true
-          },
-          "accessStatus": {
-            "type": "string",
-            "description": "接入状态：unknown / online / offline / auth_failed",
-            "example": "online",
-            "nullable": true
-          },
-          "accessError": {
-            "type": "string",
-            "description": "最近一次接入失败原因，成功时为空",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "integer",
-            "description": "创建时间（毫秒时间戳）",
-            "example": 1726560000000,
-            "format": "int64"
-          },
-          "updatedAt": {
-            "type": "integer",
-            "description": "最后更新时间（毫秒时间戳）",
-            "example": 1726646400000,
-            "format": "int64"
-          },
-          "streamCount": {
-            "type": "integer",
-            "description": "该设备已注册码流数量",
-            "example": 2
           },
           "playable": {
             "type": "boolean",
@@ -1395,155 +1368,68 @@
             "example": true
           }
         },
-        "description": "业务端设备列表项（不含码流明细）"
+        "description": "业务端设备。不含登录信息和码流明细"
       },
-      "StreamView": {
+      "CatalogStream": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "integer",
-            "description": "码流主键 ID",
-            "example": 11,
-            "format": "int64"
-          },
-          "deviceId": {
+          "channelType": {
             "type": "string",
-            "description": "所属设备编码",
-            "example": "UV_10135"
+            "description": "可见光为 visible",
+            "example": "visible"
           },
           "streamType": {
             "type": "string",
-            "description": "码流类型：main=主码流，sub=辅码流，third=第三流。由摄像机实际启用的码流决定，不是固定两路",
+            "description": "main 主码流 / sub 辅码流 / third 第三流",
             "example": "sub"
-          },
-          "streamIndex": {
-            "type": "integer",
-            "description": "宇视码流序号：0=主码流，1=辅码流，2=第三流",
-            "example": 1,
-            "nullable": true
-          },
-          "channelId": {
-            "type": "string",
-            "description": "国标通道 ID。宇视拉流为空，避免和通道 0 冲突",
-            "nullable": true
           },
           "streamUrl": {
             "type": "string",
-            "description": "HTTP-FLV 播放地址。地址先写入码流表，不代表 ZLM 已经在拉流",
+            "description": "HTTP-FLV。此时 ZLM 上可能还没有流",
             "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
-          },
-          "streamName": {
-            "type": "string",
-            "description": "码流显示名称：主码流 / 辅码流 / 第三流",
-            "example": "辅码流",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "description": "ON=正在拉流，OFF=未拉流",
-            "example": "OFF"
-          },
-          "zlmApp": {
-            "type": "string",
-            "description": "ZLM 应用名，宇视固定 live",
-            "example": "live",
-            "nullable": true
-          },
-          "zlmStream": {
-            "type": "string",
-            "description": "ZLM 流名，形如 uv_{设备编码}_{码流类型}",
-            "example": "uv_UV_10135_sub",
-            "nullable": true
-          },
-          "sortNo": {
-            "type": "integer",
-            "description": "排序号，越小越靠前，一般为 streamIndex+1",
-            "example": 2
-          },
-          "liveEnabled": {
-            "type": "boolean",
-            "description": "是否为该设备的业务直播流（同设备仅一条为 true）。优先辅码流，没有再用主码流",
-            "example": true
-          },
-          "playCount": {
-            "type": "integer",
-            "description": "当前播放人数（由 ZLM Hook 维护）",
-            "example": 0
-          },
-          "createdAt": {
-            "type": "integer",
-            "description": "创建时间（毫秒时间戳）",
-            "example": 1726560000000,
-            "format": "int64"
-          },
-          "updatedAt": {
-            "type": "integer",
-            "description": "最后更新时间（毫秒时间戳）",
-            "example": 1726646400000,
-            "format": "int64"
           }
         },
-        "description": "码流信息"
+        "description": "云台设备详情里的已启用码流"
       },
       "BizLiveStreamBrief": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "integer",
-            "description": "业务直播流的码流主键 ID",
-            "example": 11,
-            "format": "int64"
-          },
           "streamType": {
             "type": "string",
-            "description": "业务直播使用的码流类型，默认优先 sub",
+            "description": "业务直播码流：main / sub / third，优先 sub",
             "example": "sub"
           },
           "streamUrl": {
             "type": "string",
-            "description": "业务直播播放地址",
+            "description": "HTTP-FLV。此时可能尚未拉流",
             "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
-          },
-          "streamName": {
-            "type": "string",
-            "description": "码流名称",
-            "example": "东门-子码流"
-          },
-          "liveEnabled": {
-            "type": "boolean",
-            "description": "固定为 true，表示当前即为业务直播流",
-            "example": true
           }
         },
-        "description": "业务直播流摘要；设备未配置业务直播流时整个字段为 null"
+        "description": "业务直播流；没有时整个字段为 null"
       },
       "BizDeviceDetail": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "integer",
-            "description": "设备主键 ID（数据库自增）",
-            "example": 1,
-            "format": "int64"
-          },
           "deviceId": {
             "type": "string",
-            "description": "设备业务编码，全局唯一，后续接口都用这个",
+            "description": "设备业务编码，全局唯一",
             "example": "UV_10135"
           },
           "name": {
             "type": "string",
-            "description": "设备名称",
-            "example": "东门球机"
+            "description": "设备名称，可空",
+            "example": "演示球机",
+            "nullable": true
           },
-          "platformId": {
+          "address": {
             "type": "string",
-            "description": "上级/平台 ID，可空",
+            "description": "安装地址，可空",
+            "example": "宇视在线调试",
             "nullable": true
           },
           "folderId": {
             "type": "integer",
-            "description": "所属设备目录 ID，可空表示未归类",
+            "description": "所属目录 ID，未分组为 null",
             "example": 2,
             "nullable": true,
             "format": "int64"
@@ -1558,104 +1444,6 @@
               2
             ]
           },
-          "manufacturer": {
-            "type": "string",
-            "description": "厂商名称，可空",
-            "example": "宇视",
-            "nullable": true
-          },
-          "model": {
-            "type": "string",
-            "description": "设备型号，可空",
-            "example": "IPC-B",
-            "nullable": true
-          },
-          "address": {
-            "type": "string",
-            "description": "安装地址/位置描述，可空",
-            "example": "小区东门",
-            "nullable": true
-          },
-          "ptzType": {
-            "type": "integer",
-            "description": "云台类型：常见 0=无云台，1=球机等，可空",
-            "example": 1,
-            "nullable": true
-          },
-          "gatewayId": {
-            "type": "string",
-            "description": "网关/接入网关 ID，可空",
-            "nullable": true
-          },
-          "longitude": {
-            "type": "number",
-            "description": "经度，可空",
-            "example": 116.4,
-            "nullable": true
-          },
-          "latitude": {
-            "type": "number",
-            "description": "纬度，可空",
-            "example": 39.9,
-            "nullable": true
-          },
-          "host": {
-            "type": "string",
-            "description": "宇视摄像机 IP。有值表示走宇视拉流和该摄像机自己的云台账号，不返回密码",
-            "example": "39.185.236.176",
-            "nullable": true
-          },
-          "port": {
-            "type": "integer",
-            "description": "宇视 LAPI 端口，IPC 常见为映射端口",
-            "example": 10135,
-            "nullable": true
-          },
-          "username": {
-            "type": "string",
-            "description": "宇视登录用户名。密码不下发，只返回 passwordSet",
-            "example": "guest",
-            "nullable": true
-          },
-          "passwordSet": {
-            "type": "boolean",
-            "description": "是否已保存密码。编辑时密码留空表示沿用原密码",
-            "example": true
-          },
-          "accessChannel": {
-            "type": "string",
-            "description": "宇视通道号，IPC 一般为 0",
-            "example": "0",
-            "nullable": true
-          },
-          "accessStatus": {
-            "type": "string",
-            "description": "接入状态：unknown / online / offline / auth_failed",
-            "example": "online",
-            "nullable": true
-          },
-          "accessError": {
-            "type": "string",
-            "description": "最近一次接入失败原因，成功时为空",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "integer",
-            "description": "创建时间（毫秒时间戳）",
-            "example": 1726560000000,
-            "format": "int64"
-          },
-          "updatedAt": {
-            "type": "integer",
-            "description": "最后更新时间（毫秒时间戳）",
-            "example": 1726646400000,
-            "format": "int64"
-          },
-          "streamCount": {
-            "type": "integer",
-            "description": "码流数量",
-            "example": 2
-          },
           "playable": {
             "type": "boolean",
             "description": "可否回放：status=2 时为 false",
@@ -1666,129 +1454,21 @@
             "description": "可否直播：仅 status=1 时为 true",
             "example": true
           },
-          "streams": {
-            "type": "array",
-            "description": "设备下全部码流",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "integer",
-                  "description": "码流主键 ID",
-                  "example": 11,
-                  "format": "int64"
-                },
-                "deviceId": {
-                  "type": "string",
-                  "description": "所属设备编码",
-                  "example": "UV_10135"
-                },
-                "streamType": {
-                  "type": "string",
-                  "description": "码流类型：main=主码流，sub=辅码流，third=第三流。由摄像机实际启用的码流决定，不是固定两路",
-                  "example": "sub"
-                },
-                "streamIndex": {
-                  "type": "integer",
-                  "description": "宇视码流序号：0=主码流，1=辅码流，2=第三流",
-                  "example": 1,
-                  "nullable": true
-                },
-                "channelId": {
-                  "type": "string",
-                  "description": "国标通道 ID。宇视拉流为空，避免和通道 0 冲突",
-                  "nullable": true
-                },
-                "streamUrl": {
-                  "type": "string",
-                  "description": "HTTP-FLV 播放地址。地址先写入码流表，不代表 ZLM 已经在拉流",
-                  "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
-                },
-                "streamName": {
-                  "type": "string",
-                  "description": "码流显示名称：主码流 / 辅码流 / 第三流",
-                  "example": "辅码流",
-                  "nullable": true
-                },
-                "status": {
-                  "type": "string",
-                  "description": "ON=正在拉流，OFF=未拉流",
-                  "example": "OFF"
-                },
-                "zlmApp": {
-                  "type": "string",
-                  "description": "ZLM 应用名，宇视固定 live",
-                  "example": "live",
-                  "nullable": true
-                },
-                "zlmStream": {
-                  "type": "string",
-                  "description": "ZLM 流名，形如 uv_{设备编码}_{码流类型}",
-                  "example": "uv_UV_10135_sub",
-                  "nullable": true
-                },
-                "sortNo": {
-                  "type": "integer",
-                  "description": "排序号，越小越靠前，一般为 streamIndex+1",
-                  "example": 2
-                },
-                "liveEnabled": {
-                  "type": "boolean",
-                  "description": "是否为该设备的业务直播流（同设备仅一条为 true）。优先辅码流，没有再用主码流",
-                  "example": true
-                },
-                "playCount": {
-                  "type": "integer",
-                  "description": "当前播放人数（由 ZLM Hook 维护）",
-                  "example": 0
-                },
-                "createdAt": {
-                  "type": "integer",
-                  "description": "创建时间（毫秒时间戳）",
-                  "example": 1726560000000,
-                  "format": "int64"
-                },
-                "updatedAt": {
-                  "type": "integer",
-                  "description": "最后更新时间（毫秒时间戳）",
-                  "example": 1726646400000,
-                  "format": "int64"
-                }
-              },
-              "description": "码流信息"
-            }
-          },
           "liveStream": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "integer",
-                "description": "业务直播流的码流主键 ID",
-                "example": 11,
-                "format": "int64"
-              },
               "streamType": {
                 "type": "string",
-                "description": "业务直播使用的码流类型，默认优先 sub",
+                "description": "业务直播码流：main / sub / third，优先 sub",
                 "example": "sub"
               },
               "streamUrl": {
                 "type": "string",
-                "description": "业务直播播放地址",
+                "description": "HTTP-FLV。此时可能尚未拉流",
                 "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
-              },
-              "streamName": {
-                "type": "string",
-                "description": "码流名称",
-                "example": "东门-子码流"
-              },
-              "liveEnabled": {
-                "type": "boolean",
-                "description": "固定为 true，表示当前即为业务直播流",
-                "example": true
               }
             },
-            "description": "当前业务直播流配置；未设置时为 null",
+            "description": "当前业务直播流；未设置时为 null",
             "nullable": true
           }
         },
@@ -1824,41 +1504,16 @@
           },
           "ref": {
             "type": "integer",
-            "description": "当前播放引用人数（ZLM Hook 统计；本接口不加人数）",
-            "example": 1
+            "description": "当前观看人数，由 ZLM 回调维护，本接口不加人数",
+            "example": 0
           },
           "countBy": {
             "type": "string",
-            "description": "人数统计来源，普通流为 zlm-hook；国标点播为 gb28181",
+            "description": "固定 zlm-hook",
             "example": "zlm-hook"
-          },
-          "streamName": {
-            "type": "string",
-            "description": "码流名称（国标点播时可能有）",
-            "nullable": true
-          },
-          "channelId": {
-            "type": "string",
-            "description": "国标通道 ID（国标点播时可能有）",
-            "nullable": true
-          },
-          "transport": {
-            "type": "string",
-            "description": "国标点播时为 gb28181",
-            "nullable": true
-          },
-          "dataSource": {
-            "type": "string",
-            "description": "国标点播时为 mock 或 live",
-            "nullable": true
-          },
-          "gb28181": {
-            "type": "object",
-            "properties": {},
-            "description": "国标 INVITE 原始结果（仅国标点播时有）"
           }
         },
-        "description": "业务端开播结果"
+        "description": "开始预览 / 业务直播结果"
       },
       "RecordingWithUrl": {
         "type": "object",
@@ -1870,43 +1525,44 @@
           },
           "fileName": {
             "type": "string",
-            "description": "录像文件名，一般为 yyyyMMdd_HHmmss.mp4",
-            "example": "20260910_143000.mp4"
+            "description": "文件名。录像机为通道与起止时间拼出的名字；本地为 MP4 文件名",
+            "example": "C1/B1790092800/E1790093684"
           },
           "recordTime": {
             "type": "integer",
-            "description": "录制开始时刻（毫秒，从文件名解析）",
-            "example": 1725952200000,
+            "description": "开始毫秒",
+            "example": 1790092800000,
             "format": "int64"
           },
           "endTime": {
             "type": "integer",
-            "description": "录制结束时刻（毫秒，ffprobe 读取 MP4 时长；失败时不返回）",
-            "example": 1725952500000,
+            "description": "结束毫秒。本地文件探测失败时可能没有",
+            "example": 1790093684000,
             "format": "int64",
-            "nullable": true
-          },
-          "durationSeconds": {
-            "type": "number",
-            "description": "录像时长（秒，ffprobe 读取；失败时不返回）",
-            "example": 300,
             "nullable": true
           },
           "size": {
             "type": "integer",
-            "description": "文件大小，单位：字节",
-            "example": 12345678,
+            "description": "字节。录像机上的文件可能为 0",
+            "example": 0,
             "format": "int64"
           },
-          "path": {
+          "source": {
             "type": "string",
-            "description": "服务器本地绝对路径（内部用，对外可忽略）",
-            "example": "/data/.../20260910_143000.mp4"
+            "description": "已绑定录像机时为 nvr。本地 MP4 没有这个字段",
+            "example": "nvr",
+            "nullable": true
+          },
+          "durationSeconds": {
+            "type": "number",
+            "description": "仅本地 MP4：时长秒。探测失败时不返回",
+            "example": 300,
+            "nullable": true
           },
           "videoUrl": {
             "type": "string",
-            "description": "可直接播放的绝对地址，指向 /api/open/recordings/{deviceId}/{fileName}，无需 Token",
-            "example": "http://8.130.74.232:8090/api/open/recordings/UV_10135/20260910_143000.mp4"
+            "description": "仅本地 MP4：可直接播放，指向 /api/open/recordings/{deviceId}/{fileName}。录像机记录没有此字段，播放走 /api/recordings/playback.flv",
+            "nullable": true
           }
         },
         "description": "带播放链接的录像项"
@@ -1936,6 +1592,86 @@
           "at"
         ],
         "description": "批量截取录像：单条请求项"
+      },
+      "ClipInfo": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码",
+            "example": "UV_10135"
+          },
+          "at": {
+            "type": "integer",
+            "description": "时间点，已换成毫秒",
+            "example": 1730000030000,
+            "format": "int64"
+          },
+          "seconds": {
+            "type": "integer",
+            "description": "实际使用的前后秒数",
+            "example": 30
+          },
+          "windowStart": {
+            "type": "integer",
+            "description": "请求窗口起点，at − seconds×1000",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "windowEnd": {
+            "type": "integer",
+            "description": "请求窗口终点，at + seconds×1000",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "startTime": {
+            "type": "integer",
+            "description": "片段实际开始，受录像覆盖裁切",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "endTime": {
+            "type": "integer",
+            "description": "片段实际结束",
+            "example": 1726560000000,
+            "format": "int64"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "description": "实际时长秒",
+            "example": 60
+          },
+          "videoUrl": {
+            "type": "string",
+            "description": "给播放器的 MP4 地址，即片段文件接口",
+            "example": "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30"
+          },
+          "clipUrl": {
+            "type": "string",
+            "description": "与 videoUrl 相同",
+            "example": "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30"
+          },
+          "sourceFiles": {
+            "type": "array",
+            "description": "源文件名",
+            "items": {
+              "type": "string",
+              "description": "参与截取的原始文件名"
+            }
+          },
+          "clipFileName": {
+            "type": "string",
+            "description": "缓存片段文件名",
+            "example": "UV_10135_1730000030000_30.mp4"
+          },
+          "size": {
+            "type": "integer",
+            "description": "片段字节数",
+            "example": 5242880,
+            "format": "int64"
+          }
+        },
+        "description": "按时间点截取的结果。只切本地 MP4"
       },
       "ClipBatchItem": {
         "type": "object",
@@ -2079,7 +1815,7 @@
           },
           "presetIndex": {
             "type": "integer",
-            "description": "预置位编号（预置位接口）",
+            "description": "预置位编号（调用或保存预置位）",
             "example": 1,
             "nullable": true
           },
@@ -2089,27 +1825,15 @@
             "example": false,
             "nullable": true
           },
-          "index": {
-            "type": "integer",
-            "description": "保存预置位后的编号（与 presetIndex 相同）",
-            "example": 1,
-            "nullable": true
-          },
           "name": {
             "type": "string",
             "description": "保存后的预置位名称",
-            "example": "东门全景",
-            "nullable": true
-          },
-          "zoom": {
-            "type": "number",
-            "description": "广角 mock 固定 1.0；保存预置位时为中台记录倍率",
-            "example": 1,
+            "example": "门口",
             "nullable": true
           },
           "channelType": {
             "type": "string",
-            "description": "抓拍通道类型 visible / thermal",
+            "description": "抓拍通道类型，默认 visible",
             "example": "visible",
             "nullable": true
           },
@@ -2153,22 +1877,16 @@
               "parentId": null,
               "name": "园区",
               "sortNo": 1,
-              "path": "/1/",
-              "createdAt": 1726560000000,
-              "updatedAt": 1726646400000,
-              "deviceCount": 2,
-              "totalDeviceCount": 5,
+              "deviceCount": 0,
+              "totalDeviceCount": 1,
               "children": [
                 {
                   "id": 2,
                   "parentId": 1,
-                  "name": "东门",
+                  "name": "东门区域",
                   "sortNo": 1,
-                  "path": "/1/2/",
-                  "createdAt": 1726560000000,
-                  "updatedAt": 1726646400000,
-                  "deviceCount": 2,
-                  "totalDeviceCount": 2,
+                  "deviceCount": 1,
+                  "totalDeviceCount": 1,
                   "children": []
                 }
               ]
@@ -2203,29 +1921,11 @@
           "message": "success",
           "data": [
             {
-              "id": 1,
               "deviceId": "UV_10135",
-              "name": "东门球机",
-              "platformId": null,
+              "name": "演示球机",
+              "address": "宇视在线调试",
               "folderId": 2,
               "status": 1,
-              "manufacturer": "宇视",
-              "model": "IPC-B",
-              "address": "小区东门",
-              "ptzType": 1,
-              "gatewayId": null,
-              "longitude": 116.4,
-              "latitude": 39.9,
-              "host": "39.185.236.176",
-              "port": 10135,
-              "username": "guest",
-              "passwordSet": true,
-              "accessChannel": "0",
-              "accessStatus": "online",
-              "accessError": null,
-              "createdAt": 1726560000000,
-              "updatedAt": 1726646400000,
-              "streamCount": 2,
               "playable": true,
               "livePlayable": true
             }
@@ -2254,56 +1954,16 @@
           "code": 0,
           "message": "success",
           "data": {
-            "id": 1,
             "deviceId": "UV_10135",
-            "name": "东门球机",
-            "platformId": null,
+            "name": "演示球机",
+            "address": "宇视在线调试",
             "folderId": 2,
             "status": 1,
-            "manufacturer": "宇视",
-            "model": "IPC-B",
-            "address": "小区东门",
-            "ptzType": 1,
-            "gatewayId": null,
-            "longitude": 116.4,
-            "latitude": 39.9,
-            "host": "39.185.236.176",
-            "port": 10135,
-            "username": "guest",
-            "passwordSet": true,
-            "accessChannel": "0",
-            "accessStatus": "online",
-            "accessError": null,
-            "createdAt": 1726560000000,
-            "updatedAt": 1726646400000,
-            "streamCount": 2,
             "playable": true,
             "livePlayable": true,
-            "streams": [
-              {
-                "id": 11,
-                "deviceId": "UV_10135",
-                "streamType": "sub",
-                "streamIndex": 1,
-                "channelId": null,
-                "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv",
-                "streamName": "辅码流",
-                "status": "OFF",
-                "zlmApp": "live",
-                "zlmStream": "uv_UV_10135_sub",
-                "sortNo": 2,
-                "liveEnabled": true,
-                "playCount": 0,
-                "createdAt": 1726560000000,
-                "updatedAt": 1726646400000
-              }
-            ],
             "liveStream": {
-              "id": 11,
               "streamType": "sub",
-              "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv",
-              "streamName": "东门-子码流",
-              "liveEnabled": true
+              "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
             }
           }
         }
@@ -2402,13 +2062,11 @@
           "data": [
             {
               "deviceId": "UV_10135",
-              "fileName": "20260910_143000.mp4",
-              "recordTime": 1725952200000,
-              "endTime": 1725952500000,
-              "durationSeconds": 300,
-              "size": 12345678,
-              "path": "/data/testdata-records/UV_10135/20260910_143000.mp4",
-              "videoUrl": "http://8.130.74.232:8090/api/open/recordings/UV_10135/20260910_143000.mp4"
+              "fileName": "C1/B1790092800/E1790093684",
+              "recordTime": 1790092800000,
+              "endTime": 1790093684000,
+              "size": 0,
+              "source": "nvr"
             }
           ]
         }
@@ -2510,7 +2168,7 @@
           },
           "direction": {
             "type": "string",
-            "description": "【必填】方向：up / down / left / right / left_up / left_down / right_up / right_down",
+            "description": "【必填】方向：up / down / left / right / left_up / left_down / right_up / right_down / stop",
             "example": "up",
             "enum": [
               "up",
@@ -2520,7 +2178,8 @@
               "left_up",
               "left_down",
               "right_up",
-              "right_down"
+              "right_down",
+              "stop"
             ]
           },
           "speed": {

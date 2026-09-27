@@ -187,6 +187,41 @@ public class ZlmClient {
         }
     }
 
+    /** 回放拉流：不无限重连，避免录像结束后一直重试。 */
+    public boolean addPlaybackProxy(String app, String stream, String sourceUrl) {
+        if (app == null || app.isBlank() || stream == null || stream.isBlank()
+                || sourceUrl == null || sourceUrl.isBlank()) {
+            return false;
+        }
+        String url = api("/index/api/addStreamProxy")
+                .queryParam("vhost", "__defaultVhost__")
+                .queryParam("app", app.trim())
+                .queryParam("stream", stream.trim())
+                .queryParam("url", sourceUrl.trim())
+                .queryParam("retry_count", 0)
+                .queryParam("rtp_type", 0)
+                .queryParam("timeout_sec", 15)
+                .queryParam("enable_hls", 0)
+                .queryParam("enable_rtmp", 1)
+                .queryParam("enable_mp4", 0)
+                .toUriString();
+        log.info("[本服务→ZLM] addPlaybackProxy app={} stream={}", app, stream);
+        try {
+            String body = proxyRestTemplate.getForObject(url, String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            int code = resp == null ? -1 : resp.path("code").asInt(-1);
+            String msg = resp == null ? "" : resp.path("msg").asText("");
+            if (code == 0 || msg.toLowerCase().contains("exist")) {
+                return true;
+            }
+            log.warn("[本服务→ZLM] addPlaybackProxy 失败 app={} stream={} code={} msg={}", app, stream, code, msg);
+            return false;
+        } catch (Exception e) {
+            log.warn("[本服务→ZLM] addPlaybackProxy 异常 app={} stream={} error={}", app, stream, e.getMessage());
+            return false;
+        }
+    }
+
     /** 停止 addStreamProxy 建立的拉流。代理已不存在视为成功。 */
     public boolean delStreamProxy(String app, String stream) {
         if (app == null || app.isBlank() || stream == null || stream.isBlank()) {

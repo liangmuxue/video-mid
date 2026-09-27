@@ -97,17 +97,18 @@ export function buildDaySegments(records, dateStr, clipSeconds = 300) {
   const raw = []
 
   for (const item of list) {
-    const start =
+    let start =
       parseRecordTimestamp(item.recordTime) ||
       parseRecordTimestamp(item.timestamp) ||
       parseRecordTimestamp(item.startTime)
     if (!start) continue
-    if (start < dayStart || start > dayEnd) continue
 
     let end = parseRecordTimestamp(item.endTime)
     if (!end) {
       end = new Date(start.getTime() + Math.max(1, clipSeconds) * 1000)
     }
+    if (end <= dayStart || start > dayEnd) continue
+    if (start < dayStart) start = new Date(dayStart.getTime())
     if (end > dayEnd) end = dayEnd
     if (end <= start) {
       end = new Date(start.getTime() + 1000)

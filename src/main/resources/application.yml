@@ -7,7 +7,7 @@ spring:
   datasource:
     url: jdbc:mysql://8.130.74.232:3306/video_mid?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: 123456
+    password: "zhaobin@zhangbotao"
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       minimum-idle: 1
@@ -38,6 +38,8 @@ uniview:
     username: guest
     password: "*Guest321"
     api-type: lapi
+  nvr:
+    library-path: ""
 
 # 国标 GB28181：前期 mock 模拟下级，live 接真实 SIP（不用 RTSP）
 gb28181:

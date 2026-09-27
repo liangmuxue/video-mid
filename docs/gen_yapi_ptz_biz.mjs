@@ -106,46 +106,17 @@ const DEVICE_STATUS = prop(
 );
 
 const DEVICE_BASE = {
-  id: prop("integer", "设备主键 ID（数据库自增）", 1, false, "int64"),
-  deviceId: prop("string", "设备业务编码，全局唯一，后续接口都用这个", "UV_10135"),
-  name: prop("string", "设备名称", "东门球机"),
-  platformId: prop("string", "上级/平台 ID，可空", undefined, true),
-  folderId: prop("integer", "所属设备目录 ID，可空表示未归类", 2, true, "int64"),
+  deviceId: prop("string", "设备业务编码，全局唯一", "UV_10135"),
+  name: prop("string", "设备名称，可空", "演示球机", true),
+  address: prop("string", "安装地址，可空", "宇视在线调试", true),
+  folderId: prop("integer", "所属目录 ID，未分组为 null", 2, true, "int64"),
   status: DEVICE_STATUS,
-  manufacturer: prop("string", "厂商名称，可空", "宇视", true),
-  model: prop("string", "设备型号，可空", "IPC-B", true),
-  address: prop("string", "安装地址/位置描述，可空", "小区东门", true),
-  ptzType: prop("integer", "云台类型：常见 0=无云台，1=球机等，可空", 1, true),
-  gatewayId: prop("string", "网关/接入网关 ID，可空", undefined, true),
-  longitude: prop("number", "经度，可空", 116.4, true),
-  latitude: prop("number", "纬度，可空", 39.9, true),
-  host: prop("string", "宇视摄像机 IP。有值表示走宇视拉流和该摄像机自己的云台账号，不返回密码", "39.185.236.176", true),
-  port: prop("integer", "宇视 LAPI 端口，IPC 常见为映射端口", 10135, true),
-  username: prop("string", "宇视登录用户名。密码不下发，只返回 passwordSet", "guest", true),
-  passwordSet: prop("boolean", "是否已保存密码。编辑时密码留空表示沿用原密码", true),
-  accessChannel: prop("string", "宇视通道号，IPC 一般为 0", "0", true),
-  accessStatus: prop("string", "接入状态：unknown / online / offline / auth_failed", "online", true),
-  accessError: prop("string", "最近一次接入失败原因，成功时为空", undefined, true),
-  createdAt: { ...TS, description: "创建时间（毫秒时间戳）" },
-  updatedAt: { ...TS, description: "最后更新时间（毫秒时间戳）", example: 1726646400000 },
 };
 
-const STREAM = {
-  id: prop("integer", "码流主键 ID", 11, false, "int64"),
-  deviceId: prop("string", "所属设备编码", "UV_10135"),
-  streamType: prop("string", "码流类型：main=主码流，sub=辅码流，third=第三流。由摄像机实际启用的码流决定，不是固定两路", "sub"),
-  streamIndex: prop("integer", "宇视码流序号：0=主码流，1=辅码流，2=第三流", 1, true),
-  channelId: prop("string", "国标通道 ID。宇视拉流为空，避免和通道 0 冲突", undefined, true),
-  streamUrl: prop("string", "HTTP-FLV 播放地址。地址先写入码流表，不代表 ZLM 已经在拉流", "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"),
-  streamName: prop("string", "码流显示名称：主码流 / 辅码流 / 第三流", "辅码流", true),
-  status: prop("string", "ON=正在拉流，OFF=未拉流", "OFF"),
-  zlmApp: prop("string", "ZLM 应用名，宇视固定 live", "live", true),
-  zlmStream: prop("string", "ZLM 流名，形如 uv_{设备编码}_{码流类型}", "uv_UV_10135_sub", true),
-  sortNo: prop("integer", "排序号，越小越靠前，一般为 streamIndex+1", 2),
-  liveEnabled: prop("boolean", "是否为该设备的业务直播流（同设备仅一条为 true）。优先辅码流，没有再用主码流", true),
-  playCount: prop("integer", "当前播放人数（由 ZLM Hook 维护）", 0),
-  createdAt: { ...TS, description: "创建时间（毫秒时间戳）" },
-  updatedAt: { ...TS, description: "最后更新时间（毫秒时间戳）", example: 1726646400000 },
+const CATALOG_STREAM = {
+  channelType: prop("string", "可见光为 visible", "visible"),
+  streamType: prop("string", "main 主码流 / sub 辅码流 / third 第三流", "sub"),
+  streamUrl: prop("string", "HTTP-FLV。此时 ZLM 上可能还没有流", "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"),
 };
 
 const FOLDER_BASE = {
@@ -153,56 +124,23 @@ const FOLDER_BASE = {
   parentId: prop("integer", "父目录 ID；根节点为 null", undefined, true, "int64"),
   name: prop("string", "目录名称", "园区"),
   sortNo: prop("integer", "同级排序号，越小越靠前", 1),
-  path: prop("string", "目录路径，如 /1/ 或 /1/2/", "/1/"),
-  createdAt: { ...TS, description: "创建时间（毫秒时间戳）" },
-  updatedAt: { ...TS, description: "最后更新时间（毫秒时间戳）" },
 };
 
 const DEV = "UV_10135";
 const PLAY = "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv";
 
-const ex_stream = {
-  id: 11,
-  deviceId: DEV,
+const ex_catalog_stream = {
+  channelType: "visible",
   streamType: "sub",
-  streamIndex: 1,
-  channelId: null,
   streamUrl: PLAY,
-  streamName: "辅码流",
-  status: "OFF",
-  zlmApp: "live",
-  zlmStream: "uv_UV_10135_sub",
-  sortNo: 2,
-  liveEnabled: true,
-  playCount: 0,
-  createdAt: 1726560000000,
-  updatedAt: 1726646400000,
 };
 
 const ex_device = {
-  id: 1,
   deviceId: DEV,
-  name: "东门球机",
-  platformId: null,
+  name: "演示球机",
+  address: "宇视在线调试",
   folderId: 2,
   status: 1,
-  manufacturer: "宇视",
-  model: "IPC-B",
-  address: "小区东门",
-  ptzType: 1,
-  gatewayId: null,
-  longitude: 116.4,
-  latitude: 39.9,
-  host: "39.185.236.176",
-  port: 10135,
-  username: "guest",
-  passwordSet: true,
-  accessChannel: "0",
-  accessStatus: "online",
-  accessError: null,
-  createdAt: 1726560000000,
-  updatedAt: 1726646400000,
-  streamCount: 2,
   playable: true,
   livePlayable: true,
 };
@@ -212,22 +150,16 @@ const ex_folder = {
   parentId: null,
   name: "园区",
   sortNo: 1,
-  path: "/1/",
-  createdAt: 1726560000000,
-  updatedAt: 1726646400000,
-  deviceCount: 2,
-  totalDeviceCount: 5,
+  deviceCount: 0,
+  totalDeviceCount: 1,
   children: [
     {
       id: 2,
       parentId: 1,
-      name: "东门",
+      name: "东门区域",
       sortNo: 1,
-      path: "/1/2/",
-      createdAt: 1726560000000,
-      updatedAt: 1726646400000,
-      deviceCount: 2,
-      totalDeviceCount: 2,
+      deviceCount: 1,
+      totalDeviceCount: 1,
       children: [],
     },
   ],
@@ -245,13 +177,11 @@ const ex_live = {
 
 const ex_recording = {
   deviceId: DEV,
-  fileName: "20260910_143000.mp4",
-  recordTime: 1725952200000,
-  endTime: 1725952500000,
-  durationSeconds: 300,
-  size: 12345678,
-  path: "/data/testdata-records/UV_10135/20260910_143000.mp4",
-  videoUrl: "http://8.130.74.232:8090/api/open/recordings/UV_10135/20260910_143000.mp4",
+  fileName: "C1/B1790092800/E1790093684",
+  recordTime: 1790092800000,
+  endTime: 1790093684000,
+  size: 0,
+  source: "nvr",
 };
 
 const ex_clip_ok = {
@@ -309,34 +239,28 @@ const FolderNode = obj(
 const BizDeviceItem = obj(
   {
     ...DEVICE_BASE,
-    streamCount: prop("integer", "该设备已注册码流数量", 2),
     playable: prop("boolean", "可否回放/截取：status=2（已停用）时为 false，其余为 true", true),
     livePlayable: prop("boolean", "可否直播：仅 status=1（已启用）时为 true", true),
   },
-  "业务端设备列表项（不含码流明细）"
+  "业务端设备。不含登录信息和码流明细"
 );
 
-const StreamView = obj(STREAM, "码流信息");
+const CatalogStream = obj(CATALOG_STREAM, "云台设备详情里的已启用码流");
 
 const BizLiveBrief = obj(
   {
-    id: prop("integer", "业务直播流的码流主键 ID", 11, false, "int64"),
-    streamType: prop("string", "业务直播使用的码流类型，默认优先 sub", "sub"),
-    streamUrl: prop("string", "业务直播播放地址", "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"),
-    streamName: prop("string", "码流名称", "东门-子码流"),
-    liveEnabled: prop("boolean", "固定为 true，表示当前即为业务直播流", true),
+    streamType: prop("string", "业务直播码流：main / sub / third，优先 sub", "sub"),
+    streamUrl: prop("string", "HTTP-FLV。此时可能尚未拉流", PLAY),
   },
-  "业务直播流摘要；设备未配置业务直播流时整个字段为 null"
+  "业务直播流；没有时整个字段为 null"
 );
 
 const BizDeviceDetail = obj(
   {
     ...DEVICE_BASE,
-    streamCount: prop("integer", "码流数量", 2),
     playable: prop("boolean", "可否回放：status=2 时为 false", true),
     livePlayable: prop("boolean", "可否直播：仅 status=1 时为 true", true),
-    streams: arr(StreamView, "设备下全部码流"),
-    liveStream: { ...BizLiveBrief, nullable: true, description: "当前业务直播流配置；未设置时为 null" },
+    liveStream: { ...BizLiveBrief, nullable: true, description: "当前业务直播流；未设置时为 null" },
   },
   "业务端设备详情"
 );
@@ -348,35 +272,31 @@ const LiveStart = obj(
     streamUrl: prop("string", "取流/播放地址", "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"),
     playUrl: prop("string", "前端播放地址，与 streamUrl 相同", "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"),
     liveEnabled: prop("boolean", "该码流是否标记为业务直播流", true),
-    ref: prop("integer", "当前播放引用人数（ZLM Hook 统计；本接口不加人数）", 1),
-    countBy: prop("string", "人数统计来源，普通流为 zlm-hook；国标点播为 gb28181", "zlm-hook"),
-    streamName: prop("string", "码流名称（国标点播时可能有）", undefined, true),
-    channelId: prop("string", "国标通道 ID（国标点播时可能有）", undefined, true),
-    transport: prop("string", "国标点播时为 gb28181", undefined, true),
-    dataSource: prop("string", "国标点播时为 mock 或 live", undefined, true),
-    gb28181: obj({}, "国标 INVITE 原始结果（仅国标点播时有）"),
+    ref: prop("integer", "当前观看人数，由 ZLM 回调维护，本接口不加人数", 0),
+    countBy: prop("string", "固定 zlm-hook", "zlm-hook"),
   },
-  "业务端开播结果"
+  "开始预览 / 业务直播结果"
 );
 
 const RecordingWithUrl = obj(
   {
     deviceId: prop("string", "设备编码", "UV_10135"),
-    fileName: prop("string", "录像文件名，一般为 yyyyMMdd_HHmmss.mp4", "20260910_143000.mp4"),
-    recordTime: { ...TS, description: "录制开始时刻（毫秒，从文件名解析）", example: 1725952200000 },
+    fileName: prop("string", "文件名。录像机为通道与起止时间拼出的名字；本地为 MP4 文件名", "C1/B1790092800/E1790093684"),
+    recordTime: { ...TS, description: "开始毫秒", example: 1790092800000 },
     endTime: {
       ...TS,
-      description: "录制结束时刻（毫秒，ffprobe 读取 MP4 时长；失败时不返回）",
-      example: 1725952500000,
+      description: "结束毫秒。本地文件探测失败时可能没有",
+      example: 1790093684000,
       nullable: true,
     },
-    durationSeconds: prop("number", "录像时长（秒，ffprobe 读取；失败时不返回）", 300, true),
-    size: prop("integer", "文件大小，单位：字节", 12345678, false, "int64"),
-    path: prop("string", "服务器本地绝对路径（内部用，对外可忽略）", "/data/.../20260910_143000.mp4"),
+    size: prop("integer", "字节。录像机上的文件可能为 0", 0, false, "int64"),
+    source: prop("string", "已绑定录像机时为 nvr。本地 MP4 没有这个字段", "nvr", true),
+    durationSeconds: prop("number", "仅本地 MP4：时长秒。探测失败时不返回", 300, true),
     videoUrl: prop(
       "string",
-      "可直接播放的绝对地址，指向 /api/open/recordings/{deviceId}/{fileName}，无需 Token",
-      "http://8.130.74.232:8090/api/open/recordings/UV_10135/20260910_143000.mp4"
+      "仅本地 MP4：可直接播放，指向 /api/open/recordings/{deviceId}/{fileName}。录像机记录没有此字段，播放走 /api/recordings/playback.flv",
+      undefined,
+      true
     ),
   },
   "带播放链接的录像项"
@@ -396,6 +316,29 @@ const RecordClipItemRequest = obj(
   },
   ["deviceId", "at"],
   "批量截取录像：单条请求项"
+);
+
+const ClipInfo = obj(
+  {
+    deviceId: prop("string", "设备编码", "UV_10135"),
+    at: { ...TS, description: "时间点，已换成毫秒", example: 1730000030000 },
+    seconds: prop("integer", "实际使用的前后秒数", 30),
+    windowStart: { ...TS, description: "请求窗口起点，at − seconds×1000" },
+    windowEnd: { ...TS, description: "请求窗口终点，at + seconds×1000" },
+    startTime: { ...TS, description: "片段实际开始，受录像覆盖裁切" },
+    endTime: { ...TS, description: "片段实际结束" },
+    durationSeconds: prop("number", "实际时长秒", 60),
+    videoUrl: prop(
+      "string",
+      "给播放器的 MP4 地址，即片段文件接口",
+      "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30"
+    ),
+    clipUrl: prop("string", "与 videoUrl 相同", "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30"),
+    sourceFiles: arr(prop("string", "参与截取的原始文件名"), "源文件名"),
+    clipFileName: prop("string", "缓存片段文件名", "UV_10135_1730000030000_30.mp4"),
+    size: prop("integer", "片段字节数", 5242880, false, "int64"),
+  },
+  "按时间点截取的结果。只切本地 MP4"
 );
 
 const ClipBatchItem = obj(
@@ -433,12 +376,10 @@ const PtzResult = obj(
     deviceId: prop("string", "设备编码", PTZ_DEV),
     ptzCmd: prop("integer", "方向/变倍/对焦下发给宇视的 PTZCmd 数值", 1026, true),
     speed: prop("integer", "实际速度，live 会夹到 1~8", 4, true),
-    presetIndex: prop("integer", "预置位编号（预置位接口）", 1, true),
+    presetIndex: prop("integer", "预置位编号（调用或保存预置位）", 1, true),
     overwrite: prop("boolean", "保存预置位时是否覆盖", false, true),
-    index: prop("integer", "保存预置位后的编号（与 presetIndex 相同）", 1, true),
-    name: prop("string", "保存后的预置位名称", "东门全景", true),
-    zoom: prop("number", "广角 mock 固定 1.0；保存预置位时为中台记录倍率", 1.0, true),
-    channelType: prop("string", "抓拍通道类型 visible / thermal", "visible", true),
+    name: prop("string", "保存后的预置位名称", "门口", true),
+    channelType: prop("string", "抓拍通道类型，默认 visible", "visible", true),
     response: prop("string", "宇视 LAPI 原始 JSON 字符串", "{\"Response\":{\"ResponseCode\":0}}", true),
   },
   "云台控制结果。live=true 表示已发到该设备自己的摄像机"
@@ -447,25 +388,22 @@ const PtzResult = obj(
 const schemas = {
   FolderNode,
   BizDeviceItem,
-  StreamView,
+  CatalogStream,
   BizLiveStreamBrief: BizLiveBrief,
   BizDeviceDetail,
   LiveStartResult: LiveStart,
   RecordingWithUrl,
   RecordClipItemRequest,
+  ClipInfo,
   ClipBatchItem,
   PtzResult,
   RespFolderTree: resp_schema(arr(ref("FolderNode"), "目录树根节点数组"), [ex_folder]),
   RespBizDeviceList: resp_schema(arr(ref("BizDeviceItem"), "业务端设备列表"), [ex_device]),
   RespBizDeviceDetail: resp_schema(ref("BizDeviceDetail"), {
     ...ex_device,
-    streams: [ex_stream],
     liveStream: {
-      id: 11,
       streamType: "sub",
-      streamUrl: ex_stream.streamUrl,
-      streamName: "东门-子码流",
-      liveEnabled: true,
+      streamUrl: PLAY,
     },
   }),
   RespLiveStart: resp_schema(ref("LiveStartResult"), ex_live),
@@ -481,11 +419,11 @@ const schemas = {
       deviceId: prop("string", "【必填】云台设备编码", PTZ_DEV),
       direction: prop(
         "string",
-        "【必填】方向：up / down / left / right / left_up / left_down / right_up / right_down",
+        "【必填】方向：up / down / left / right / left_up / left_down / right_up / right_down / stop",
         "up",
         false,
         undefined,
-        ["up", "down", "left", "right", "left_up", "left_down", "right_up", "right_down"]
+        ["up", "down", "left", "right", "left_up", "left_down", "right_up", "right_down", "stop"]
       ),
       speed: prop("integer", "速度，默认 4；live 限制 1~8", 4),
     },
@@ -569,12 +507,14 @@ const doc = {
   info: {
     title: "视频中台 - 云台监控 / 业务端",
     description:
-      "仅含云台控制与业务端（含批量片段截取）。除目录树外，带参接口一律 POST + JSON Body，路径不含变量。\n" +
+      "仅含云台监控与业务端（目录、设备、直播、录像、录像机回放、片段截取）。\n" +
+      "除目录树、设备详情、录像机回放、片段文件外，带参接口一律 POST + JSON Body。\n" +
       "统一响应 { code, message, data }；code=0 成功。时间字段为毫秒时间戳。\n" +
       "设备 status：0=不可用 1=已启用 2=已停用。直播仅 status=1；回放/截取 status=2 不可用。\n" +
-      "当前 uniview.data-source=live。云台和直播使用设备表上的 IP、端口、账号，示例设备 UV_10135。密码不出现在响应里。有人看才拉流，无人观看后停止。\n" +
+      "返回只有调用方会用到的字段。没有密码、经纬度、创建时间、服务器磁盘路径。\n" +
+      "当前 uniview.data-source=live。云台发给这台摄像机自己的地址；历史录像在它绑定的录像机上。示例设备 UV_10135。\n" +
       "鉴权：auth.enabled=false 时免登录；true 时 Header Authorization: Bearer {token}。" +
-      "批量截取返回的 videoUrl 给 video 标签播时，可在 URL 上加 token。",
+      "<video> 带不了 Header，URL 上加 token。",
     version: "1.0.0",
   },
   servers: [
@@ -582,34 +522,28 @@ const doc = {
     { url: "http://127.0.0.1:8090", description: "本地环境" },
   ],
   tags: [
-    { name: "云台监控", description: "真实宇视设备。云台控制 POST + JSON Body。看直播用 /api/preview/start，第一人拉流，无人观看后停止。" },
-    { name: "业务端", description: "目录树、设备、直播、录像、批量截取片段。" },
+    { name: "云台监控", description: "已配置宇视地址的设备。云台控制 POST + JSON Body。看直播用 /api/preview/start。" },
+    { name: "业务端", description: "目录树、设备、直播、录像、录像机回放、片段截取。" },
   ],
   paths: {
     "/api/uniview/ptz/devices": {
       get: {
         tags: ["云台监控"],
         summary: "云台-设备列表",
-        description: "只返回已配置宇视 IP 的设备。presets 为该摄像机当前预置位，连不上时为空数组，不影响列表。不含密码。",
+        description: "只返回已配置宇视地址的设备。presets 为该摄像机当前预置位，连不上时为空数组，不影响列表。",
         operationId: "ptzDevices",
         responses: ok(
           resp_schema(
             arr(
               obj({
-                deviceId: prop("string", "设备编码", DEV),
-                name: prop("string", "设备名称", "东门球机"),
-                manufacturer: prop("string", "厂商", "宇视", true),
-                model: prop("string", "型号", "IPC-S6424-IR@P-X25-VF", true),
-                ptzType: prop("integer", "云台类型", 1, true),
-                host: prop("string", "摄像机 IP", "39.185.236.176"),
-                port: prop("integer", "LAPI 端口", 10135),
-                accessChannel: prop("string", "通道号，IPC 一般为 0", "0"),
+                deviceId: prop("string", "设备编码，如 UV_10135", DEV),
+                name: prop("string", "名称，可空", "演示球机", true),
                 presets: arr(
                   obj({
                     index: prop("integer", "预置位编号", 1),
-                    name: prop("string", "预置位名称", "东门全景"),
+                    name: prop("string", "预置位名称", "门口"),
                   }),
-                  "摄像机上的预置位"
+                  "预置位。项为 index、name"
                 ),
               }),
               "云台设备"
@@ -619,14 +553,8 @@ const doc = {
           [
             {
               deviceId: DEV,
-              name: "东门球机",
-              manufacturer: "宇视",
-              model: "IPC-S6424-IR@P-X25-VF",
-              ptzType: 1,
-              host: "39.185.236.176",
-              port: 10135,
-              accessChannel: "0",
-              presets: [{ index: 1, name: "东门全景" }],
+              name: "演示球机",
+              presets: [{ index: 1, name: "门口" }],
             },
           ]
         ),
@@ -637,51 +565,22 @@ const doc = {
         tags: ["云台监控"],
         summary: "云台-设备详情（含码流，不拉流）",
         description:
-          "返回该设备在码流表中的主/辅/第三流及播放地址。本接口不向摄像机拉流。看画面请再调 /api/preview/start。未配置 IP 时失败：设备未配置宇视地址。",
+          "取这台摄像机已启用码流的播放地址。不拉流。要出画面再调 /api/preview/start。未配置宇视地址时失败：设备未配置宇视地址。",
         operationId: "univiewDevice",
         parameters: [path_p("deviceId", "string", "设备编码", DEV)],
         responses: ok(
           resp_schema(
             obj({
               deviceId: prop("string", "设备编码", DEV),
-              name: prop("string", "设备名称", "东门球机"),
-              host: prop("string", "摄像机 IP", "39.185.236.176"),
-              port: prop("integer", "LAPI 端口", 10135),
-              accessChannel: prop("string", "通道号", "0"),
-              accessStatus: prop("string", "unknown / online / offline / auth_failed", "online"),
-              streamCount: prop("integer", "启用的码流路数", 2),
-              streams: arr(
-                obj({
-                  channelId: prop("string", "通道号", "0"),
-                  channelType: prop("string", "可见光固定 visible", "visible"),
-                  streamType: prop("string", "main / sub / third", "sub"),
-                  streamName: prop("string", "主码流 / 辅码流 / 第三流", "辅码流"),
-                  streamUrl: prop("string", "HTTP-FLV，此时可能尚未拉流", PLAY),
-                  status: prop("string", "ON 正在拉流，OFF 未拉流", "OFF"),
-                }),
-                "码流"
-              ),
+              name: prop("string", "名称", "演示球机"),
+              streams: arr(ref("CatalogStream"), "已启用码流"),
             }),
-            "宇视设备详情"
+            "云台设备详情"
           ),
           {
             deviceId: DEV,
-            name: "东门球机",
-            host: "39.185.236.176",
-            port: 10135,
-            accessChannel: "0",
-            accessStatus: "online",
-            streamCount: 2,
-            streams: [
-              {
-                channelId: "0",
-                channelType: "visible",
-                streamType: "sub",
-                streamName: "辅码流",
-                streamUrl: PLAY,
-                status: "OFF",
-              },
-            ],
+            name: "演示球机",
+            streams: [ex_catalog_stream],
           }
         ),
       },
@@ -811,9 +710,8 @@ const doc = {
           deviceId: PTZ_DEV,
           presetIndex: 1,
           overwrite: false,
-          index: 1,
-          name: "东门全景",
-          zoom: 1.0,
+          presetIndex: 1,
+          name: "门口",
         }),
       },
     },
@@ -857,18 +755,14 @@ const doc = {
       post: {
         tags: ["业务端"],
         summary: "业务端-设备详情",
-        description: "含 streams 与 liveStream（业务直播流摘要，未配置为 null）。不存在时 message=设备不存在: {deviceId}。",
+        description: "单台设备，并带上业务直播流地址。不拉流。没有业务直播流时 liveStream 为 null。不存在时 message=设备不存在: {deviceId}。",
         operationId: "bizDeviceDetail",
         requestBody: jsonBody(ref("BizDeviceIdRequest"), { deviceId: "UV_10135" }),
         responses: ok(ref("RespBizDeviceDetail"), {
           ...ex_device,
-          streams: [ex_stream],
           liveStream: {
-            id: 11,
             streamType: "sub",
-            streamUrl: ex_stream.streamUrl,
-            streamName: "东门-子码流",
-            liveEnabled: true,
+            streamUrl: PLAY,
           },
         }),
       },
@@ -888,7 +782,7 @@ const doc = {
       post: {
         tags: ["业务端"],
         summary: "业务端-有录像的日期",
-        description: "返回指定年/月内有录像的日期列表（yyyy-MM-dd，升序），供回放日历。status=2 不可调用。",
+        description: "给回放日历打点。已绑定录像机的设备查录像机；没绑定的查中台本地 MP4。已停用设备不能查。返回 yyyy-MM-dd，升序。",
         operationId: "bizRecordingDays",
         requestBody: jsonBody(ref("BizRecordingDaysRequest"), { deviceId: "UV_10135", year: 2026, month: 9 }),
         responses: ok(ref("RespRecordingDays"), ["2026-09-10", "2026-09-15", "2026-09-17"]),
@@ -899,7 +793,7 @@ const doc = {
         tags: ["业务端"],
         summary: "业务端-录像列表",
         description:
-          "status=2 不可回放。from/to 为毫秒时间戳（可选），与文件时段有交集即返回，新的在前。videoUrl 指向开放接口，无需登录。",
+          "已停用设备不能查。已绑定录像机的记录带 source=nvr，没有 videoUrl，播放走 GET /api/recordings/playback.flv。没绑定的是本地 MP4，带 durationSeconds 和 videoUrl。",
         operationId: "bizRecordings",
         requestBody: jsonBody(ref("BizRecordingsRequest"), {
           deviceId: "UV_10135",
@@ -909,18 +803,88 @@ const doc = {
         responses: ok(ref("RespRecordingUrlList"), [ex_recording]),
       },
     },
+    "/api/recordings/playback.flv": {
+      get: {
+        tags: ["业务端"],
+        summary: "业务端-录像机回放",
+        description:
+          "source=nvr 的记录用这个地址播放。服务向录像机取这段时间的流，转成 FLV 再输出。不是 JSON。begin 用列表里的 recordTime，拖动进度时加上偏移毫秒；end 用 endTime。大于 1e10 按毫秒，否则按秒。",
+        operationId: "nvrPlayback",
+        parameters: [
+          q("deviceId", "string", true, "设备编码", DEV),
+          q("begin", "integer", true, "开始时间。毫秒或秒都可以，大于 1e10 按毫秒", 1790092800000, "int64"),
+          q("end", "integer", true, "结束时间，规则同 begin", 1790093684000, "int64"),
+          q("token", "string", false, "auth.enabled=true 时，video 标签把登录 token 放这里"),
+        ],
+        responses: {
+          200: {
+            description: "FLV 码流。没绑定录像机：该设备没有绑定录像设备。开始不早于结束：回放开始时间必须早于结束时间。",
+            content: { "video/x-flv": { schema: { type: "string", format: "binary" } } },
+          },
+        },
+      },
+    },
+    "/api/biz/devices/{deviceId}/clip": {
+      get: {
+        tags: ["业务端"],
+        summary: "业务端-按时间点截取",
+        description:
+          "以 at 为中心，前后各 seconds 秒，从本地 MP4 切出一段。只生成播放地址，文件在访问片段文件接口时才输出。不切录像机上的历史录像。该时间点没有本地录像：该时间点无可用录像。",
+        operationId: "bizClip",
+        parameters: [
+          path_p("deviceId", "string", "设备编码", DEV),
+          q("at", "string", true, "时间点。10 位是秒，11~13 位是毫秒", "1730000030000"),
+          q("seconds", "integer", false, "前后各取的秒数，默认 30，须大于 0，最大 150", 30),
+        ],
+        responses: ok(resp_schema(ref("ClipInfo"), ex_clip_ok), {
+          deviceId: DEV,
+          at: 1730000030000,
+          seconds: 30,
+          startTime: 1730000000000,
+          endTime: 1730000060000,
+          durationSeconds: 60,
+          videoUrl: ex_clip_ok.videoUrl,
+          clipUrl: ex_clip_ok.clipUrl,
+          windowStart: 1730000000000,
+          windowEnd: 1730000060000,
+          sourceFiles: ["20260910_143000.mp4"],
+          clipFileName: "UV_10135_1730000030000_30.mp4",
+          size: 5242880,
+        }),
+      },
+    },
     "/api/biz/clips": {
       post: {
         tags: ["业务端"],
         summary: "业务端-批量截取录像片段",
         description:
-          "Body 为 JSON 数组（不是 {items:[]}），每项含 deviceId、at、seconds。以 at 为中心前后各 seconds 秒（默认 30，最大 150）。只切一条时数组放一项即可。单条失败不影响其它（ok=false + error）。整单最多 50 条。成功条的 videoUrl 给播放器直接播放。",
+          "一次切多段本地 MP4，不切录像机历史录像。Body 是 JSON 数组，不是 {items:[]}。最多 50 条。单条失败不影响其它条。成功条带截取结果字段且 ok=true；失败条 ok=false，并有 deviceId、at、seconds、error。",
         operationId: "bizClipsBatch",
         requestBody: jsonBody(arr(ref("RecordClipItemRequest"), "批量截取请求"), [
           { deviceId: "UV_10135", at: 1730000030000, seconds: 30 },
           { deviceId: "CAM_WEST_02", at: 1730000100000, seconds: 15 },
         ]),
         responses: ok(ref("RespClipBatch"), [ex_clip_ok, ex_clip_fail]),
+      },
+    },
+    "/api/biz/devices/{deviceId}/clip/file": {
+      get: {
+        tags: ["业务端"],
+        summary: "业务端-片段文件",
+        description: "按时间点截取和批量截取返回的 videoUrl 实际文件。响应是 MP4，不是 JSON。",
+        operationId: "bizClipFile",
+        parameters: [
+          path_p("deviceId", "string", "设备编码", DEV),
+          q("at", "string", true, "与截取时相同的时间点", "1730000030000"),
+          q("seconds", "integer", false, "与截取时相同，默认 30", 30),
+          q("token", "string", false, "开启鉴权时给 video 标签用"),
+        ],
+        responses: {
+          200: {
+            description: "MP4 文件流",
+            content: { "video/mp4": { schema: { type: "string", format: "binary" } } },
+          },
+        },
       },
     },
   },

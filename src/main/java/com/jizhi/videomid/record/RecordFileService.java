@@ -185,7 +185,6 @@ public class RecordFileService {
         row.put("fileName", fileName);
         row.put("recordTime", startMillis);
         row.put("size", Files.size(file));
-        row.put("path", file.toAbsolutePath().normalize().toString());
         attachDuration(row, file, startMillis);
         return row;
     }

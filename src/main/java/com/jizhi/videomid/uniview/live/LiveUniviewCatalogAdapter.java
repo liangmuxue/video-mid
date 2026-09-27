@@ -51,13 +51,6 @@ public class LiveUniviewCatalogAdapter implements UniviewCatalogPort {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("deviceId", device.getDeviceId());
         view.put("name", device.getName());
-        view.put("manufacturer", device.getManufacturer());
-        view.put("model", device.getModel());
-        view.put("ptzType", device.getPtzType());
-        view.put("host", device.getHost());
-        view.put("port", device.getPort());
-        view.put("accessChannel", device.getAccessChannel());
-        view.put("accessStatus", device.getAccessStatus());
         if (!withStreams) {
             return view;
         }
@@ -68,16 +61,12 @@ public class LiveUniviewCatalogAdapter implements UniviewCatalogPort {
                 continue;
             }
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("channelId", device.getAccessChannel() == null ? "0" : device.getAccessChannel());
             item.put("channelType", "visible");
             item.put("streamType", stream.getStreamType());
-            item.put("streamName", stream.getStreamName());
             item.put("streamUrl", stream.getStreamUrl());
-            item.put("status", stream.getStatus());
             streams.add(item);
         }
         view.put("streams", streams);
-        view.put("streamCount", streams.size());
         return view;
     }
 }

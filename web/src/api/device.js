@@ -11,6 +11,10 @@ export const fetchDeviceFolderTree = () => http.get('/api/device-folders/tree')
 export const createDeviceFolder = (data) => http.post('/api/device-folders', data)
 export const updateDeviceFolder = (id, data) => http.put(`/api/device-folders/${id}`, data)
 export const deleteDeviceFolder = (id) => http.delete(`/api/device-folders/${id}`)
+export const fetchRecordDevices = () => http.get('/api/record-devices')
+export const createRecordDevice = (data) => http.post('/api/record-devices', data)
+export const updateRecordDevice = (id, data) => http.put(`/api/record-devices/${id}`, data)
+export const deleteRecordDevice = (id) => http.delete(`/api/record-devices/${id}`)
 export const registerStream = (data) => http.post('/api/streams/register', data)
 export const deleteStream = (id) => http.delete(`/api/streams/${id}`)
 export const setStreamLive = (id) => http.put(`/api/streams/${id}/live`)
@@ -34,6 +38,19 @@ export const fetchRecordingDays = (deviceId, params = {}) =>
   http.get('/api/recordings/days', { params: { deviceId, ...params }, ...recordingHttpOpts })
 export const fetchBizRecordingDays = (deviceId, params = {}) =>
   http.post('/api/biz/devices/recording-days', { deviceId, ...params }, recordingHttpOpts)
+export const nvrPlaybackUrl = (deviceId, record, seekSeconds = 0) => {
+  const base = (http.defaults.baseURL || '').replace(/\/$/, '')
+  const start = Number(record?.recordTime) + Math.max(0, Math.round(Number(seekSeconds) || 0)) * 1000
+  const end = Number(record?.endTime)
+  const params = new URLSearchParams({
+    deviceId,
+    begin: String(start),
+    end: String(end)
+  })
+  const token = localStorage.getItem('video_mid_token')
+  if (token) params.set('token', token)
+  return `${base}/api/recordings/playback.flv?${params}`
+}
 export const recordingFileUrl = (deviceId, fileName) => {
   const base = (http.defaults.baseURL || '').replace(/\/$/, '')
   const token = localStorage.getItem('video_mid_token')

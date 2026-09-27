@@ -59,7 +59,6 @@ public class DevicePtzPresetService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("index", p.getPresetIndex());
         m.put("name", p.getName());
-        m.put("zoom", p.getZoom() == null ? 1.0 : p.getZoom());
         return m;
     }
 }

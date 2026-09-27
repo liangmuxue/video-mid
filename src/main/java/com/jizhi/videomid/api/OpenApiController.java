@@ -4,6 +4,7 @@ import com.jizhi.videomid.auth.dto.ApiResponse;
 import com.jizhi.videomid.device.DeviceService;
 import com.jizhi.videomid.record.RecordClipService;
 import com.jizhi.videomid.record.RecordFileService;
+import com.jizhi.videomid.uniview.nvr.RecordingCatalog;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -30,6 +31,7 @@ import java.util.Map;
 public class OpenApiController {
 
     private final DeviceService deviceService;
+    private final RecordingCatalog recordingCatalog;
     private final RecordFileService recordFileService;
     private final RecordClipService recordClipService;
 
@@ -37,9 +39,10 @@ public class OpenApiController {
     @Value("${open-api.public-base-url:}")
     private String publicBaseUrl;
 
-    public OpenApiController(DeviceService deviceService, RecordFileService recordFileService,
-                             RecordClipService recordClipService) {
+    public OpenApiController(DeviceService deviceService, RecordingCatalog recordingCatalog,
+                             RecordFileService recordFileService, RecordClipService recordClipService) {
         this.deviceService = deviceService;
+        this.recordingCatalog = recordingCatalog;
         this.recordFileService = recordFileService;
         this.recordClipService = recordClipService;
     }
@@ -68,7 +71,7 @@ public class OpenApiController {
             @PathVariable String deviceId,
             @RequestParam int year,
             @RequestParam int month) {
-        return ApiResponse.ok(recordFileService.listRecordingDays(deviceId, year, month));
+        return ApiResponse.ok(recordingCatalog.listRecordingDays(deviceId, year, month));
     }
 
     /**
@@ -81,7 +84,7 @@ public class OpenApiController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
             HttpServletRequest request) {
-        return ApiResponse.ok(recordFileService.listWithVideoUrls(
+        return ApiResponse.ok(recordingCatalog.listWithVideoUrls(
                 deviceId, from, to, resolvePublicBase(request)));
     }
 

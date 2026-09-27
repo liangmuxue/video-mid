@@ -7,6 +7,8 @@ public class DeviceRequest {
     private String deviceId;
     private String name;
     private String platformId;
+    /** MOCK / UNIVIEW / HIKVISION */
+    private String vendor;
     private Long folderId;
     /** 1=已启用 2=已停用（0 不可用仅系统写入） */
     private Integer status;
@@ -22,6 +24,8 @@ public class DeviceRequest {
     private String username;
     private String password;
     private String accessChannel;
+    private String lanIp;
+    private Long recordDeviceId;
 
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
@@ -29,6 +33,8 @@ public class DeviceRequest {
     public void setName(String name) { this.name = name; }
     public String getPlatformId() { return platformId; }
     public void setPlatformId(String platformId) { this.platformId = platformId; }
+    public String getVendor() { return vendor; }
+    public void setVendor(String vendor) { this.vendor = vendor; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
     public Integer getStatus() { return status; }
@@ -57,4 +63,8 @@ public class DeviceRequest {
     public void setPassword(String password) { this.password = password; }
     public String getAccessChannel() { return accessChannel; }
     public void setAccessChannel(String accessChannel) { this.accessChannel = accessChannel; }
+    public String getLanIp() { return lanIp; }
+    public void setLanIp(String lanIp) { this.lanIp = lanIp; }
+    public Long getRecordDeviceId() { return recordDeviceId; }
+    public void setRecordDeviceId(Long recordDeviceId) { this.recordDeviceId = recordDeviceId; }
 }

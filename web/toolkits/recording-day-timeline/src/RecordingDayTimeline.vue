@@ -251,10 +251,12 @@ async function onMonthNavigate({ year, month }) {
   await loadRecordingDays(year, month)
 }
 
-function resolveUrl(record) {
+function resolveUrl(record, seekSeconds = 0) {
   if (!record) return ''
+  const fromGetter = props.getVideoUrl(props.deviceId, record.fileName, record, seekSeconds)
+  if (fromGetter) return fromGetter
   if (record.videoUrl) return record.videoUrl
-  return props.getVideoUrl(props.deviceId, record.fileName, record) || ''
+  return ''
 }
 
 function seekInFile(record, daySec) {
@@ -269,8 +271,8 @@ function playAt(daySec, segment) {
   if (!seg) return
   const record = pickRecordAt(seg, daySec)
   if (!record) return
-  const url = resolveUrl(record)
   const fileSeek = seekInFile(record, daySec)
+  const url = resolveUrl(record, fileSeek)
   playheadSec.value = daySec
   currentRecord.value = record
   currentUrl.value = url

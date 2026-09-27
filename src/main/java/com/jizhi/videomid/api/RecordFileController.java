@@ -4,6 +4,7 @@ import com.jizhi.videomid.auth.dto.ApiResponse;
 import com.jizhi.videomid.record.RecordClipItemRequest;
 import com.jizhi.videomid.record.RecordClipService;
 import com.jizhi.videomid.record.RecordFileService;
+import com.jizhi.videomid.uniview.nvr.RecordingCatalog;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -26,13 +28,16 @@ import java.util.Map;
 public class RecordFileController {
 
     private final RecordFileService recordFileService;
+    private final RecordingCatalog recordingCatalog;
     private final RecordClipService recordClipService;
 
     @Value("${open-api.public-base-url:}")
     private String publicBaseUrl;
 
-    public RecordFileController(RecordFileService recordFileService, RecordClipService recordClipService) {
+    public RecordFileController(RecordFileService recordFileService, RecordingCatalog recordingCatalog,
+                                RecordClipService recordClipService) {
         this.recordFileService = recordFileService;
+        this.recordingCatalog = recordingCatalog;
         this.recordClipService = recordClipService;
     }
 
@@ -45,7 +50,29 @@ public class RecordFileController {
             @RequestParam String deviceId,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
-        return ApiResponse.ok(recordFileService.list(deviceId, from, to));
+        return ApiResponse.ok(recordingCatalog.list(deviceId, from, to));
+    }
+
+    /** NVR 回放：向宇视取 RTSP，ZLM 转成 FLV 后从本服务输出，供页面播放器拉取。 */
+    @GetMapping("/playback.flv")
+    public void playback(@RequestParam String deviceId,
+                         @RequestParam long begin,
+                         @RequestParam long end,
+                         jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        String flv = recordingCatalog.openNvrPlayback(deviceId, begin, end);
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) URI.create(flv).toURL().openConnection();
+        conn.setConnectTimeout(15_000);
+        conn.setReadTimeout(0);
+        conn.connect();
+        response.setStatus(conn.getResponseCode());
+        response.setContentType("video/x-flv");
+        try (java.io.InputStream in = conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream()) {
+            if (in != null) {
+                in.transferTo(response.getOutputStream());
+            }
+        } finally {
+            conn.disconnect();
+        }
     }
 
     /** 某月内有录像的日期 yyyy-MM-dd */
@@ -54,7 +81,7 @@ public class RecordFileController {
             @RequestParam String deviceId,
             @RequestParam int year,
             @RequestParam int month) {
-        return ApiResponse.ok(recordFileService.listRecordingDays(deviceId, year, month));
+        return ApiResponse.ok(recordingCatalog.listRecordingDays(deviceId, year, month));
     }
 
     /**

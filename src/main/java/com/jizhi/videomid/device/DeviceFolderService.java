@@ -180,9 +180,6 @@ public class DeviceFolderService {
         m.put("parentId", f.getParentId());
         m.put("name", f.getName());
         m.put("sortNo", f.getSortNo());
-        m.put("path", f.getPath());
-        m.put("createdAt", f.getCreatedAt());
-        m.put("updatedAt", f.getUpdatedAt());
         return m;
     }
 }
