@@ -313,23 +313,30 @@ public class DeviceService {
         return found;
     }
 
-    /** 业务端：宇视设备按观看拉流；其余仍优先国标 INVITE，否则走已注册 streamUrl */
+    /** 业务端直播：宇视向摄像机拉流，模拟走国标或已登记地址，海康未对接。 */
     public Map<String, Object> startBizLive(String deviceId) {
-        Optional<Device> device = deviceRepository.findByDeviceId(deviceId);
-        if (device.isPresent() && hasUniviewLogin(device.get())) {
-            DeviceStream stream = resolveLiveStream(deviceId)
-                    .orElseThrow(() -> new IllegalArgumentException("设备未配置可直播码流"));
-            return previewService.start(deviceId, stream.getStreamType());
-        }
+        Device device = deviceRepository.findByDeviceId(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
+        return switch (VendorDevices.of(device)) {
+            case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
+            case UNIVIEW -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
+            case MOCK -> startMockLive(deviceId);
+        };
+    }
+
+    private Map<String, Object> startMockLive(String deviceId) {
         if (gb28181PlayService.preferForBizLive()) {
             Optional<Map<String, Object>> gb = gb28181PlayService.startLive(deviceId);
             if (gb.isPresent()) {
                 return gb.get();
             }
         }
-        DeviceStream stream = resolveLiveStream(deviceId)
+        return previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
+    }
+
+    private DeviceStream requireLiveStream(String deviceId) {
+        return resolveLiveStream(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("设备未配置可直播码流"));
-        return previewService.start(deviceId, stream.getStreamType());
     }
 
     private void ensureDefaultLiveStream(String deviceId) {

@@ -66,6 +66,133 @@ public final class FfmpegUtil {
         }
     }
 
+    /**
+     * 把一段 HTTP-FLV（录像机回放）收成 MP4。视频流复制，音频转成 AAC。
+     * 没有音轨时改为只保留视频。
+     */
+    public static void recordUrl(String ffmpegBin, String inputUrl, double durationSec,
+                                 Path output, int timeoutSeconds) {
+        if (inputUrl == null || inputUrl.isBlank()) {
+            throw new IllegalArgumentException("回放地址为空");
+        }
+        if (durationSec <= 0) {
+            throw new IllegalArgumentException("截取时长必须大于 0");
+        }
+        try {
+            Files.createDirectories(output.getParent());
+            try {
+                runRecord(ffmpegBin, inputUrl, durationSec, output, timeoutSeconds, true);
+            } catch (IllegalStateException first) {
+                if (first.getMessage() != null && first.getMessage().contains("超时")) {
+                    throw first;
+                }
+                runRecord(ffmpegBin, inputUrl, durationSec, output, timeoutSeconds, false);
+            }
+            if (!Files.isRegularFile(output) || Files.size(output) <= 0) {
+                throw new IllegalStateException("截取失败，输出文件为空");
+            }
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("ffmpeg 截取回放失败: " + e.getMessage(), e);
+        }
+    }
+
+    private static void runRecord(String ffmpegBin, String inputUrl, double durationSec,
+                                  Path output, int timeoutSeconds, boolean withAudio) throws Exception {
+        String bin = normalizeBin(ffmpegBin);
+        List<String> cmd = new java.util.ArrayList<>();
+        cmd.add(bin);
+        cmd.add("-hide_banner");
+        cmd.add("-loglevel");
+        cmd.add("error");
+        cmd.add("-y");
+        cmd.add("-i");
+        cmd.add(inputUrl);
+        cmd.add("-t");
+        cmd.add(formatSec(durationSec));
+        cmd.add("-c:v");
+        cmd.add("copy");
+        if (withAudio) {
+            cmd.add("-c:a");
+            cmd.add("aac");
+            cmd.add("-b:a");
+            cmd.add("64k");
+        } else {
+            cmd.add("-an");
+        }
+        cmd.add("-movflags");
+        cmd.add("+faststart");
+        cmd.add(output.toAbsolutePath().normalize().toString());
+        runProcess(new ProcessBuilder(cmd), timeoutSeconds, "ffmpeg record");
+    }
+
+    /**
+     * 把 SDK 下载好的 MP4 整理成浏览器能播的文件。视频流复制，音频转成 48000Hz AAC。
+     * 没有音轨时改为只保留视频。
+     */
+    public static void remuxCopy(String ffmpegBin, Path input, Path output, int timeoutSeconds) {
+        if (!Files.isRegularFile(input)) {
+            throw new IllegalArgumentException("回放文件不存在");
+        }
+        try {
+            if (Files.size(input) <= 0) {
+                throw new IllegalArgumentException("回放文件为空");
+            }
+            Files.createDirectories(output.getParent());
+            try {
+                runRemux(ffmpegBin, input, output, timeoutSeconds, true);
+            } catch (IllegalStateException first) {
+                if (first.getMessage() != null && first.getMessage().contains("超时")) {
+                    throw first;
+                }
+                runRemux(ffmpegBin, input, output, timeoutSeconds, false);
+            }
+            if (!Files.isRegularFile(output) || Files.size(output) <= 0) {
+                throw new IllegalStateException("截取失败，输出文件为空");
+            }
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("整理回放文件失败: " + e.getMessage(), e);
+        }
+    }
+
+    private static void runRemux(String ffmpegBin, Path input, Path output, int timeoutSeconds,
+                                 boolean withAudio) throws Exception {
+        String bin = normalizeBin(ffmpegBin);
+        List<String> cmd = new java.util.ArrayList<>();
+        cmd.add(bin);
+        cmd.add("-hide_banner");
+        cmd.add("-loglevel");
+        cmd.add("error");
+        cmd.add("-y");
+        cmd.add("-i");
+        cmd.add(input.toAbsolutePath().normalize().toString());
+        cmd.add("-c:v");
+        cmd.add("copy");
+        // 录像机每帧都带截断的 SEI。浏览器解到这里会停，VLC 会忽略。类型 6 就是 SEI。
+        cmd.add("-bsf:v");
+        cmd.add("filter_units=remove_types=6");
+        if (withAudio) {
+            cmd.add("-c:a");
+            cmd.add("aac");
+            // 录像机原音是 8000Hz，浏览器解到几秒就会停。改成 48000Hz。
+            cmd.add("-ar");
+            cmd.add("48000");
+            cmd.add("-ac");
+            cmd.add("1");
+            cmd.add("-b:a");
+            cmd.add("64k");
+        } else {
+            cmd.add("-an");
+        }
+        cmd.add("-movflags");
+        cmd.add("+faststart");
+        cmd.add(output.toAbsolutePath().normalize().toString());
+        runProcess(new ProcessBuilder(cmd), timeoutSeconds, "ffmpeg remux");
+    }
+
     /** 按顺序合并多个 MP4（流复制）。 */
     public static void concatCopy(String ffmpegBin, List<Path> inputs, Path output, int timeoutSeconds) {
         if (inputs == null || inputs.isEmpty()) {

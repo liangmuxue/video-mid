@@ -6,10 +6,14 @@ import com.jizhi.videomid.media.ZlmClient;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.LongByReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -28,6 +32,10 @@ public class NvrRecordingService {
     private static final Logger log = LoggerFactory.getLogger(NvrRecordingService.class);
     private static final String PLAYBACK_APP = "playback";
     private static final int TCP = 1;
+    /** NETDEV_DOWNLOAD_SPEED_EIGHT，按时间下载用 8 倍速，避免按实时速度等完整段。 */
+    private static final int DOWNLOAD_SPEED_EIGHT = 3;
+    private static final int MEDIA_FILE_MP4 = 0;
+    private static final int PLAY_CTRL_GETPLAYTIME = 3;
 
     private final NvrProperties properties;
     private final RecordDeviceRepository recordDeviceRepository;
@@ -128,6 +136,28 @@ public class NvrRecordingService {
             return List.of();
         }
         begin = Math.max(0, begin - 24 * 60 * 60);
+        return findFiles(device, begin, end);
+    }
+
+    /**
+     * 查与 [beginMs, endMs] 相交的录像。录像文件常常在窗口开始前就已开录，
+     * 查询起点向前扩 24 小时，再由调用方按窗口裁切。
+     */
+    public List<Map<String, Object>> listRecordingsBetween(Device device, long beginMs, long endMs) {
+        long begin = epochSecond(beginMs);
+        long end = epochSecond(endMs);
+        long now = Instant.now().getEpochSecond();
+        if (end > now) {
+            end = now;
+        }
+        if (begin >= end) {
+            return List.of();
+        }
+        begin = Math.max(0, begin - 24 * 60 * 60);
+        return findFiles(device, begin, end);
+    }
+
+    private List<Map<String, Object>> findFiles(Device device, long begin, long end) {
         RecordDevice recorder = requireRecorder(device);
         Pointer user = login(recorder);
         loadChannels(user, recorder.getHost() + ":" + recorder.getPort());
@@ -188,8 +218,8 @@ public class NvrRecordingService {
     }
 
     /**
-     * 按 Demo 的 GetReplayUrl_V30 取这段录像的 RTSP，再交给 ZLM 转成 HTTP-FLV。
-     * begin/end 用查询录像时同一套秒级时间。
+     * 按 Demo 的 GetReplayUrl_V30 取 RTSP，再把开始/结束时间写进宇视回放路径。
+     * 只把地址交给 ZLM 时，录像机不会按条件里的时间定位，会从同一段旧录像开头送流。
      */
     public String openPlayback(Device device, long beginRaw, long endRaw) {
         long begin = epochSecond(beginRaw);
@@ -200,9 +230,12 @@ public class NvrRecordingService {
         RecordDevice recorder = requireRecorder(device);
         Pointer user = login(recorder);
         loadChannels(user, recorder.getHost() + ":" + recorder.getPort());
-        String rtsp = replayUrl(user, device.getRecordChannel(), begin, end);
+        int channel = device.getRecordChannel();
+        String rtsp = withPlaybackRange(replayUrl(user, channel, begin, end), channel, begin, end);
+        log.info("[宇视NVR] 回放地址 channel={} begin={} end={} url={}", channel, begin, end, redactUrl(rtsp));
         rtsp = withCredentials(recorder, rtsp);
-        String stream = "pb" + device.getId() + "_" + begin;
+        String stream = "pb" + device.getId() + "_" + begin + "_" + end;
+        zlmClient.delStreamProxy(PLAYBACK_APP, stream);
         if (!zlmClient.addPlaybackProxy(PLAYBACK_APP, stream, rtsp)) {
             throw new IllegalStateException("回放拉流失败");
         }
@@ -229,9 +262,10 @@ public class NvrRecordingService {
         cond.tBeginTime = begin;
         cond.tEndTime = end;
         cond.dwLinkMode = TCP;
-        cond.dwRecordLocation = 1;
+        // 0=所有存储。1 在头文件里是 VMS，不是录像机；查录像能命中的也是 0。
+        cond.dwRecordLocation = 0;
         log.info("[宇视NVR] GetReplayUrl_V30 请求 channel={} begin={} end={} linkMode={} location={}",
-                channel, begin, end, TCP, 1);
+                channel, begin, end, TCP, cond.dwRecordLocation);
         if (api.NETDEV_GetReplayUrl_V30(user, cond, buf)) {
             String url = cString(buf);
             log.info("[宇视NVR] GetReplayUrl_V30 响应 url={}", redactUrl(url));
@@ -245,7 +279,7 @@ public class NvrRecordingService {
         find.udwChannelID = channel;
         find.udwBegin = (int) begin;
         find.udwEnd = (int) end;
-        find.udwPosition = 1;
+        find.udwPosition = 0;
         log.info("[宇视NVR] GetPlaybackUrl 请求 channel={} begin={} end={} position={}",
                 channel, begin, end, find.udwPosition);
         if (api.NETDEV_GetPlaybackUrl(user, find, buf)) {
@@ -258,6 +292,234 @@ public class NvrRecordingService {
         int playbackErr = api.NETDEV_GetLastError();
         log.warn("[宇视NVR] GetPlaybackUrl 响应失败 error={}", playbackErr);
         throw new IllegalStateException("获取回放地址失败，错误码 " + v30Err + "/" + playbackErr);
+    }
+
+    /**
+     * 按时间把录像下载到本地 MP4。时间由 SDK 定位，不经过 ZLM 的实时拉流。
+     */
+    public void downloadByTime(Device device, long beginRaw, long endRaw, Path output, int timeoutSeconds) {
+        long begin = epochSecond(beginRaw);
+        long end = epochSecond(endRaw);
+        if (begin >= end) {
+            throw new IllegalArgumentException("回放开始时间必须早于结束时间");
+        }
+        if (output == null) {
+            throw new IllegalArgumentException("下载路径为空");
+        }
+        RecordDevice recorder = requireRecorder(device);
+        Pointer user = login(recorder);
+        loadChannels(user, recorder.getHost() + ":" + recorder.getPort());
+        int channel = device.getRecordChannel();
+        try {
+            if (output.getParent() != null) {
+                Files.createDirectories(output.getParent());
+            }
+            Files.deleteIfExists(output);
+            Files.deleteIfExists(Path.of(output.toString() + ".mp4"));
+        } catch (IOException e) {
+            throw new IllegalStateException("准备录像下载目录失败: " + e.getMessage(), e);
+        }
+        NvrSdk.PlaybackCond cond = new NvrSdk.PlaybackCond();
+        cond.dwChannelID = channel;
+        cond.tBeginTime = begin;
+        cond.tEndTime = end;
+        cond.dwLinkMode = TCP;
+        cond.dwDownloadSpeed = DOWNLOAD_SPEED_EIGHT;
+        // 0 是 16 倍速后退。头文件写明不指定播放速度时会默认后退，这里指定 1 倍速前进。
+        cond.dwPlaySpeed = 9;
+        // 存储位置保持 0（所有）。1 是 VMS，不是录像机。
+        String savePath = output.toAbsolutePath().normalize().toString();
+        byte[] saveBytes = (savePath + "\u0000").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        NvrSdk.LibraryApi api = api();
+        log.info("[宇视NVR] GetFileByTime 请求 channel={} begin={} end={} linkMode=TCP speed=8x path={}",
+                channel, begin, end, savePath);
+        Pointer handle = api.NETDEV_GetFileByTime(user, cond, saveBytes, MEDIA_FILE_MP4);
+        if (handle == null) {
+            int err = api.NETDEV_GetLastError();
+            log.warn("[宇视NVR] GetFileByTime 响应失败 channel={} error={}", channel, err);
+            throw new IllegalStateException("按时间下载录像失败，错误码 " + err);
+        }
+        DownloadWatch watch = new DownloadWatch();
+        try {
+            waitDownload(api, handle, begin, end, output, timeoutSeconds, watch);
+        } finally {
+            api.NETDEV_StopGetFile(handle);
+        }
+        try {
+            Path saved = null;
+            for (int i = 0; i < 6 && saved == null; i++) {
+                saved = locateDownload(output);
+                if (saved == null) {
+                    Thread.sleep(500);
+                }
+            }
+            if (saved == null) {
+                throw new IllegalStateException("按时间下载录像失败 time=" + watch.time
+                        + " size=" + watch.size + " err=" + watch.lastError
+                        + " files=" + describeDownloadDir(output));
+            }
+            if (!saved.equals(output)) {
+                Files.move(saved, output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            log.info("[宇视NVR] GetFileByTime 完成 channel={} begin={} end={} size={} playTime={}",
+                    channel, begin, end, Files.size(output), watch.time);
+        } catch (IOException e) {
+            throw new IllegalStateException("保存下载录像失败: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("按时间下载录像被中断");
+        }
+    }
+
+    private void waitDownload(NvrSdk.LibraryApi api, Pointer handle, long begin, long end,
+                              Path output, int timeoutSeconds, DownloadWatch watch) {
+        long deadline = System.currentTimeMillis() + Math.max(10, timeoutSeconds) * 1000L;
+        long lastTime = Long.MIN_VALUE;
+        long lastSize = -1;
+        int stall = 0;
+        while (System.currentTimeMillis() < deadline) {
+            LongByReference playTime = new LongByReference();
+            boolean ok = api.NETDEV_PlayBackControl(handle, PLAY_CTRL_GETPLAYTIME, playTime.getPointer());
+            long size = downloadSize(output);
+            watch.size = size;
+            if (ok) {
+                watch.fail = 0;
+                long time = playTime.getValue();
+                watch.time = time;
+                if (time != lastTime || size != lastSize) {
+                    log.info("[宇视NVR] GetFileByTime 进度 time={} end={} size={}", time, end, size);
+                }
+                if (time >= end) {
+                    return;
+                }
+                if (time == lastTime) {
+                    stall++;
+                    // 已经在收数据且进度不再变化时结束。刚开始时间不动不能停，否则 TCP 还没连上就被掐掉。
+                    if (stall >= 5 && (size > 0 || time > begin)) {
+                        return;
+                    }
+                } else {
+                    stall = 0;
+                }
+                lastTime = time;
+                lastSize = size;
+            } else {
+                watch.fail++;
+                watch.lastError = api.NETDEV_GetLastError();
+                if (watch.fail == 1 || watch.fail == 4) {
+                    log.warn("[宇视NVR] GetFileByTime 进度读取失败 fail={} size={} error={}",
+                            watch.fail, size, watch.lastError);
+                }
+                if (watch.fail > 3 && size > 0) {
+                    return;
+                }
+                lastSize = size;
+            }
+            try {
+                Thread.sleep(700);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("按时间下载录像被中断");
+            }
+        }
+        watch.timedOut = true;
+        log.warn("[宇视NVR] GetFileByTime 等待结束 time={} size={} err={}", watch.time, watch.size, watch.lastError);
+    }
+
+    private static long downloadSize(Path output) {
+        Path found = null;
+        try {
+            found = locateDownload(output);
+        } catch (IOException ignored) {
+            return 0L;
+        }
+        return found == null ? 0L : fileSize(found);
+    }
+
+    private static long fileSize(Path path) {
+        try {
+            return Files.isRegularFile(path) ? Files.size(path) : 0L;
+        } catch (IOException e) {
+            return 0L;
+        }
+    }
+
+    private static Path locateDownload(Path output) throws IOException {
+        Path withSuffix = Path.of(output.toString() + ".mp4");
+        Path cwd = Path.of("").toAbsolutePath().resolve(output.getFileName().toString());
+        Path cwdSuffix = Path.of(cwd.toString() + ".mp4");
+        for (Path candidate : new Path[] {output, withSuffix, cwd, cwdSuffix}) {
+            if (fileSize(candidate) > 0) {
+                return candidate;
+            }
+        }
+        Path parent = output.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            return null;
+        }
+        String name = output.getFileName().toString();
+        int dot = name.lastIndexOf('.');
+        String stem = dot > 0 ? name.substring(0, dot) : name;
+        try (var list = Files.list(parent)) {
+            return list.filter(path -> Files.isRegularFile(path) && fileSize(path) > 0)
+                    .filter(path -> path.getFileName().toString().startsWith(stem))
+                    .max((a, b) -> Long.compare(fileSize(a), fileSize(b)))
+                    .orElse(null);
+        }
+    }
+
+    private static String describeDownloadDir(Path output) {
+        Path parent = output.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            return "[]";
+        }
+        StringBuilder sb = new StringBuilder("[");
+        try (var list = Files.list(parent)) {
+            list.limit(12).forEach(path -> {
+                if (sb.length() > 1) {
+                    sb.append(',');
+                }
+                sb.append(path.getFileName()).append(':').append(fileSize(path));
+            });
+        } catch (IOException e) {
+            return "[unreadable]";
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    private static final class DownloadWatch {
+        private long time = -1;
+        private long size;
+        private int fail;
+        private int lastError;
+        private boolean timedOut;
+    }
+
+    /**
+     * 宇视 NVR 回放路径：/c通道/b开始秒/e结束秒/replay/。
+     * 已有 b/e 时只替换时间；没有时用返回地址里的主机和端口拼这条路径。
+     */
+    static String withPlaybackRange(String rtspUrl, int channel, long begin, long end) {
+        if (rtspUrl == null || rtspUrl.isBlank()) {
+            throw new IllegalStateException("回放地址为空");
+        }
+        String range = "/c" + channel + "/b" + begin + "/e" + end + "/replay/";
+        String replaced = rtspUrl.replaceFirst("(?i)/c\\d+/b\\d+/e\\d+/replay/?", range);
+        if (!replaced.equals(rtspUrl)) {
+            return replaced;
+        }
+        replaced = rtspUrl.replaceFirst("(?i)/b\\d+/e\\d+", "/b" + begin + "/e" + end);
+        if (!replaced.equals(rtspUrl)) {
+            return replaced;
+        }
+        int scheme = rtspUrl.indexOf("://");
+        if (scheme < 0) {
+            return rtspUrl;
+        }
+        int path = rtspUrl.indexOf('/', scheme + 3);
+        String origin = path < 0 ? rtspUrl : rtspUrl.substring(0, path);
+        return origin + range;
     }
 
     private String playUrl(String stream) {

@@ -50,8 +50,9 @@ async function playOne(url, seekSeconds = 0) {
     destroyFlv()
     unloadVideo(video)
     if (!mpegts.getFeatureList().mseLivePlayback) return
+    // 录像机回放是 H.264 + G.711。mpegts 不支持 G.711，遇到后会中断整路播放，所以只解视频。
     flvPlayer = mpegts.createPlayer(
-      { type: 'flv', url, isLive: true, hasAudio: true, hasVideo: true },
+      { type: 'flv', url, isLive: true, hasAudio: false, hasVideo: true },
       { enableWorker: false, lazyLoad: false }
     )
     flvPlayer.attachMediaElement(video)

@@ -13,7 +13,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 - 播放地址在 ZLM：`http://8.130.74.232:8080`
 - JSON 接口：`Content-Type: application/json; charset=UTF-8`
 - 鉴权：`auth.enabled=true` 时，除登录外加 `Authorization: Bearer {token}`。`<video>` 带不了 Header，URL 上加 `?token=` 或 `&token=`。当前 `auth.enabled` 为 `false`，可不带 Token。
-- 示例设备：`UV_10135`（演示球机）。一台设备只对接一个平台。云台发给这台摄像机自己的地址；历史录像在它绑定的录像机上，不在摄像机上。
+- 示例设备：`UV_10135`（演示球机）。一台设备只对接一个平台，字段是 `vendor`：`MOCK` 模拟、`UNIVIEW` 宇视、`HIKVISION` 海康。调用方不传平台，只传 `deviceId`。服务按这台设备的 `vendor` 去调对应平台。海康尚未实现，调用时失败，文案为 `海康尚未对接`。
 
 统一包装（文件流接口除外）：
 
@@ -35,7 +35,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 # 一、云台监控
 
-只列出已配置宇视地址的设备。指令发到这台摄像机自己的账号。
+调用方不传平台。云台、预览、直播、录像、截取都只传 `deviceId`，服务用这台设备的 `vendor` 去调对应平台。云台路径是 `/api/ptz`。
 
 方向键按住时重复调用移动，松开传 `direction=stop`。变倍、对焦、广角是点按：服务端下发动作后自行停止。
 
@@ -71,8 +71,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | success | boolean | 固定 `true` |
-| mock | boolean | 真实对接为 `false` |
-| live | boolean | 真实对接为 `true` |
+| mock | boolean | 模拟设备为 `true`，宇视为 `false` |
+| live | boolean | 宇视为 `true`，模拟为 `false` |
 | action | string | 本次动作：`move` / `zoom` / `focus` / `wide-angle` / `goto-preset` / `set-preset` / `snapshot` |
 | deviceId | string | 设备编码 |
 | response | string | 摄像机原始 JSON 字符串 |
@@ -83,8 +83,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.1 云台设备列表
 
-- **说明**：给云台页选设备、展示预置位。只含已配置宇视地址的设备。预置位来自摄像机；暂时查不到时 `presets` 为空数组，设备仍然返回。
-- **GET** `/api/uniview/ptz/devices`
+- **说明**：给云台页选设备、展示预置位。宇视且已配置地址的设备，预置位向摄像机查；暂时查不到时 `presets` 为空数组，设备仍然返回。模拟设备也列出，预置位来自中台，不访问摄像机。海康不列出。
+- **GET** `/api/ptz/devices`
 - 无参数
 
 `data` 为数组。每一项：
@@ -113,8 +113,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.2 云台设备详情
 
-- **说明**：取这台摄像机已启用码流的播放地址。**不拉流。** 要出画面再调 1.3。
-- **GET** `/api/uniview/devices/{deviceId}`
+- **说明**：取这台设备已启用码流的播放地址。**不拉流。** 要出画面再调 1.3。宇视读这台摄像机的码流；模拟读中台已登记的码流。海康失败：`海康尚未对接`。
+- **GET** `/api/ptz/devices/{deviceId}`
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -142,7 +142,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.3 开始预览
 
-- **说明**：云台页选中设备后调用。不传 `streamType` 时用 `sub`。这路在 ZLM 上已经有流就直接返回同一地址；没有才向摄像机取地址并拉流。最后一个观众离开后停止拉流。播放器用 `playUrl`。
+- **说明**：云台页选中设备后调用。不传 `streamType` 时用 `sub`。宇视：这路在 ZLM 上已经有流就直接返回同一地址；没有才向这台摄像机取地址并拉流。模拟：只用已登记地址，不向宇视拉流。海康失败：`海康尚未对接`。最后一个观众离开后停止拉流。播放器用 `playUrl`。
 - **POST** `/api/preview/start`
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -170,8 +170,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.4 方向移动
 
-- **说明**：按住方向键时重复调用；松开传 `stop`。
-- **POST** `/api/uniview/ptz/move`
+- **说明**：按住方向键时重复调用；松开传 `stop`。宇视发到这台摄像机。模拟只返回成功，不转动设备。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/move`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -187,8 +187,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.5 变倍
 
-- **说明**：点按拉近或拉远，服务端下发后自行停止。
-- **POST** `/api/uniview/ptz/zoom`
+- **说明**：点按拉近或拉远，服务端下发后自行停止。宇视发到这台摄像机。模拟只返回成功。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/zoom`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -200,8 +200,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.6 对焦
 
-- **说明**：点按近焦或远焦，服务端下发后自行停止。
-- **POST** `/api/uniview/ptz/focus`
+- **说明**：点按近焦或远焦，服务端下发后自行停止。宇视发到这台摄像机。模拟只返回成功。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/focus`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -213,8 +213,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.7 广角
 
-- **说明**：点按拉远。速度固定 4。
-- **POST** `/api/uniview/ptz/wide-angle`
+- **说明**：点按拉远。速度固定 4。宇视发到这台摄像机。模拟只返回成功。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/wide-angle`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -228,8 +228,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.8 调用预置位
 
-- **说明**：转到摄像机上已有的预置位。编号来自 1.1 的 `presets[].index`。
-- **POST** `/api/uniview/ptz/preset/goto`
+- **说明**：转到已有预置位。编号来自 1.1 的 `presets[].index`。宇视发到这台摄像机。模拟只确认中台预置位存在。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/preset/goto`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -240,8 +240,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.9 保存预置位
 
-- **说明**：把当前姿态存成预置位。同号已存在且 `overwrite` 不为 true 时失败。
-- **POST** `/api/uniview/ptz/preset/save`
+- **说明**：把当前姿态存成预置位。同号已存在且 `overwrite` 不为 true 时失败。宇视写到这台摄像机。模拟只写入中台。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/preset/save`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -254,8 +254,8 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 1.10 抓拍
 
-- **说明**：向摄像机要一张当前画面。没有单独的图片 URL，内容在 `data.response`。
-- **POST** `/api/uniview/ptz/snapshot`
+- **说明**：向设备要一张当前画面。没有单独的图片 URL，内容在 `data.response`。宇视向这台摄像机抓拍。模拟返回占位结果。海康失败：`海康尚未对接`。
+- **POST** `/api/ptz/snapshot`
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -269,7 +269,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 设备状态：`0` 不可用，`1` 已启用，`2` 已停用。  
 直播只允许 `status=1`。回放和截取在 `status=2` 时失败，文案为 `设备已停用，无法回放`。
 
-除目录树、片段文件流外，查询都是 **POST + JSON Body**。
+除目录树、片段文件流外，查询都是 **POST + JSON Body**。请求不传平台，只传 `deviceId`。
 
 设备列表和详情只返回下面这些字段，不含登录信息、码流明细：
 
@@ -346,7 +346,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 2.4 开始直播
 
-- **说明**：仅已启用设备。已配置宇视地址时按业务直播流拉流（优先辅码流）。返回和 1.3 相同，播放 `playUrl`。
+- **说明**：仅已启用设备。宇视按业务直播流向这台摄像机拉流（优先辅码流），不走国标。模拟走国标模拟或已登记地址，不向宇视拉流。海康失败：`海康尚未对接`。返回和 1.3 相同，播放 `playUrl`。
 - **POST** `/api/biz/devices/live`
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -359,7 +359,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 2.5 有录像的日期
 
-- **说明**：给回放日历打点。已绑定录像机的设备查录像机；没绑定的查中台本地 MP4。已停用设备不能查。
+- **说明**：给回放日历打点。宇视且已绑定录像机时查录像机；宇视未绑定，以及模拟设备，查中台本地 MP4。海康失败：`海康尚未对接`。已停用设备不能查。
 - **POST** `/api/biz/devices/recording-days`
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -374,7 +374,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 2.6 录像列表
 
-- **说明**：查一段时间里的录像，新的在前。已停用设备不能查。
+- **说明**：查一段时间里的录像，新的在前。数据源与 2.5 相同：宇视且已绑定录像机查录像机，模拟或未绑定查本地 MP4，海康失败：`海康尚未对接`。已停用设备不能查。
 - **POST** `/api/biz/devices/recordings`
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -404,13 +404,13 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 | durationSeconds | number | 时长秒。探测失败时没有 |
 | videoUrl | string | 可直接播放，指向 `/api/open/recordings/{deviceId}/{fileName}`，不需登录 |
 
-片段截取（2.8、2.9）只切本地 MP4，不切录像机上的历史录像。
+片段截取（2.8、2.9、2.10）使用同一套数据源：宇视且已绑定录像机时从录像机拉这段历史，模拟或未绑定切本地 MP4。
 
 ---
 
 ## 2.7 录像机回放
 
-- **说明**：`source=nvr` 的记录用这个地址播放。服务向录像机取这段时间的流，转成 FLV 再输出。不是 JSON。
+- **说明**：`source=nvr` 的记录用这个地址播放。仅宇视且已绑定录像机：服务向录像机取这段时间的流，转成 FLV 再输出。模拟或未绑定失败：`该设备没有绑定录像设备`。海康失败：`海康尚未对接`。不是 JSON。
 - **GET** `/api/recordings/playback.flv`
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |
@@ -428,7 +428,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 2.8 按时间点截取
 
-- **说明**：以 `at` 为中心，前后各 `seconds` 秒，从本地 MP4 切出一段。只生成播放地址，文件在访问 2.10 时才输出。
+- **说明**：以 `at` 为中心，前后各 `seconds` 秒切出一段。本接口只查录像并返回播放地址，通常几秒内返回，不等待文件生成。宇视且已绑定录像机时，地址指向录像机上的这段历史；模拟或未绑定指向本地 MP4。海康失败：`海康尚未对接`。MP4 在访问 2.10 时才生成，耗时约等于片段时长。
 - **GET** `/api/biz/devices/{deviceId}/clip`
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |
@@ -453,15 +453,15 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 | clipUrl | string | 与 `videoUrl` 相同 |
 | sourceFiles | array | 参与截取的原始文件名 |
 | clipFileName | string | 缓存片段文件名 |
-| size | integer | 片段字节数 |
+| size | integer | 片段字节数。文件尚未生成时没有这个字段 |
 
-该时间点没有本地录像：`该时间点无可用录像`。
+该时间点没有对应录像：`该时间点无可用录像`。
 
 ---
 
 ## 2.9 批量截取
 
-- **说明**：一次切多段。Body 是 **JSON 数组**，不是 `{ "items": [] }`。最多 50 条。单条失败不影响其它条。
+- **说明**：一次切多段。每条按该设备的平台取录像，规则与 2.8 相同。Body 是 **JSON 数组**，不是 `{ "items": [] }`。最多 50 条。单条失败不影响其它条。海康那一条 `ok=false`，`error` 为 `海康尚未对接`。
 - **POST** `/api/biz/clips`
 
 数组每一项：
@@ -484,7 +484,7 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 
 ## 2.10 片段文件
 
-- **说明**：2.8、2.9 里 `videoUrl` 的实际文件。响应是 MP4，不是 JSON。
+- **说明**：2.8、2.9 里 `videoUrl` 的实际文件。第一次访问才按 2.8 的数据源生成 MP4，耗时约等于片段时长；生成后再次访问直接返回缓存。响应是 MP4，不是 JSON。
 - **GET** `/api/biz/devices/{deviceId}/clip/file`
 
 | 参数 | 位置 | 类型 | 必填 | 说明 |

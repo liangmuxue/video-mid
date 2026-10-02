@@ -290,7 +290,7 @@ const RecordingWithUrl = obj(
       nullable: true,
     },
     size: prop("integer", "字节。录像机上的文件可能为 0", 0, false, "int64"),
-    source: prop("string", "已绑定录像机时为 nvr。本地 MP4 没有这个字段", "nvr", true),
+    source: prop("string", "宇视且已绑定录像机时为 nvr。本地 MP4 没有这个字段", "nvr", true),
     durationSeconds: prop("number", "仅本地 MP4：时长秒。探测失败时不返回", 300, true),
     videoUrl: prop(
       "string",
@@ -336,9 +336,9 @@ const ClipInfo = obj(
     clipUrl: prop("string", "与 videoUrl 相同", "http://8.130.74.232:8090/api/biz/devices/UV_10135/clip/file?at=1730000030000&seconds=30"),
     sourceFiles: arr(prop("string", "参与截取的原始文件名"), "源文件名"),
     clipFileName: prop("string", "缓存片段文件名", "UV_10135_1730000030000_30.mp4"),
-    size: prop("integer", "片段字节数", 5242880, false, "int64"),
+    size: prop("integer", "片段字节数。文件尚未生成时不返回", 5242880, true, "int64"),
   },
-  "按时间点截取的结果。只切本地 MP4"
+  "按时间点截取的结果。宇视且已绑定录像机时来自录像机，否则来自本地 MP4"
 );
 
 const ClipBatchItem = obj(
@@ -511,8 +511,9 @@ const doc = {
       "除目录树、设备详情、录像机回放、片段文件外，带参接口一律 POST + JSON Body。\n" +
       "统一响应 { code, message, data }；code=0 成功。时间字段为毫秒时间戳。\n" +
       "设备 status：0=不可用 1=已启用 2=已停用。直播仅 status=1；回放/截取 status=2 不可用。\n" +
+      "一台设备只对接一个平台 vendor：MOCK 模拟、UNIVIEW 宇视、HIKVISION 海康。调用方不传平台，只传 deviceId，服务按 vendor 调用对应平台。云台路径为 /api/ptz。海康尚未实现，失败文案为「海康尚未对接」。\n" +
       "返回只有调用方会用到的字段。没有密码、经纬度、创建时间、服务器磁盘路径。\n" +
-      "当前 uniview.data-source=live。云台发给这台摄像机自己的地址；历史录像在它绑定的录像机上。示例设备 UV_10135。\n" +
+      "宇视云台发给这台摄像机自己的地址；历史录像在它绑定的录像机上。示例设备 UV_10135。\n" +
       "鉴权：auth.enabled=false 时免登录；true 时 Header Authorization: Bearer {token}。" +
       "<video> 带不了 Header，URL 上加 token。",
     version: "1.0.0",
@@ -522,15 +523,15 @@ const doc = {
     { url: "http://127.0.0.1:8090", description: "本地环境" },
   ],
   tags: [
-    { name: "云台监控", description: "已配置宇视地址的设备。云台控制 POST + JSON Body。看直播用 /api/preview/start。" },
-    { name: "业务端", description: "目录树、设备、直播、录像、录像机回放、片段截取。" },
+    { name: "云台监控", description: "路径 /api/ptz。只传 deviceId，服务按 vendor 调用对应平台。看直播用 /api/preview/start。" },
+    { name: "业务端", description: "目录树、设备、直播、录像、录像机回放、片段截取。只传 deviceId，服务按 vendor 进入对应数据源。" },
   ],
   paths: {
-    "/api/uniview/ptz/devices": {
+    "/api/ptz/devices": {
       get: {
         tags: ["云台监控"],
         summary: "云台-设备列表",
-        description: "只返回已配置宇视地址的设备。presets 为该摄像机当前预置位，连不上时为空数组，不影响列表。",
+        description: "宇视且已配置地址的设备，预置位向摄像机查，连不上时为空数组，不影响列表。模拟设备也列出，预置位来自中台。海康不列出。",
         operationId: "ptzDevices",
         responses: ok(
           resp_schema(
@@ -560,12 +561,12 @@ const doc = {
         ),
       },
     },
-    "/api/uniview/devices/{deviceId}": {
+    "/api/ptz/devices/{deviceId}": {
       get: {
         tags: ["云台监控"],
         summary: "云台-设备详情（含码流，不拉流）",
         description:
-          "取这台摄像机已启用码流的播放地址。不拉流。要出画面再调 /api/preview/start。未配置宇视地址时失败：设备未配置宇视地址。",
+          "取这台设备已启用码流的播放地址。不拉流。宇视读这台摄像机的码流；模拟读中台已登记的码流。海康失败：海康尚未对接。未配置宇视地址时失败：设备未配置宇视地址。要出画面再调 /api/preview/start。",
         operationId: "univiewDevice",
         parameters: [path_p("deviceId", "string", "设备编码", DEV)],
         responses: ok(
@@ -590,7 +591,7 @@ const doc = {
         tags: ["云台监控"],
         summary: "开始预览（宇视按需拉流）",
         description:
-          "云台页选中设备后调用。streamType 不传默认 sub。码流带 zlmApp/zlmStream 时：ZLM 上已有该流则直接返回同一 playUrl，不再拉一次；没有则向该摄像机取直播地址并拉流。无人观看后停止拉流。播放器使用 playUrl。",
+          "云台页选中设备后调用。streamType 不传默认 sub。宇视：ZLM 上已有该流则直接返回同一 playUrl，没有则向这台摄像机取直播地址并拉流。模拟只用已登记地址，不向宇视拉流。海康失败：海康尚未对接。播放器使用 playUrl。",
         operationId: "previewStart",
         requestBody: jsonBody(
           obj(
@@ -606,12 +607,12 @@ const doc = {
         responses: ok(ref("RespLiveStart"), ex_live),
       },
     },
-    "/api/uniview/ptz/move": {
+    "/api/ptz/move": {
       post: {
         tags: ["云台监控"],
         summary: "云台-方向移动",
         description:
-          "连续转动，按住时重复调用，松开传 direction=stop。JSON Body。\n" +
+          "连续转动，按住时重复调用，松开传 direction=stop。宇视发到这台摄像机。模拟只返回成功，不转动设备。海康失败：海康尚未对接。\n" +
           "direction：up/down/left/right/left_up/left_down/right_up/right_down/stop。其它值返回 400。\n" +
           "使用该设备自己的 IP、端口和账号，不再使用配置文件里的单一摄像机。",
         operationId: "ptzMove",
@@ -619,12 +620,12 @@ const doc = {
         responses: ok(ref("RespPtz"), ex_ptz_move),
       },
     },
-    "/api/uniview/ptz/zoom": {
+    "/api/ptz/zoom": {
       post: {
         tags: ["云台监控"],
         summary: "云台-变倍",
         description:
-          "点按一次：下发变倍后短暂保持再停止。action：in / zoom_in / tele 拉近；out / zoom_out / wide 拉远。其它值返回 400。",
+          "点按一次：下发变倍后短暂保持再停止。宇视发到这台摄像机。模拟只返回成功。海康失败：海康尚未对接。action：in / zoom_in / tele 拉近；out / zoom_out / wide 拉远。其它值返回 400。",
         operationId: "ptzZoom",
         requestBody: jsonBody(ref("PtzActionRequest"), { deviceId: PTZ_DEV, action: "zoom_in", speed: 4 }),
         responses: ok(ref("RespPtz"), {
@@ -637,12 +638,12 @@ const doc = {
         }),
       },
     },
-    "/api/uniview/ptz/focus": {
+    "/api/ptz/focus": {
       post: {
         tags: ["云台监控"],
         summary: "云台-对焦",
         description:
-          "点按一次：下发对焦后短暂保持再停止。action：near / focus_near 近焦；far / focus_far 远焦。其它值返回 400。",
+          "点按一次：下发对焦后短暂保持再停止。宇视发到这台摄像机。模拟只返回成功。海康失败：海康尚未对接。action：near / focus_near 近焦；far / focus_far 远焦。其它值返回 400。",
         operationId: "ptzFocus",
         requestBody: jsonBody(ref("PtzActionRequest"), { deviceId: PTZ_DEV, action: "focus_near", speed: 4 }),
         responses: ok(ref("RespPtz"), {
@@ -655,11 +656,11 @@ const doc = {
         }),
       },
     },
-    "/api/uniview/ptz/wide-angle": {
+    "/api/ptz/wide-angle": {
       post: {
         tags: ["云台监控"],
         summary: "云台-一键广角",
-        description: "点按一次拉远（广角）。JSON Body 只传 deviceId。速度固定 4。",
+        description: "点按一次拉远（广角）。宇视发到这台摄像机。模拟只返回成功。海康失败：海康尚未对接。速度固定 4。",
         operationId: "ptzWideAngle",
         requestBody: jsonBody(ref("PtzDeviceIdRequest"), { deviceId: PTZ_DEV }),
         responses: ok(ref("RespPtz"), {
@@ -672,11 +673,11 @@ const doc = {
         }),
       },
     },
-    "/api/uniview/ptz/preset/goto": {
+    "/api/ptz/preset/goto": {
       post: {
         tags: ["云台监控"],
         summary: "云台-调用预置位",
-        description: "转到已保存预置位。编号与保存时的 index 一致。",
+        description: "转到已保存预置位。宇视发到这台摄像机。模拟只确认中台预置位存在。海康失败：海康尚未对接。编号与保存时的 index 一致。",
         operationId: "ptzGotoPreset",
         requestBody: jsonBody(ref("PtzPresetGotoRequest"), { deviceId: PTZ_DEV, index: 1 }),
         responses: ok(ref("RespPtz"), {
@@ -689,12 +690,12 @@ const doc = {
         }),
       },
     },
-    "/api/uniview/ptz/preset/save": {
+    "/api/ptz/preset/save": {
       post: {
         tags: ["云台监控"],
         summary: "云台-保存预置位",
         description:
-          "把当前姿态存为预置位。name 不能为空。已存在且 overwrite=false 时失败：预置位 n 已存在，请勾选覆盖。",
+          "把当前姿态存为预置位。宇视写到这台摄像机。模拟只写入中台。海康失败：海康尚未对接。name 不能为空。已存在且 overwrite=false 时失败：预置位 n 已存在，请勾选覆盖。",
         operationId: "ptzSetPreset",
         requestBody: jsonBody(ref("PtzPresetSaveRequest"), {
           deviceId: PTZ_DEV,
@@ -715,11 +716,11 @@ const doc = {
         }),
       },
     },
-    "/api/uniview/ptz/snapshot": {
+    "/api/ptz/snapshot": {
       post: {
         tags: ["云台监控"],
         summary: "云台-抓拍",
-        description: "向该设备摄像机抓拍。结果在 response 字符串（LAPI JSON）。channelType 默认 visible，当前 live 仍按设备通道抓拍。",
+        description: "宇视向这台摄像机抓拍，结果在 response 字符串。模拟返回占位结果。海康失败：海康尚未对接。channelType 默认 visible。",
         operationId: "ptzSnapshot",
         requestBody: jsonBody(ref("PtzSnapshotRequest"), { deviceId: PTZ_DEV, channelType: "visible" }),
         responses: ok(ref("RespPtz"), {
@@ -772,7 +773,7 @@ const doc = {
         tags: ["业务端"],
         summary: "业务端-开始直播",
         description:
-          "仅 status=1 可直播，否则「仅「已启用」设备可直播」。设备已配置宇视 IP 时不走国标：第一人观看向摄像机拉流，已有流则复用，无人观看后停止拉流。前端播 playUrl。",
+          "仅 status=1 可直播，否则「仅「已启用」设备可直播」。宇视按业务直播流向这台摄像机拉流，不走国标。模拟走国标模拟或已登记地址，不向宇视拉流。海康失败：海康尚未对接。前端播 playUrl。",
         operationId: "bizStartLive",
         requestBody: jsonBody(ref("BizDeviceIdRequest"), { deviceId: "UV_10135" }),
         responses: ok(ref("RespLiveStart"), ex_live),
@@ -782,7 +783,7 @@ const doc = {
       post: {
         tags: ["业务端"],
         summary: "业务端-有录像的日期",
-        description: "给回放日历打点。已绑定录像机的设备查录像机；没绑定的查中台本地 MP4。已停用设备不能查。返回 yyyy-MM-dd，升序。",
+        description: "给回放日历打点。宇视且已绑定录像机时查录像机；宇视未绑定以及模拟设备查中台本地 MP4。海康失败：海康尚未对接。已停用设备不能查。返回 yyyy-MM-dd，升序。",
         operationId: "bizRecordingDays",
         requestBody: jsonBody(ref("BizRecordingDaysRequest"), { deviceId: "UV_10135", year: 2026, month: 9 }),
         responses: ok(ref("RespRecordingDays"), ["2026-09-10", "2026-09-15", "2026-09-17"]),
@@ -793,7 +794,7 @@ const doc = {
         tags: ["业务端"],
         summary: "业务端-录像列表",
         description:
-          "已停用设备不能查。已绑定录像机的记录带 source=nvr，没有 videoUrl，播放走 GET /api/recordings/playback.flv。没绑定的是本地 MP4，带 durationSeconds 和 videoUrl。",
+          "数据源与有录像的日期相同：宇视且已绑定录像机查录像机，模拟或未绑定查本地 MP4，海康失败：海康尚未对接。已停用设备不能查。已绑定录像机的记录带 source=nvr，没有 videoUrl，播放走 GET /api/recordings/playback.flv。本地 MP4 带 durationSeconds 和 videoUrl。",
         operationId: "bizRecordings",
         requestBody: jsonBody(ref("BizRecordingsRequest"), {
           deviceId: "UV_10135",
@@ -808,7 +809,7 @@ const doc = {
         tags: ["业务端"],
         summary: "业务端-录像机回放",
         description:
-          "source=nvr 的记录用这个地址播放。服务向录像机取这段时间的流，转成 FLV 再输出。不是 JSON。begin 用列表里的 recordTime，拖动进度时加上偏移毫秒；end 用 endTime。大于 1e10 按毫秒，否则按秒。",
+          "source=nvr 的记录用这个地址播放。仅宇视且已绑定录像机：向录像机取这段时间的流，转成 FLV。模拟或未绑定：该设备没有绑定录像设备。海康：海康尚未对接。begin 用列表里的 recordTime，拖动进度时加上偏移毫秒；end 用 endTime。大于 1e10 按毫秒，否则按秒。",
         operationId: "nvrPlayback",
         parameters: [
           q("deviceId", "string", true, "设备编码", DEV),
@@ -818,7 +819,7 @@ const doc = {
         ],
         responses: {
           200: {
-            description: "FLV 码流。没绑定录像机：该设备没有绑定录像设备。开始不早于结束：回放开始时间必须早于结束时间。",
+            description: "FLV 码流。模拟或未绑定：该设备没有绑定录像设备。海康：海康尚未对接。开始不早于结束：回放开始时间必须早于结束时间。",
             content: { "video/x-flv": { schema: { type: "string", format: "binary" } } },
           },
         },
@@ -829,7 +830,7 @@ const doc = {
         tags: ["业务端"],
         summary: "业务端-按时间点截取",
         description:
-          "以 at 为中心，前后各 seconds 秒，从本地 MP4 切出一段。只生成播放地址，文件在访问片段文件接口时才输出。不切录像机上的历史录像。该时间点没有本地录像：该时间点无可用录像。",
+          "以 at 为中心，前后各 seconds 秒切出一段。本接口只查录像并返回播放地址，通常几秒内返回，不等待文件生成。宇视且已绑定录像机时地址指向录像机历史；模拟或未绑定指向本地 MP4。海康失败：海康尚未对接。MP4 在访问 videoUrl 时才生成，耗时约等于片段时长。该时间点没有对应录像：该时间点无可用录像。",
         operationId: "bizClip",
         parameters: [
           path_p("deviceId", "string", "设备编码", DEV),
@@ -858,7 +859,7 @@ const doc = {
         tags: ["业务端"],
         summary: "业务端-批量截取录像片段",
         description:
-          "一次切多段本地 MP4，不切录像机历史录像。Body 是 JSON 数组，不是 {items:[]}。最多 50 条。单条失败不影响其它条。成功条带截取结果字段且 ok=true；失败条 ok=false，并有 deviceId、at、seconds、error。",
+          "一次切多段。每条按该设备的平台取录像，规则与按时间点截取相同。Body 是 JSON 数组，不是 {items:[]}。最多 50 条。单条失败不影响其它条。成功条带截取结果字段且 ok=true；失败条 ok=false，并有 deviceId、at、seconds、error。海康那一条 error 为海康尚未对接。",
         operationId: "bizClipsBatch",
         requestBody: jsonBody(arr(ref("RecordClipItemRequest"), "批量截取请求"), [
           { deviceId: "UV_10135", at: 1730000030000, seconds: 30 },
@@ -871,7 +872,7 @@ const doc = {
       get: {
         tags: ["业务端"],
         summary: "业务端-片段文件",
-        description: "按时间点截取和批量截取返回的 videoUrl 实际文件。响应是 MP4，不是 JSON。",
+        description: "按时间点截取和批量截取返回的 videoUrl。第一次访问才生成 MP4，耗时约等于片段时长；生成后直接返回缓存。响应是 MP4，不是 JSON。",
         operationId: "bizClipFile",
         parameters: [
           path_p("deviceId", "string", "设备编码", DEV),

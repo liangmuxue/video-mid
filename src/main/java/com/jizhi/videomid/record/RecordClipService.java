@@ -1,5 +1,10 @@
 package com.jizhi.videomid.record;
 
+import com.jizhi.videomid.device.AccessVendor;
+import com.jizhi.videomid.device.Device;
+import com.jizhi.videomid.device.DeviceRepository;
+import com.jizhi.videomid.device.VendorDevices;
+import com.jizhi.videomid.uniview.nvr.NvrRecordingService;
 import com.jizhi.videomid.util.FfmpegUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -24,6 +29,8 @@ import java.util.function.Consumer;
 public class RecordClipService {
 
     private final RecordFileService recordFileService;
+    private final DeviceRepository deviceRepository;
+    private final NvrRecordingService nvrRecordingService;
 
     @Value("${record.ffmpeg-path:ffmpeg}")
     private String ffmpegPath;
@@ -49,8 +56,12 @@ public class RecordClipService {
     @Value("${record.clip-batch-max-size:50}")
     private int clipBatchMaxSize;
 
-    public RecordClipService(RecordFileService recordFileService) {
+    public RecordClipService(RecordFileService recordFileService,
+                             DeviceRepository deviceRepository,
+                             NvrRecordingService nvrRecordingService) {
         this.recordFileService = recordFileService;
+        this.deviceRepository = deviceRepository;
+        this.nvrRecordingService = nvrRecordingService;
     }
 
     /** 截取并返回 MP4 资源（带磁盘缓存）。 */
@@ -60,15 +71,17 @@ public class RecordClipService {
         return new FileSystemResource(clip);
     }
 
-    /** 返回片段元数据：videoUrl、startTime、endTime（毫秒）等。 */
+    /** 返回片段信息。不在这里拉流，打开 videoUrl 时才生成文件。 */
     public Map<String, Object> clipInfo(String deviceId, String atRaw, Integer seconds, String videoUrl) {
         ClipRequest req = parseRequest(deviceId, atRaw, seconds);
-        Path clip = getOrCreateClip(req);
-        long size;
-        try {
-            size = Files.size(clip);
-        } catch (IOException e) {
-            throw new IllegalStateException("读取片段文件失败: " + e.getMessage(), e);
+        Path clip = cachePath(req);
+        Long size = null;
+        if (isCacheValid(clip, req)) {
+            try {
+                size = Files.size(clip);
+            } catch (IOException e) {
+                size = null;
+            }
         }
         return buildClipMetadata(req, clip, size, videoUrl);
     }
@@ -134,7 +147,7 @@ public class RecordClipService {
         String build(String deviceId, String at, Integer seconds);
     }
 
-    private Map<String, Object> buildClipMetadata(ClipRequest req, Path clip, long size, String videoUrl) {
+    private Map<String, Object> buildClipMetadata(ClipRequest req, Path clip, Long size, String videoUrl) {
         long startTime = req.actualStartMillis();
         long endTime = req.actualEndMillis();
 
@@ -151,7 +164,9 @@ public class RecordClipService {
         info.put("windowEnd", req.windowEnd());
         info.put("sourceFiles", req.sourceFileNames());
         info.put("clipFileName", clip.getFileName().toString());
-        info.put("size", size);
+        if (size != null) {
+            info.put("size", size);
+        }
         return info;
     }
 
@@ -188,6 +203,14 @@ public class RecordClipService {
         long windowStart = atMillis - seconds * 1000L;
         long windowEnd = atMillis + seconds * 1000L;
 
+        Device device = deviceRepository.findByDeviceId(deviceId.trim()).orElse(null);
+        if (device != null && VendorDevices.of(device) == AccessVendor.HIKVISION) {
+            throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
+        }
+        if (device != null && VendorDevices.of(device) == AccessVendor.UNIVIEW && nvrRecordingService.isBound(device)) {
+            return parseNvrRequest(device, atMillis, seconds, windowStart, windowEnd);
+        }
+
         List<Map<String, Object>> records = recordFileService.list(
                         deviceId, String.valueOf(windowStart), String.valueOf(windowEnd))
                 .stream()
@@ -196,7 +219,7 @@ public class RecordClipService {
         if (records.isEmpty()) {
             throw new IllegalArgumentException("该时间点无可用录像");
         }
-        List<SlicePlan> plans = buildPlans(records, windowStart, windowEnd);
+        List<SlicePlan> plans = buildPlans(records, windowStart, windowEnd, true);
         if (plans.isEmpty()) {
             throw new IllegalArgumentException("该时间点无可用录像");
         }
@@ -205,10 +228,32 @@ public class RecordClipService {
         long actualStart = plans.stream().mapToLong(SlicePlan::segStartMillis).min().orElse(windowStart);
         long actualEnd = plans.stream().mapToLong(SlicePlan::segEndMillis).max().orElse(windowEnd);
         return new ClipRequest(deviceId.trim(), atMillis, seconds, windowStart, windowEnd,
-                actualStart, actualEnd, plans, sourceNames);
+                actualStart, actualEnd, plans, sourceNames, false);
     }
 
-    private List<SlicePlan> buildPlans(List<Map<String, Object>> records, long windowStart, long windowEnd) {
+    /** 已绑定宇视录像机时，按时间窗口取录像机上的历史录像，不读本地 MP4。 */
+    private ClipRequest parseNvrRequest(Device device, long atMillis, int seconds,
+                                        long windowStart, long windowEnd) {
+        List<Map<String, Object>> records = nvrRecordingService.listRecordingsBetween(device, windowStart, windowEnd)
+                .stream()
+                .sorted(Comparator.comparing(r -> (Long) r.get("recordTime")))
+                .toList();
+        if (records.isEmpty()) {
+            throw new IllegalArgumentException("该时间点无可用录像");
+        }
+        List<SlicePlan> plans = buildPlans(records, windowStart, windowEnd, false);
+        if (plans.isEmpty()) {
+            throw new IllegalArgumentException("该时间点无可用录像");
+        }
+        List<String> sourceNames = plans.stream().map(SlicePlan::fileName).toList();
+        long actualStart = plans.stream().mapToLong(SlicePlan::segStartMillis).min().orElse(windowStart);
+        long actualEnd = plans.stream().mapToLong(SlicePlan::segEndMillis).max().orElse(windowEnd);
+        return new ClipRequest(device.getDeviceId(), atMillis, seconds, windowStart, windowEnd,
+                actualStart, actualEnd, plans, sourceNames, true);
+    }
+
+    private List<SlicePlan> buildPlans(List<Map<String, Object>> records, long windowStart, long windowEnd,
+                                      boolean localFile) {
         List<SlicePlan> plans = new ArrayList<>();
         long clipEstimateMs = Math.max(1, defaultClipSeconds) * 1000L;
 
@@ -224,7 +269,9 @@ public class RecordClipService {
             }
 
             String fileName = String.valueOf(row.get("fileName"));
-            Path file = recordFileService.resolveFilePath(String.valueOf(row.get("deviceId")), fileName);
+            Path file = localFile
+                    ? recordFileService.resolveFilePath(String.valueOf(row.get("deviceId")), fileName)
+                    : null;
             double offsetSec = (segStart - recordTime) / 1000.0;
             double durationSec = (segEnd - segStart) / 1000.0;
             plans.add(new SlicePlan(fileName, file, offsetSec, durationSec, recordTime, segStart, segEnd));
@@ -236,6 +283,10 @@ public class RecordClipService {
         try {
             if (output.getParent() != null) {
                 Files.createDirectories(output.getParent());
+            }
+            if (req.nvr()) {
+                generateNvrClip(req, output);
+                return;
             }
             if (req.plans().size() == 1) {
                 SlicePlan plan = req.plans().get(0);
@@ -264,7 +315,8 @@ public class RecordClipService {
 
     private Path cachePath(ClipRequest req) {
         String safeDevice = req.deviceId().replaceAll("[\\\\/:*?\"<>|]", "_");
-        String name = safeDevice + "_" + req.atMillis() + "_" + req.seconds() + ".mp4";
+        String suffix = req.nvr() ? "_web.mp4" : ".mp4";
+        String name = safeDevice + "_" + req.atMillis() + "_" + req.seconds() + suffix;
         return Path.of(clipCacheDir, safeDevice, name).toAbsolutePath().normalize();
     }
 
@@ -277,8 +329,11 @@ public class RecordClipService {
             if (ageMs > Math.max(1, clipCacheMaxAgeHours) * 3600_000L) {
                 return false;
             }
+            if (req.nvr()) {
+                return Files.size(cacheFile) > 0;
+            }
             for (SlicePlan plan : req.plans()) {
-                if (!Files.isRegularFile(plan.file())) {
+                if (plan.file() == null || !Files.isRegularFile(plan.file())) {
                     return false;
                 }
                 long srcMtime = Files.getLastModifiedTime(plan.file()).toMillis();
@@ -290,6 +345,33 @@ public class RecordClipService {
             return Files.size(cacheFile) > 0;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    private void generateNvrClip(ClipRequest req, Path output) {
+        Device device = deviceRepository.findByDeviceId(req.deviceId())
+                .orElseThrow(() -> new IllegalArgumentException("设备不存在"));
+        double durationSec = (req.actualEndMillis() - req.actualStartMillis()) / 1000.0;
+        int timeout = Math.max(clipTimeoutSeconds, (int) Math.ceil(durationSec) + 45);
+        Path dir;
+        try {
+            dir = Files.createTempDirectory("nvrclip");
+        } catch (IOException e) {
+            throw new IllegalStateException("准备录像下载目录失败: " + e.getMessage(), e);
+        }
+        Path raw = dir.resolve("clip.mp4");
+        try {
+            nvrRecordingService.downloadByTime(device, req.actualStartMillis(), req.actualEndMillis(), raw, timeout);
+            FfmpegUtil.remuxCopy(ffmpegPath, raw, output, timeout);
+        } catch (RuntimeException e) {
+            try {
+                Files.deleteIfExists(output);
+            } catch (IOException ignored) {
+                // 失败时不保留半截文件，避免下次命中错误缓存
+            }
+            throw e;
+        } finally {
+            deleteRecursively(dir);
         }
     }
 
@@ -309,7 +391,7 @@ public class RecordClipService {
 
     private record ClipRequest(String deviceId, long atMillis, int seconds,
                                long windowStart, long windowEnd, long actualStartMillis, long actualEndMillis,
-                               List<SlicePlan> plans, List<String> sourceFileNames) {
+                               List<SlicePlan> plans, List<String> sourceFileNames, boolean nvr) {
     }
 
     private record SlicePlan(String fileName, Path file, double offsetSec, double durationSec, long recordTime,

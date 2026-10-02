@@ -9,15 +9,13 @@ import com.jizhi.videomid.device.DeviceFolderService;
 import com.jizhi.videomid.device.DeviceService;
 import com.jizhi.videomid.device.DeviceStatus;
 import com.jizhi.videomid.device.DeviceStream;
+import com.jizhi.videomid.record.ClipFileResponses;
 import com.jizhi.videomid.record.RecordClipItemRequest;
 import com.jizhi.videomid.record.RecordClipService;
 import com.jizhi.videomid.uniview.nvr.RecordingCatalog;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -124,16 +122,15 @@ public class BizPortalController {
 
     /** 片段 MP4 直链 */
     @GetMapping("/devices/{deviceId}/clip/file")
-    public ResponseEntity<Resource> clipFile(@PathVariable String deviceId,
-                                             @RequestParam String at,
-                                             @RequestParam(required = false) Integer seconds) {
+    public void clipFile(@PathVariable String deviceId,
+                         @RequestParam String at,
+                         @RequestParam(required = false) Integer seconds,
+                         HttpServletRequest request,
+                         jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         assertDeviceEnabled(deviceId);
         Resource resource = recordClipService.openClip(deviceId, at, seconds);
         String fileName = deviceId + "_" + at + ".mp4";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"")
-                .contentType(MediaType.parseMediaType("video/mp4"))
-                .body(resource);
+        ClipFileResponses.write(resource, fileName, request, response);
     }
 
     private List<Map<String, Object>> listDevices(Long folderId, boolean includeChildren) {

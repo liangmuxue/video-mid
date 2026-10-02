@@ -6,7 +6,6 @@ import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.uniview.UniviewPtzPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -17,7 +16,6 @@ import java.util.Map;
 
 /** 宇视 LAPI PTZ 控制。连续动作走 PTZCtrl 指令码。 */
 @Service
-@ConditionalOnProperty(name = "uniview.data-source", havingValue = "live")
 public class LiveUniviewPtzAdapter implements UniviewPtzPort {
 
     private static final Logger log = LoggerFactory.getLogger(LiveUniviewPtzAdapter.class);

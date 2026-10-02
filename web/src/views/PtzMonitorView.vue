@@ -4,11 +4,7 @@
       <header class="ptz-head">
         <div>
           <h1>云台监控</h1>
-          <p class="sub">
-            {{ config?.mock ? 'TIC7632 双光谱云台' : (activeDevice?.name || '宇视云台') }} ·
-            <span v-if="config?.mock" class="badge mock">模拟数据</span>
-            <span v-else class="badge live">真实宇视</span>
-          </p>
+          <p class="sub">{{ activeDevice?.name || '选择设备后开始控制' }}</p>
         </div>
         <p v-if="error" class="error">{{ error }}</p>
       </header>
@@ -121,7 +117,6 @@ import StreamPlayer from '../components/StreamPlayer.vue'
 import { useBackdropClose } from '../composables/useBackdropClose'
 import { previewStart } from '../api/device'
 import {
-  fetchUniviewConfig,
   fetchUniviewDevice,
   fetchPtzDevices,
   ptzFocus,
@@ -134,7 +129,6 @@ import {
 
 const loading = ref(true)
 const error = ref('')
-const config = ref(null)
 const devices = ref([])
 const activeId = ref('')
 const detail = ref(null)
@@ -180,7 +174,6 @@ async function loadAll() {
   loading.value = true
   error.value = ''
   try {
-    config.value = await fetchUniviewConfig()
     devices.value = await fetchPtzDevices()
     if (devices.value.length && !activeId.value) {
       await selectDevice(devices.value[0].deviceId)
@@ -199,14 +192,12 @@ async function selectDevice(deviceId) {
   error.value = ''
   try {
     detail.value = await fetchUniviewDevice(deviceId)
-    if (!config.value?.mock) {
-      const streams = detail.value?.streams || []
-      const prefer = streams.find((s) => s.streamType === 'sub')
-        || streams.find((s) => s.streamType === 'main')
-        || streams[0]
-      const play = await previewStart({ deviceId, streamType: prefer?.streamType || 'sub' })
-      playedUrl.value = play.playUrl || play.streamUrl || ''
-    }
+    const streams = detail.value?.streams || []
+    const prefer = streams.find((s) => s.streamType === 'sub')
+      || streams.find((s) => s.streamType === 'main')
+      || streams[0]
+    const play = await previewStart({ deviceId, streamType: prefer?.streamType || 'sub' })
+    playedUrl.value = play.playUrl || play.streamUrl || ''
     const d = devices.value.find((x) => x.deviceId === deviceId)
     if (d) {
       const fresh = await fetchPtzDevices()

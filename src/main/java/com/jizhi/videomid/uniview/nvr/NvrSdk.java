@@ -312,6 +312,9 @@ final class NvrSdk {
         boolean NETDEV_QueryVideoChlDetailListEx(Pointer userId, com.sun.jna.ptr.IntByReference count, ChannelInfo[] list);
         boolean NETDEV_GetReplayUrl_V30(Pointer userId, PlaybackCond cond, byte[] url);
         boolean NETDEV_GetPlaybackUrl(Pointer userId, RecordFindCond cond, byte[] url);
+        Pointer NETDEV_GetFileByTime(Pointer userId, PlaybackCond cond, byte[] savePath, int format);
+        boolean NETDEV_StopGetFile(Pointer playHandle);
+        boolean NETDEV_PlayBackControl(Pointer playHandle, int controlCode, Pointer buffer);
     }
 
     /** 与 Linux SDK 2.8.1 的 NETDEV_PLAYBACKCOND_S 一致。Demo 回放用这组字段取 RTSP。 */

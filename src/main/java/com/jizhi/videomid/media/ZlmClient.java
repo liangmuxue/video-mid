@@ -237,7 +237,8 @@ public class ZlmClient {
             JsonNode resp = objectMapper.readTree(body);
             int code = resp == null ? -1 : resp.path("code").asInt(-1);
             String msg = resp == null ? "" : resp.path("msg").asText("");
-            if (code == 0 || msg.toLowerCase().contains("not found") || msg.toLowerCase().contains("no such")) {
+            String lower = msg.toLowerCase();
+            if (code == 0 || lower.contains("not found") || lower.contains("no such") || lower.contains("can not find")) {
                 log.info("[本服务→ZLM] delStreamProxy 成功 app={} stream={} code={} msg={}", app, stream, code, msg);
                 return true;
             }

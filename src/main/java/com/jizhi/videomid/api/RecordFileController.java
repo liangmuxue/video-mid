@@ -1,6 +1,7 @@
 package com.jizhi.videomid.api;
 
 import com.jizhi.videomid.auth.dto.ApiResponse;
+import com.jizhi.videomid.record.ClipFileResponses;
 import com.jizhi.videomid.record.RecordClipItemRequest;
 import com.jizhi.videomid.record.RecordClipService;
 import com.jizhi.videomid.record.RecordFileService;
@@ -109,15 +110,14 @@ public class RecordFileController {
 
     /** 片段 MP4 直链（供 videoUrl 播放/下载） */
     @GetMapping("/clip/file")
-    public ResponseEntity<Resource> clipFile(@RequestParam String deviceId,
-                                             @RequestParam String at,
-                                             @RequestParam(required = false) Integer seconds) {
+    public void clipFile(@RequestParam String deviceId,
+                         @RequestParam String at,
+                         @RequestParam(required = false) Integer seconds,
+                         HttpServletRequest request,
+                         jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         Resource resource = recordClipService.openClip(deviceId, at, seconds);
         String fileName = deviceId + "_" + at + ".mp4";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"")
-                .contentType(MediaType.parseMediaType("video/mp4"))
-                .body(resource);
+        ClipFileResponses.write(resource, fileName, request, response);
     }
 
     private String resolvePublicBase(HttpServletRequest request) {

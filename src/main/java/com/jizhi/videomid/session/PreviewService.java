@@ -1,7 +1,9 @@
 package com.jizhi.videomid.session;
 
+import com.jizhi.videomid.device.AccessVendor;
 import com.jizhi.videomid.device.Device;
 import com.jizhi.videomid.device.DeviceRepository;
+import com.jizhi.videomid.device.VendorDevices;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
 import com.jizhi.videomid.media.ZlmClient;
@@ -49,11 +51,15 @@ public class PreviewService {
 
     public Map<String, Object> start(String deviceId, String streamType) {
         String type = normalize(streamType);
+        Device device = deviceRepository.findByDeviceId(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
+        AccessVendor vendor = VendorDevices.of(device);
+        if (vendor == AccessVendor.HIKVISION) {
+            throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
+        }
         DeviceStream stream = streamRepository.findByDeviceIdAndType(deviceId, type)
                 .orElseThrow(() -> new IllegalArgumentException("码流未注册: " + deviceId + "/" + type));
-        if (UniviewStreamIds.isPull(stream)) {
-            Device device = deviceRepository.findByDeviceId(deviceId)
-                    .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
+        if (vendor == AccessVendor.UNIVIEW && UniviewStreamIds.isPull(stream)) {
             stream = univiewStreamKeeper.ensure(device, stream);
         }
         if (stream.getStreamUrl() == null || stream.getStreamUrl().isBlank()) {
