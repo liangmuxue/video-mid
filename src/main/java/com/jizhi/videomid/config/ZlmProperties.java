@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ZlmProperties {
 
     private String baseUrl = "http://127.0.0.1:8080";
+    /** 返回给浏览器的播放地址前缀。空则与 baseUrl 相同。 */
+    private String playBaseUrl = "";
     private String secret = "";
     /** 按 ZLM 真实观看人数回写 Redis 的间隔，毫秒；0 表示关闭 */
     private int playCountSyncMs = 5000;
@@ -16,6 +18,17 @@ public class ZlmProperties {
 
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
+    }
+
+    public String getPlayBaseUrl() {
+        if (playBaseUrl == null || playBaseUrl.isBlank()) {
+            return baseUrl;
+        }
+        return playBaseUrl;
+    }
+
+    public void setPlayBaseUrl(String playBaseUrl) {
+        this.playBaseUrl = playBaseUrl;
     }
 
     public String getSecret() {

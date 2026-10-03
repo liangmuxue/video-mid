@@ -189,11 +189,19 @@ public class ZlmClient {
 
     /** 回放拉流：不无限重连，避免录像结束后一直重试。 */
     public boolean addPlaybackProxy(String app, String stream, String sourceUrl) {
+        return addPlaybackProxy(app, stream, sourceUrl, null);
+    }
+
+    /**
+     * 宇视回放要在 RTSP PLAY 里带 Scale、Speed 和 Range，否则录像机只推音频。
+     * playHeader 形如 Scale=1.000000&Speed=1.000000&Range=clock=...
+     */
+    public boolean addPlaybackProxy(String app, String stream, String sourceUrl, String playHeader) {
         if (app == null || app.isBlank() || stream == null || stream.isBlank()
                 || sourceUrl == null || sourceUrl.isBlank()) {
             return false;
         }
-        String url = api("/index/api/addStreamProxy")
+        UriComponentsBuilder builder = api("/index/api/addStreamProxy")
                 .queryParam("vhost", "__defaultVhost__")
                 .queryParam("app", app.trim())
                 .queryParam("stream", stream.trim())
@@ -203,11 +211,15 @@ public class ZlmClient {
                 .queryParam("timeout_sec", 15)
                 .queryParam("enable_hls", 0)
                 .queryParam("enable_rtmp", 1)
-                .queryParam("enable_mp4", 0)
-                .toUriString();
-        log.info("[本服务→ZLM] addPlaybackProxy app={} stream={}", app, stream);
+                .queryParam("enable_mp4", 0);
+        if (playHeader != null && !playHeader.isBlank()) {
+            builder.queryParam("custom_header", playHeader);
+        }
+        String url = builder.toUriString();
+        log.info("[本服务→ZLM] addPlaybackProxy app={} stream={} playHeader={}", app, stream, playHeader);
         try {
-            String body = proxyRestTemplate.getForObject(url, String.class);
+            // 地址已经编码过。用 String 再交给 RestTemplate 会把 %26 编成 %2526，ZLM 就收不到 Scale/Speed/Range。
+            String body = proxyRestTemplate.getForObject(java.net.URI.create(url), String.class);
             JsonNode resp = objectMapper.readTree(body);
             int code = resp == null ? -1 : resp.path("code").asInt(-1);
             String msg = resp == null ? "" : resp.path("msg").asText("");
@@ -219,6 +231,24 @@ public class ZlmClient {
         } catch (Exception e) {
             log.warn("[本服务→ZLM] addPlaybackProxy 异常 app={} stream={} error={}", app, stream, e.getMessage());
             return false;
+        }
+    }
+
+    /** 关掉某一类拉流。录像机同时只给一路回放，不关的话下一次 SETUP 会 503。 */
+    public void closeStreams(String app) {
+        if (app == null || app.isBlank()) {
+            return;
+        }
+        String url = api("/index/api/close_streams")
+                .queryParam("app", app.trim())
+                .queryParam("force", 1)
+                .toUriString();
+        log.info("[本服务→ZLM] close_streams app={}", app);
+        try {
+            String body = proxyRestTemplate.getForObject(url, String.class);
+            log.info("[本服务→ZLM] close_streams 响应 app={} body={}", app, body);
+        } catch (Exception e) {
+            log.warn("[本服务→ZLM] close_streams 异常 app={} error={}", app, e.getMessage());
         }
     }
 
@@ -303,11 +333,14 @@ public class ZlmClient {
     }
 
     public String mediaBaseUrl() {
-        return baseUrl();
+        return normalize(props.getPlayBaseUrl());
     }
 
     private String baseUrl() {
-        String base = props.getBaseUrl();
+        return normalize(props.getBaseUrl());
+    }
+
+    private static String normalize(String base) {
         if (base == null || base.isBlank()) {
             return "http://127.0.0.1:8080";
         }

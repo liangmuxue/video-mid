@@ -63,6 +63,10 @@ public class RecordingCatalog {
         return nvrRecordingService.openPlayback(device, begin, end);
     }
 
+    public void releaseNvrPlayback(String flvUrl) {
+        nvrRecordingService.releasePlayback(flvUrl);
+    }
+
     /** 宇视且已绑定录像机时返回设备，模拟或未绑定返回 null 走本地文件。海康直接拒绝。 */
     private Device boundUniview(String deviceId) {
         Device device = deviceRepository.findByDeviceId(deviceId).orElse(null);

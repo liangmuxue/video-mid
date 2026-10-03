@@ -64,15 +64,18 @@ public class RecordFileController {
         java.net.HttpURLConnection conn = (java.net.HttpURLConnection) URI.create(flv).toURL().openConnection();
         conn.setConnectTimeout(15_000);
         conn.setReadTimeout(0);
-        conn.connect();
-        response.setStatus(conn.getResponseCode());
-        response.setContentType("video/x-flv");
-        try (java.io.InputStream in = conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream()) {
-            if (in != null) {
-                in.transferTo(response.getOutputStream());
+        try {
+            conn.connect();
+            response.setStatus(conn.getResponseCode());
+            response.setContentType("video/x-flv");
+            try (java.io.InputStream in = conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream()) {
+                if (in != null) {
+                    in.transferTo(response.getOutputStream());
+                }
             }
         } finally {
             conn.disconnect();
+            recordingCatalog.releaseNvrPlayback(flv);
         }
     }
 

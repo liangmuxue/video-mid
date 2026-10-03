@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 
 function proxyBackend(path) {
   return {
-    target: 'http://8.130.74.232:8090',
+    target: 'http://119.3.161.125:7093',
     changeOrigin: true,
     configure(proxy) {
       proxy.on('error', (_err, _req, res) => {

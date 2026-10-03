@@ -104,7 +104,7 @@ public class ZlmRtpBridge {
     }
 
     private String buildPlayUrl(String app, String streamId) {
-        String base = zlmProps.getBaseUrl();
+        String base = zlmProps.getPlayBaseUrl();
         if (base == null || base.isBlank()) {
             base = "http://127.0.0.1:8080";
         }

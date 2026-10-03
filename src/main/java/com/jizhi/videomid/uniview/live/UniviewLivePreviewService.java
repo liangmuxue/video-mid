@@ -102,7 +102,7 @@ public class UniviewLivePreviewService {
     }
 
     private String playUrl(String stream) {
-        String base = zlmProperties.getBaseUrl();
+        String base = zlmProperties.getPlayBaseUrl();
         if (base == null || base.isBlank()) {
             base = "http://127.0.0.1:8080";
         }

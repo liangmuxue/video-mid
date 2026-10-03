@@ -18,6 +18,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -235,9 +237,13 @@ public class NvrRecordingService {
         log.info("[宇视NVR] 回放地址 channel={} begin={} end={} url={}", channel, begin, end, redactUrl(rtsp));
         rtsp = withCredentials(recorder, rtsp);
         String stream = "pb" + device.getId() + "_" + begin + "_" + end;
-        zlmClient.delStreamProxy(PLAYBACK_APP, stream);
-        if (!zlmClient.addPlaybackProxy(PLAYBACK_APP, stream, rtsp)) {
-            throw new IllegalStateException("回放拉流失败");
+        String playHeader = playbackPlayHeader(begin, end);
+        zlmClient.closeStreams(PLAYBACK_APP);
+        if (!zlmClient.addPlaybackProxy(PLAYBACK_APP, stream, rtsp, playHeader)) {
+            sleepQuietly(1000);
+            if (!zlmClient.addPlaybackProxy(PLAYBACK_APP, stream, rtsp, playHeader)) {
+                throw new IllegalStateException("回放拉流失败");
+            }
         }
         long deadline = System.currentTimeMillis() + 8000;
         while (System.currentTimeMillis() < deadline) {
@@ -254,6 +260,44 @@ public class NvrRecordingService {
         return playUrl(stream);
     }
 
+    /** 浏览器断开后释放这一路，避免一直占着录像机的回放口。 */
+    public void releasePlayback(String flvUrl) {
+        if (flvUrl == null || flvUrl.isBlank()) {
+            return;
+        }
+        int slash = flvUrl.lastIndexOf('/');
+        if (slash < 0 || slash == flvUrl.length() - 1) {
+            return;
+        }
+        String name = flvUrl.substring(slash + 1);
+        if (name.endsWith(".live.flv")) {
+            name = name.substring(0, name.length() - ".live.flv".length());
+        }
+        if (!name.isBlank()) {
+            zlmClient.delStreamProxy(PLAYBACK_APP, name);
+        }
+    }
+
+    /** 宇视回放的 PLAY 头。时间用 UTC，格式 yyyyMMddTHHmmssZ。 */
+    private static String playbackPlayHeader(long beginSec, long endSec) {
+        return "Scale=1.000000&Speed=1.000000&Range=clock="
+                + utcClock(beginSec) + "-" + utcClock(endSec);
+    }
+
+    private static String utcClock(long epochSec) {
+        return DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+                .withZone(ZoneOffset.UTC)
+                .format(Instant.ofEpochSecond(epochSec));
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private String replayUrl(Pointer user, int channel, long begin, long end) {
         NvrSdk.LibraryApi api = api();
         byte[] buf = new byte[512];
@@ -262,9 +306,11 @@ public class NvrRecordingService {
         cond.tBeginTime = begin;
         cond.tEndTime = end;
         cond.dwLinkMode = TCP;
+        // 0 是 16 倍速后退。和按时间下载一样，取回放地址也要指定 1 倍速前进。
+        cond.dwPlaySpeed = 9;
         // 0=所有存储。1 在头文件里是 VMS，不是录像机；查录像能命中的也是 0。
         cond.dwRecordLocation = 0;
-        log.info("[宇视NVR] GetReplayUrl_V30 请求 channel={} begin={} end={} linkMode={} location={}",
+        log.info("[宇视NVR] GetReplayUrl_V30 请求 channel={} begin={} end={} linkMode={} location={} playSpeed=1x",
                 channel, begin, end, TCP, cond.dwRecordLocation);
         if (api.NETDEV_GetReplayUrl_V30(user, cond, buf)) {
             String url = cString(buf);
@@ -497,14 +543,18 @@ public class NvrRecordingService {
     }
 
     /**
-     * 宇视 NVR 回放路径：/c通道/b开始秒/e结束秒/replay/。
-     * 已有 b/e 时只替换时间；没有时用返回地址里的主机和端口拼这条路径。
+     * 宇视 NVR 回放路径：/c通道/b开始秒/e结束秒/replay/，后面的 type、s 是码流，必须留下。
+     * 时间已经一致时直接用接口原地址；只有时间不同才替换 b/e。
      */
     static String withPlaybackRange(String rtspUrl, int channel, long begin, long end) {
         if (rtspUrl == null || rtspUrl.isBlank()) {
             throw new IllegalStateException("回放地址为空");
         }
-        String range = "/c" + channel + "/b" + begin + "/e" + end + "/replay/";
+        String marker = "/c" + channel + "/b" + begin + "/e" + end + "/replay";
+        if (rtspUrl.toLowerCase(java.util.Locale.ROOT).contains(marker.toLowerCase(java.util.Locale.ROOT))) {
+            return rtspUrl;
+        }
+        String range = marker + "/";
         String replaced = rtspUrl.replaceFirst("(?i)/c\\d+/b\\d+/e\\d+/replay/?", range);
         if (!replaced.equals(rtspUrl)) {
             return replaced;
@@ -523,6 +573,7 @@ public class NvrRecordingService {
     }
 
     private String playUrl(String stream) {
+        // 这个地址由本服务去拉 FLV，必须用本机 ZLM，不能用给浏览器的公网播放口。
         String base = zlmProperties.getBaseUrl();
         if (base == null || base.isBlank()) {
             base = "http://127.0.0.1:8080";
