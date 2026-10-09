@@ -39,6 +39,25 @@ public class UniviewStreamKeeper {
         this.deviceRepository = deviceRepository;
     }
 
+    /**
+     * 向摄像机查询 LiveStreamURL（RTSP），并补全设备账号；不触发 ZLM 拉流。
+     */
+    public java.util.Optional<String> resolveRtspLiveUrl(Device device, DeviceStream stream) {
+        if (device == null || device.getHost() == null || device.getHost().isBlank()) {
+            return java.util.Optional.empty();
+        }
+        try {
+            String raw = liveStreamUrl(device, stream);
+            if (raw == null || raw.isBlank()) {
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(withCredentials(device, raw));
+        } catch (RuntimeException e) {
+            log.debug("[Uniview] resolveRtspLiveUrl failed device={} err={}", device.getDeviceId(), e.getMessage());
+            return java.util.Optional.empty();
+        }
+    }
+
     public DeviceStream ensure(Device device, DeviceStream stream) {
         if (!UniviewStreamIds.isPull(stream)) {
             return stream;

@@ -35,6 +35,24 @@ DEVICE_STATUS = prop(
 DEVICE_BASE = {
     "id": prop("integer", "设备主键 ID（数据库自增）", 1, fmt="int64"),
     "deviceId": prop("string", "设备业务编码，全局唯一，如 CAM_EAST_01", "CAM_EAST_01"),
+    "deviceNo": prop(
+        "integer",
+        "位置编号（数字），如 101 表示一层第一个摄像头，展示可格式化为 0101",
+        101,
+        nullable=True,
+    ),
+    "deviceType": prop(
+        "integer",
+        "设备类型：0=抓拍，1=视频流，2=视频流+抓拍",
+        1,
+        enum=[0, 1, 2],
+    ),
+    "keys": {
+        "type": "array",
+        "description": "业务能力 key（不入库）：deviceType=0 仅 snap_face，1 仅 photo，2 为 photo+snap_face",
+        "items": prop("string", "能力标识", "photo"),
+        "example": ["photo", "snap_face"],
+    },
     "name": prop("string", "设备名称", "东门球机"),
     "platformId": prop("string", "上级/平台 ID，可空", None, nullable=True),
     "folderId": prop("integer", "所属设备目录 ID，可空表示未归类", 2, True, "int64"),
@@ -130,8 +148,28 @@ def resp_schema(data_prop, example_data):
     }
 
 
+LiveStreamBrief = obj(
+    {
+        "streamType": prop("string", "业务直播使用的码流类型", "sub"),
+        "streamUrl": prop(
+            "string",
+            "业务直播取流地址，固定 RTSP 格式（宇视为摄像机 LiveStreamURL；其余多为 ZLM 代理 rtsp://host:554/app/stream）",
+            "rtsp://admin:***@192.168.1.64:554/media/video1",
+        ),
+    },
+    desc="业务直播流摘要（管理端列表/详情与业务端详情一致）",
+)
+
 DeviceListItem = obj(
-    {**DEVICE_BASE, "streamCount": prop("integer", "该设备已注册码流数量", 2)},
+    {
+        **DEVICE_BASE,
+        "streamCount": prop("integer", "该设备已注册码流数量", 2),
+        "liveStream": {
+            **LiveStreamBrief,
+            "nullable": True,
+            "description": "当前业务直播流；未配置可解析时为 null",
+        },
+    },
     desc="设备列表项（不含码流明细）",
 )
 
@@ -141,6 +179,11 @@ BizDeviceItem = obj(
         "streamCount": prop("integer", "该设备已注册码流数量", 2),
         "playable": prop("boolean", "业务端可否回放：status=2（已停用）时为 false，其余为 true", True),
         "livePlayable": prop("boolean", "业务端可否直播：仅 status=1（已启用）时为 true", True),
+        "liveStream": {
+            **LiveStreamBrief,
+            "nullable": True,
+            "description": "当前业务直播流；未配置可解析时为 null",
+        },
     },
     desc="业务端设备列表项",
 )
@@ -152,6 +195,11 @@ DeviceDetail = obj(
         **DEVICE_BASE,
         "streamCount": prop("integer", "码流数量，等于 streams 数组长度", 2),
         "streams": arr(StreamView, "该设备下全部码流列表"),
+        "liveStream": {
+            **LiveStreamBrief,
+            "nullable": True,
+            "description": "当前业务直播流；未配置可解析时为 null",
+        },
     },
     desc="设备详情（含码流列表）",
 )
@@ -285,6 +333,18 @@ FolderNode = obj(
 DeviceRequest = obj(
     {
         "deviceId": prop("string", "【必填】设备业务编码，创建后一般不改", "CAM_EAST_01"),
+        "deviceNo": prop(
+            "integer",
+            "位置编号（数字），如 101；可选",
+            101,
+            nullable=True,
+        ),
+        "deviceType": prop(
+            "integer",
+            "设备类型：0=抓拍，1=视频流，2=两者；默认 1",
+            1,
+            enum=[0, 1, 2],
+        ),
         "name": prop("string", "设备名称", "东门球机"),
         "platformId": prop("string", "上级/平台 ID，可空", None, nullable=True),
         "folderId": prop("integer", "所属目录 ID，可空", 2, True, "int64"),

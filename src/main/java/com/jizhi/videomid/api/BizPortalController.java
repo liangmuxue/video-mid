@@ -8,7 +8,6 @@ import com.jizhi.videomid.biz.dto.BizRecordingsRequest;
 import com.jizhi.videomid.device.DeviceFolderService;
 import com.jizhi.videomid.device.DeviceService;
 import com.jizhi.videomid.device.DeviceStatus;
-import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.record.ClipFileResponses;
 import com.jizhi.videomid.record.RecordClipItemRequest;
 import com.jizhi.videomid.record.RecordClipService;
@@ -18,7 +17,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -142,16 +140,9 @@ public class BizPortalController {
     }
 
     private Map<String, Object> deviceDetail(String deviceId) {
-        Map<String, Object> detail = bizDevice(deviceService.getDeviceByDeviceId(deviceId));
-        DeviceStream live = deviceService.resolveLiveStream(deviceId).orElse(null);
-        if (live != null) {
-            Map<String, Object> liveView = new HashMap<>();
-            liveView.put("streamType", live.getStreamType());
-            liveView.put("streamUrl", live.getStreamUrl());
-            detail.put("liveStream", liveView);
-        } else {
-            detail.put("liveStream", null);
-        }
+        Map<String, Object> full = deviceService.getDeviceByDeviceId(deviceId);
+        Map<String, Object> detail = bizDevice(full);
+        detail.put("liveStream", full.get("liveStream"));
         return detail;
     }
 
@@ -159,12 +150,15 @@ public class BizPortalController {
         int status = DeviceStatus.normalize(source.get("status"));
         Map<String, Object> row = new java.util.LinkedHashMap<>();
         row.put("deviceId", source.get("deviceId"));
+        row.put("deviceType", source.get("deviceType"));
+        row.put("keys", source.get("keys"));
         row.put("name", source.get("name"));
         row.put("address", source.get("address"));
         row.put("folderId", source.get("folderId"));
         row.put("status", status);
         row.put("playable", !DeviceStatus.isDisabled(status));
         row.put("livePlayable", DeviceStatus.isEnabled(status));
+        row.put("liveStream", source.get("liveStream"));
         return row;
     }
 

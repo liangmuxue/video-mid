@@ -3,6 +3,10 @@ package com.jizhi.videomid.device;
 public class Device {
     private Long id;
     private String deviceId;
+    /** 位置编号，如 101 表示一层第一个摄像头（展示可格式化为 0101） */
+    private Integer deviceNo;
+    /** 设备类型：0=抓拍，1=视频流，2=两者 */
+    private Integer deviceType;
     private String name;
     private String platformId;
     /** MOCK / UNIVIEW / HIKVISION。一台设备只对应一个平台。 */
@@ -34,6 +38,10 @@ public class Device {
     public void setId(Long id) { this.id = id; }
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+    public Integer getDeviceNo() { return deviceNo; }
+    public void setDeviceNo(Integer deviceNo) { this.deviceNo = deviceNo; }
+    public Integer getDeviceType() { return deviceType; }
+    public void setDeviceType(Integer deviceType) { this.deviceType = deviceType; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getPlatformId() { return platformId; }

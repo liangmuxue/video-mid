@@ -30,6 +30,7 @@ public class DeviceService {
     private final Gb28181PlayService gb28181PlayService;
     private final UniviewStreamDiscovery streamDiscovery;
     private final NvrRecordingService nvrRecordingService;
+    private final LiveStreamRtspResolver liveStreamRtspResolver;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
@@ -38,7 +39,8 @@ public class DeviceService {
                          DeviceFolderService folderService,
                          Gb28181PlayService gb28181PlayService,
                          UniviewStreamDiscovery streamDiscovery,
-                         NvrRecordingService nvrRecordingService) {
+                         NvrRecordingService nvrRecordingService,
+                         LiveStreamRtspResolver liveStreamRtspResolver) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
@@ -47,6 +49,7 @@ public class DeviceService {
         this.gb28181PlayService = gb28181PlayService;
         this.streamDiscovery = streamDiscovery;
         this.nvrRecordingService = nvrRecordingService;
+        this.liveStreamRtspResolver = liveStreamRtspResolver;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -71,6 +74,7 @@ public class DeviceService {
                 }).toList();
         m.put("streams", streams);
         m.put("streamCount", streams.size());
+        m.put("liveStream", liveStreamForDevice(d.getDeviceId()));
         return m;
     }
 
@@ -105,6 +109,7 @@ public class DeviceService {
             Map<String, Object> m = toDeviceView(d);
             int count = streamRepository.findByDeviceId(d.getDeviceId()).size();
             m.put("streamCount", count);
+            m.put("liveStream", liveStreamForDevice(d.getDeviceId()));
             result.add(m);
         }
         return result;
@@ -236,6 +241,7 @@ public class DeviceService {
             d.setDeviceId(deviceId);
             d.setName(req.getDeviceName() == null || req.getDeviceName().isBlank() ? deviceId : req.getDeviceName());
             d.setStatus(DeviceStatus.ENABLED);
+            d.setDeviceType(DeviceType.VIDEO);
             d.setPtzType(0);
             deviceRepository.insert(d);
         } else if (req.getDeviceName() != null && !req.getDeviceName().isBlank()) {
@@ -295,6 +301,20 @@ public class DeviceService {
         Map<String, Object> view = toStreamView(s);
         view.put("playCount", previewService.getRef(s.getDeviceId(), s.getStreamType()));
         return view;
+    }
+
+    /**
+     * 业务直播流摘要（streamType + streamUrl），与业务端设备详情 {@code liveStream} 一致；未配置时为 null。
+     */
+    public Map<String, Object> liveStreamForDevice(String deviceId) {
+        return resolveLiveStream(deviceId).map(live -> toLiveStreamSummary(deviceId, live)).orElse(null);
+    }
+
+    private Map<String, Object> toLiveStreamSummary(String deviceId, DeviceStream live) {
+        Map<String, Object> liveView = new LinkedHashMap<>();
+        liveView.put("streamType", live.getStreamType());
+        liveView.put("streamUrl", liveStreamRtspResolver.resolve(deviceId, live));
+        return liveView;
     }
 
     /**
@@ -361,6 +381,8 @@ public class DeviceService {
     private Device fromDeviceRequest(DeviceRequest req) {
         Device d = new Device();
         d.setDeviceId(req.getDeviceId().trim());
+        d.setDeviceNo(req.getDeviceNo());
+        d.setDeviceType(DeviceType.normalize(req.getDeviceType()));
         d.setName(req.getName());
         d.setPlatformId(req.getPlatformId());
         d.setFolderId(req.getFolderId());
@@ -613,6 +635,9 @@ public class DeviceService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", d.getId());
         m.put("deviceId", d.getDeviceId());
+        m.put("deviceNo", d.getDeviceNo());
+        m.put("deviceType", DeviceType.normalize(d.getDeviceType()));
+        m.put("keys", DeviceType.capabilityKeys(d.getDeviceType()));
         m.put("name", d.getName());
         m.put("platformId", d.getPlatformId());
         m.put("vendor", d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());

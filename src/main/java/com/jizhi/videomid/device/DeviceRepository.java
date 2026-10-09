@@ -24,6 +24,11 @@ public class DeviceRepository {
         Device d = new Device();
         d.setId(rs.getLong("id"));
         d.setDeviceId(rs.getString("device_id"));
+        int deviceNo = rs.getInt("device_no");
+        if (!rs.wasNull()) {
+            d.setDeviceNo(deviceNo);
+        }
+        d.setDeviceType(rs.getInt("device_type"));
         d.setName(rs.getString("name"));
         d.setPlatformId(rs.getString("platform_id"));
         d.setVendor(rs.getString("vendor"));
@@ -66,7 +71,7 @@ public class DeviceRepository {
     }
 
     private static final String DEVICE_SELECT = """
-            SELECT d.id, d.device_id, d.name, d.platform_id, d.folder_id, d.status, d.manufacturer, d.model,
+            SELECT d.id, d.device_id, d.device_no, d.device_type, d.name, d.platform_id, d.folder_id, d.status, d.manufacturer, d.model,
                    d.address, d.ptz_type, d.gateway_id, d.longitude, d.latitude, d.vendor, d.created_at, d.updated_at,
                    u.host, u.port, u.username, u.password, u.access_channel, u.access_status, u.access_error,
                    u.lan_ip, u.record_device_id, u.record_channel, u.record_channel_name
@@ -77,6 +82,8 @@ public class DeviceRepository {
     /** 已有库补 vendor，把设备表上的宇视登录拷到 uniview_device，然后删掉这些旧列。 */
     private void ensureVendorSplit() {
         addColumnIfMissing("vendor", "VARCHAR(16) NOT NULL DEFAULT 'MOCK' COMMENT 'MOCK/UNIVIEW/HIKVISION'");
+        addColumnIfMissing("device_no", "INT DEFAULT NULL COMMENT '位置编号，如101表示一层第一个摄像头'");
+        addColumnIfMissing("device_type", "INT NOT NULL DEFAULT 1 COMMENT '0抓拍 1视频流 2两者'");
         jdbc.execute("""
                 CREATE TABLE IF NOT EXISTS uniview_device (
                   device_pk BIGINT NOT NULL COMMENT 'device.id',
@@ -204,24 +211,26 @@ public class DeviceRepository {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device (device_id, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, vendor, created_at, updated_at) " +
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device (device_id, device_no, device_type, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, vendor, created_at, updated_at) " +
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, d.getDeviceId());
-            ps.setString(2, d.getName());
-            ps.setString(3, d.getPlatformId());
-            if (d.getFolderId() == null) ps.setNull(4, Types.BIGINT); else ps.setLong(4, d.getFolderId());
-            ps.setInt(5, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
-            ps.setString(6, d.getManufacturer());
-            ps.setString(7, d.getModel());
-            ps.setString(8, d.getAddress());
-            ps.setInt(9, d.getPtzType() == null ? 0 : d.getPtzType());
-            ps.setString(10, d.getGatewayId());
-            if (d.getLongitude() == null) ps.setObject(11, null); else ps.setDouble(11, d.getLongitude());
-            if (d.getLatitude() == null) ps.setObject(12, null); else ps.setDouble(12, d.getLatitude());
-            ps.setString(13, d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
-            ps.setLong(14, now);
-            ps.setLong(15, now);
+            if (d.getDeviceNo() == null) ps.setNull(2, Types.INTEGER); else ps.setInt(2, d.getDeviceNo());
+            ps.setInt(3, d.getDeviceType() == null ? DeviceType.VIDEO : d.getDeviceType());
+            ps.setString(4, d.getName());
+            ps.setString(5, d.getPlatformId());
+            if (d.getFolderId() == null) ps.setNull(6, Types.BIGINT); else ps.setLong(6, d.getFolderId());
+            ps.setInt(7, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
+            ps.setString(8, d.getManufacturer());
+            ps.setString(9, d.getModel());
+            ps.setString(10, d.getAddress());
+            ps.setInt(11, d.getPtzType() == null ? 0 : d.getPtzType());
+            ps.setString(12, d.getGatewayId());
+            if (d.getLongitude() == null) ps.setObject(13, null); else ps.setDouble(13, d.getLongitude());
+            if (d.getLatitude() == null) ps.setObject(14, null); else ps.setDouble(14, d.getLatitude());
+            ps.setString(15, d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
+            ps.setLong(16, now);
+            ps.setLong(17, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
@@ -235,8 +244,8 @@ public class DeviceRepository {
         long now = TsUtil.nowMillis();
         d.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device SET name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, vendor=?, updated_at=? WHERE id=?",
-                d.getName(), d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
+                "UPDATE device SET device_no=?, device_type=?, name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, vendor=?, updated_at=? WHERE id=?",
+                d.getDeviceNo(), d.getDeviceType() == null ? DeviceType.VIDEO : d.getDeviceType(), d.getName(), d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
                 d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(),
                 d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor(),
                 now, d.getId());

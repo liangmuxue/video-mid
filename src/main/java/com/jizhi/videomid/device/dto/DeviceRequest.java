@@ -5,6 +5,10 @@ import jakarta.validation.constraints.NotBlank;
 public class DeviceRequest {
     @NotBlank
     private String deviceId;
+    /** 位置编号，如 101（一层第一个）；可选 */
+    private Integer deviceNo;
+    /** 设备类型：0=抓拍，1=视频流，2=两者；默认 1 */
+    private Integer deviceType;
     private String name;
     private String platformId;
     /** MOCK / UNIVIEW / HIKVISION */
@@ -29,6 +33,10 @@ public class DeviceRequest {
 
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+    public Integer getDeviceNo() { return deviceNo; }
+    public void setDeviceNo(Integer deviceNo) { this.deviceNo = deviceNo; }
+    public Integer getDeviceType() { return deviceType; }
+    public void setDeviceType(Integer deviceType) { this.deviceType = deviceType; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getPlatformId() { return platformId; }

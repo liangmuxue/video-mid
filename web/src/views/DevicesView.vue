@@ -43,7 +43,7 @@
       <div class="main-panel">
         <section class="toolbar">
           <div class="crumb">{{ currentFolderLabel }}</div>
-          <input v-model.trim="keyword" placeholder="搜索设备ID / 名称 / 厂家 / 地址" />
+          <input v-model.trim="keyword" placeholder="搜索编号 / 设备ID / 名称 / 厂家 / 地址" />
           <label class="check">
             <input v-model="includeChildren" type="checkbox" @change="loadDevices" />
             含下级目录
@@ -57,18 +57,23 @@
             <thead>
               <tr>
                 <th>设备ID</th>
+                <th>位置编号</th>
+                <th>设备类型</th>
                 <th>名称</th>
                 <th>状态</th>
                 <th>平台</th>
                 <th>厂家</th>
                 <th>安装地址</th>
                 <th>码流数</th>
+                <th>直播流</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="d in filtered" :key="d.id">
                 <td class="mono">{{ d.deviceId }}</td>
+                <td class="mono">{{ formatDeviceNo(d.deviceNo) }}</td>
+                <td>{{ deviceTypeLabel(d.deviceType) }}</td>
                 <td>{{ d.name || '-' }}</td>
                 <td>
                   <span class="badge" :class="statusClass(d.status)">{{ statusLabel(d.status) }}</span>
@@ -77,6 +82,9 @@
                 <td>{{ d.manufacturer || '-' }}</td>
                 <td>{{ d.address || '-' }}</td>
                 <td>{{ d.streamCount ?? 0 }}</td>
+                <td class="mono live-cell" :title="d.liveStream?.streamUrl || ''">
+                  {{ liveStreamLabel(d.liveStream) }}
+                </td>
                 <td class="actions">
                   <button type="button" class="link" @click="openPlayback(d)">录像回放</button>
                   <router-link
@@ -88,7 +96,7 @@
                 </td>
               </tr>
               <tr v-if="!filtered.length">
-                <td colspan="8" class="empty">暂无设备</td>
+                <td colspan="11" class="empty">暂无设备</td>
               </tr>
             </tbody>
           </table>
@@ -100,6 +108,17 @@
       <form class="modal" @submit.prevent="save">
         <h2>{{ editingId ? '编辑设备' : '新增设备' }}</h2>
         <label><span>设备ID</span><input v-model.trim="form.deviceId" required :disabled="!!editingId" /></label>
+        <label><span>位置编号</span>
+          <input v-model.number="form.deviceNo" type="number" min="0" step="1" placeholder="如 101，展示为 0101" />
+        </label>
+        <p class="tip">数字类型：前两位可表示楼层，后两位表示该层序号，如 101 表示一层第一个摄像头。</p>
+        <label><span>设备类型</span>
+          <select v-model.number="form.deviceType">
+            <option :value="0">抓拍</option>
+            <option :value="1">视频流</option>
+            <option :value="2">视频流 + 抓拍</option>
+          </select>
+        </label>
         <label><span>名称</span><input v-model.trim="form.name" /></label>
         <label><span>所属目录</span>
           <select v-model="form.folderId">
@@ -259,6 +278,26 @@ function vendorLabel(vendor) {
   return '模拟'
 }
 
+/** 列表展示：101 → 0101（4 位补零，可空） */
+function formatDeviceNo(deviceNo) {
+  if (deviceNo == null || deviceNo === '') return '-'
+  const n = Number(deviceNo)
+  if (Number.isNaN(n)) return '-'
+  return String(Math.trunc(n)).padStart(4, '0')
+}
+
+function liveStreamLabel(liveStream) {
+  if (!liveStream?.streamType) return '-'
+  return liveStream.streamType
+}
+
+function deviceTypeLabel(deviceType) {
+  const v = Number(deviceType)
+  if (v === 0) return '抓拍'
+  if (v === 2) return '视频+抓拍'
+  return '视频流'
+}
+
 const devices = ref([])
 const folderTree = ref([])
 const loading = ref(false)
@@ -272,6 +311,8 @@ const editingId = ref(null)
 const formError = ref('')
 const form = reactive({
   deviceId: '',
+  deviceNo: null,
+  deviceType: 1,
   name: '',
   folderId: null,
   status: STATUS_ENABLED,
@@ -337,7 +378,7 @@ const filtered = computed(() => {
   const q = keyword.value.toLowerCase()
   if (!q) return devices.value
   return devices.value.filter((d) =>
-    [d.deviceId, d.name, d.manufacturer, d.address, d.model]
+    [d.deviceNo, formatDeviceNo(d.deviceNo), deviceTypeLabel(d.deviceType), d.deviceId, d.name, d.manufacturer, d.address, d.model]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -436,6 +477,8 @@ function openDevice(d = null) {
   const manual = raw === STATUS_DISABLED ? STATUS_DISABLED : STATUS_ENABLED
   Object.assign(form, {
     deviceId: d?.deviceId || '',
+    deviceNo: d?.deviceNo ?? null,
+    deviceType: d?.deviceType ?? 1,
     name: d?.name || '',
     folderId: d?.folderId ?? selectedFolderId.value ?? null,
     status: manual,
@@ -485,6 +528,8 @@ async function save() {
   try {
     const payload = { ...form, folderId: form.folderId ?? null }
     if (payload.port === '' || Number.isNaN(payload.port)) payload.port = null
+    if (payload.deviceNo === '' || Number.isNaN(payload.deviceNo)) payload.deviceNo = null
+    if (payload.deviceType === '' || Number.isNaN(payload.deviceType)) payload.deviceType = 1
     if (!payload.recordDeviceId) payload.recordDeviceId = null
     if (!payload.lanIp) payload.lanIp = null
     delete payload.recordChannel
