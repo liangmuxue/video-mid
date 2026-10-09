@@ -3,6 +3,7 @@ package com.jizhi.videomid.device;
 import com.jizhi.videomid.device.dto.DeviceRequest;
 import com.jizhi.videomid.device.dto.StreamRegisterRequest;
 import com.jizhi.videomid.gb28181.Gb28181PlayService;
+import com.jizhi.videomid.integration.jizhiai.JizhiAiDeviceSyncClient;
 import com.jizhi.videomid.media.ZlmClient;
 import com.jizhi.videomid.session.PreviewService;
 import com.jizhi.videomid.uniview.live.UniviewStreamDiscovery;
@@ -31,6 +32,7 @@ public class DeviceService {
     private final UniviewStreamDiscovery streamDiscovery;
     private final NvrRecordingService nvrRecordingService;
     private final LiveStreamRtspResolver liveStreamRtspResolver;
+    private final JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
@@ -40,7 +42,8 @@ public class DeviceService {
                          Gb28181PlayService gb28181PlayService,
                          UniviewStreamDiscovery streamDiscovery,
                          NvrRecordingService nvrRecordingService,
-                         LiveStreamRtspResolver liveStreamRtspResolver) {
+                         LiveStreamRtspResolver liveStreamRtspResolver,
+                         JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
@@ -50,6 +53,7 @@ public class DeviceService {
         this.streamDiscovery = streamDiscovery;
         this.nvrRecordingService = nvrRecordingService;
         this.liveStreamRtspResolver = liveStreamRtspResolver;
+        this.jizhiAiDeviceSyncClient = jizhiAiDeviceSyncClient;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -174,7 +178,9 @@ public class DeviceService {
         if (hasUniviewLogin(d)) {
             syncUniviewStreams(d);
         }
-        return toDeviceView(d);
+        Device persisted = deviceRepository.findById(id).orElse(d);
+        notifyJizhiAiSave(persisted);
+        return toDeviceView(persisted);
     }
 
     @Transactional
@@ -206,7 +212,12 @@ public class DeviceService {
         }
         assertLoginFree(d, existing.getId());
         bindRecord(d, existing.getId());
+        int previousStatus = DeviceStatus.normalize(existing.getStatus());
+        int nextStatus = DeviceStatus.normalize(d.getStatus());
         deviceRepository.update(d);
+        if (previousStatus != nextStatus) {
+            notifyJizhiAiStatus(existing.getDeviceId(), nextStatus);
+        }
         deviceRepository.saveUniview(d);
         if (hasUniviewLogin(d)) {
             syncUniviewStreams(d);
@@ -586,6 +597,7 @@ public class DeviceService {
             int target = online ? DeviceStatus.ENABLED : DeviceStatus.UNAVAILABLE;
             if (target != current) {
                 deviceRepository.updateStatus(d.getId(), target);
+                notifyJizhiAiStatus(d.getDeviceId(), target);
                 changed++;
                 log.info("设备推流巡检 deviceId={} {} -> {}", d.getDeviceId(), current, target);
             }
@@ -629,6 +641,16 @@ public class DeviceService {
             return null;
         }
         return anyOnline;
+    }
+
+    private void notifyJizhiAiStatus(String deviceId, int deviceState) {
+        jizhiAiDeviceSyncClient.syncDeviceStatus(deviceId, deviceState);
+    }
+
+    private void notifyJizhiAiSave(Device device) {
+        Map<String, Object> live = liveStreamForDevice(device.getDeviceId());
+        String rtsp = live == null ? null : (String) live.get("streamUrl");
+        jizhiAiDeviceSyncClient.syncDeviceSave(device, rtsp);
     }
 
     private Map<String, Object> toDeviceView(Device d) {

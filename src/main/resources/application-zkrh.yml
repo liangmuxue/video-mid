@@ -102,6 +102,13 @@ record:
 open-api:
   public-base-url: http://119.3.161.125:7093
 
+# 极知 AI：新增 POST {base-url}/aidemo/device/save；改状态 POST .../updateStatus
+jizhi-ai:
+  sync:
+    enabled: false
+    base-url: http://127.0.0.1:8080
+
+
 # JWT 登录配置（测试环境可关闭鉴权）
 auth:
   enabled: false
