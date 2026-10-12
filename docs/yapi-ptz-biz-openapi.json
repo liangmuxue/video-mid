@@ -682,7 +682,7 @@
           "业务端"
         ],
         "summary": "业务端-设备列表",
-        "description": "含已停用设备；用 playable、livePlayable 判断可否回放/直播。不返回码流明细。Body 可传 {}。",
+        "description": "含已停用设备。返回 deviceType、keys、liveStream。liveStream.streamUrl 为 RTSP，没有可解析地址时 liveStream 为 null。用 playable、livePlayable 判断可否回放/直播。不返回登录信息和码流明细。Body 可传 {}。",
         "operationId": "bizDevices",
         "requestBody": {
           "required": false,
@@ -713,12 +713,20 @@
                   "data": [
                     {
                       "deviceId": "UV_10135",
+                      "deviceType": 1,
+                      "keys": [
+                        "photo"
+                      ],
                       "name": "演示球机",
                       "address": "宇视在线调试",
                       "folderId": 2,
                       "status": 1,
                       "playable": true,
-                      "livePlayable": true
+                      "livePlayable": true,
+                      "liveStream": {
+                        "streamType": "sub",
+                        "streamUrl": "rtsp://119.3.161.125:554/live/uv_UV_10135_sub"
+                      }
                     }
                   ]
                 }
@@ -763,6 +771,10 @@
                   "message": "success",
                   "data": {
                     "deviceId": "UV_10135",
+                    "deviceType": 1,
+                    "keys": [
+                      "photo"
+                    ],
                     "name": "演示球机",
                     "address": "宇视在线调试",
                     "folderId": 2,
@@ -771,7 +783,7 @@
                     "livePlayable": true,
                     "liveStream": {
                       "streamType": "sub",
-                      "streamUrl": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
+                      "streamUrl": "rtsp://119.3.161.125:554/live/uv_UV_10135_sub"
                     }
                   }
                 }
@@ -1328,6 +1340,28 @@
             "description": "设备业务编码，全局唯一",
             "example": "UV_10135"
           },
+          "deviceType": {
+            "type": "integer",
+            "description": "设备类型：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
+            "example": 1,
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "keys": {
+            "type": "array",
+            "description": "业务能力，由 deviceType 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
+            "items": {
+              "type": "string",
+              "description": "能力标识：photo=视频，snap_face=抓拍",
+              "example": "photo"
+            },
+            "example": [
+              "photo"
+            ]
+          },
           "name": {
             "type": "string",
             "description": "设备名称，可空",
@@ -1366,6 +1400,23 @@
             "type": "boolean",
             "description": "可否直播：仅 status=1（已启用）时为 true",
             "example": true
+          },
+          "liveStream": {
+            "type": "object",
+            "properties": {
+              "streamType": {
+                "type": "string",
+                "description": "业务直播码流：main / sub / third，优先 sub",
+                "example": "sub"
+              },
+              "streamUrl": {
+                "type": "string",
+                "description": "业务直播取流地址，RTSP。未解析到地址时整个 liveStream 为 null。开始直播仍用 /devices/live 返回的 playUrl",
+                "example": "rtsp://119.3.161.125:554/live/uv_UV_10135_sub"
+              }
+            },
+            "description": "当前业务直播流。未配置可解析地址时为 null",
+            "nullable": true
           }
         },
         "description": "业务端设备。不含登录信息和码流明细"
@@ -1401,8 +1452,8 @@
           },
           "streamUrl": {
             "type": "string",
-            "description": "HTTP-FLV。此时可能尚未拉流",
-            "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
+            "description": "业务直播取流地址，RTSP。未解析到地址时整个 liveStream 为 null。开始直播仍用 /devices/live 返回的 playUrl",
+            "example": "rtsp://119.3.161.125:554/live/uv_UV_10135_sub"
           }
         },
         "description": "业务直播流；没有时整个字段为 null"
@@ -1414,6 +1465,28 @@
             "type": "string",
             "description": "设备业务编码，全局唯一",
             "example": "UV_10135"
+          },
+          "deviceType": {
+            "type": "integer",
+            "description": "设备类型：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
+            "example": 1,
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "keys": {
+            "type": "array",
+            "description": "业务能力，由 deviceType 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
+            "items": {
+              "type": "string",
+              "description": "能力标识：photo=视频，snap_face=抓拍",
+              "example": "photo"
+            },
+            "example": [
+              "photo"
+            ]
           },
           "name": {
             "type": "string",
@@ -1464,8 +1537,8 @@
               },
               "streamUrl": {
                 "type": "string",
-                "description": "HTTP-FLV。此时可能尚未拉流",
-                "example": "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv"
+                "description": "业务直播取流地址，RTSP。未解析到地址时整个 liveStream 为 null。开始直播仍用 /devices/live 返回的 playUrl",
+                "example": "rtsp://119.3.161.125:554/live/uv_UV_10135_sub"
               }
             },
             "description": "当前业务直播流；未设置时为 null",
@@ -1923,12 +1996,20 @@
           "data": [
             {
               "deviceId": "UV_10135",
+              "deviceType": 1,
+              "keys": [
+                "photo"
+              ],
               "name": "演示球机",
               "address": "宇视在线调试",
               "folderId": 2,
               "status": 1,
               "playable": true,
-              "livePlayable": true
+              "livePlayable": true,
+              "liveStream": {
+                "streamType": "sub",
+                "streamUrl": "rtsp://119.3.161.125:554/live/uv_UV_10135_sub"
+              }
             }
           ]
         }
@@ -1956,6 +2037,10 @@
           "message": "success",
           "data": {
             "deviceId": "UV_10135",
+            "deviceType": 1,
+            "keys": [
+              "photo"
+            ],
             "name": "演示球机",
             "address": "宇视在线调试",
             "folderId": 2,

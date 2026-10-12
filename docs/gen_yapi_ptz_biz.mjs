@@ -107,6 +107,20 @@ const DEVICE_STATUS = prop(
 
 const DEVICE_BASE = {
   deviceId: prop("string", "设备业务编码，全局唯一", "UV_10135"),
+  deviceType: prop(
+    "integer",
+    "设备类型：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
+    1,
+    false,
+    undefined,
+    [0, 1, 2]
+  ),
+  keys: {
+    type: "array",
+    description: "业务能力，由 deviceType 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
+    items: prop("string", "能力标识：photo=视频，snap_face=抓拍", "photo"),
+    example: ["photo"],
+  },
   name: prop("string", "设备名称，可空", "演示球机", true),
   address: prop("string", "安装地址，可空", "宇视在线调试", true),
   folderId: prop("integer", "所属目录 ID，未分组为 null", 2, true, "int64"),
@@ -128,6 +142,7 @@ const FOLDER_BASE = {
 
 const DEV = "UV_10135";
 const PLAY = "http://8.130.74.232:8080/live/uv_UV_10135_sub.live.flv";
+const RTSP = "rtsp://119.3.161.125:554/live/uv_UV_10135_sub";
 
 const ex_catalog_stream = {
   channelType: "visible",
@@ -137,12 +152,18 @@ const ex_catalog_stream = {
 
 const ex_device = {
   deviceId: DEV,
+  deviceType: 1,
+  keys: ["photo"],
   name: "演示球机",
   address: "宇视在线调试",
   folderId: 2,
   status: 1,
   playable: true,
   livePlayable: true,
+  liveStream: {
+    streamType: "sub",
+    streamUrl: RTSP,
+  },
 };
 
 const ex_folder = {
@@ -236,24 +257,29 @@ const FolderNode = obj(
   "目录树节点"
 );
 
+const BizLiveBrief = obj(
+  {
+    streamType: prop("string", "业务直播码流：main / sub / third，优先 sub", "sub"),
+    streamUrl: prop(
+      "string",
+      "业务直播取流地址，RTSP。未解析到地址时整个 liveStream 为 null。开始直播仍用 /devices/live 返回的 playUrl",
+      RTSP
+    ),
+  },
+  "业务直播流；没有时整个字段为 null"
+);
+
 const BizDeviceItem = obj(
   {
     ...DEVICE_BASE,
     playable: prop("boolean", "可否回放/截取：status=2（已停用）时为 false，其余为 true", true),
     livePlayable: prop("boolean", "可否直播：仅 status=1（已启用）时为 true", true),
+    liveStream: { ...BizLiveBrief, nullable: true, description: "当前业务直播流。未配置可解析地址时为 null" },
   },
   "业务端设备。不含登录信息和码流明细"
 );
 
 const CatalogStream = obj(CATALOG_STREAM, "云台设备详情里的已启用码流");
-
-const BizLiveBrief = obj(
-  {
-    streamType: prop("string", "业务直播码流：main / sub / third，优先 sub", "sub"),
-    streamUrl: prop("string", "HTTP-FLV。此时可能尚未拉流", PLAY),
-  },
-  "业务直播流；没有时整个字段为 null"
-);
 
 const BizDeviceDetail = obj(
   {
@@ -746,7 +772,7 @@ const doc = {
       post: {
         tags: ["业务端"],
         summary: "业务端-设备列表",
-        description: "含已停用设备；用 playable、livePlayable 判断可否回放/直播。不返回码流明细。Body 可传 {}。",
+        description: "含已停用设备。返回 deviceType、keys、liveStream。liveStream.streamUrl 为 RTSP，没有可解析地址时 liveStream 为 null。用 playable、livePlayable 判断可否回放/直播。不返回登录信息和码流明细。Body 可传 {}。",
         operationId: "bizDevices",
         requestBody: jsonBody(ref("BizDeviceListRequest"), { folderId: 2, includeChildren: true }, false),
         responses: ok(ref("RespBizDeviceList"), [ex_device]),
@@ -759,13 +785,7 @@ const doc = {
         description: "单台设备，并带上业务直播流地址。不拉流。没有业务直播流时 liveStream 为 null。不存在时 message=设备不存在: {deviceId}。",
         operationId: "bizDeviceDetail",
         requestBody: jsonBody(ref("BizDeviceIdRequest"), { deviceId: "UV_10135" }),
-        responses: ok(ref("RespBizDeviceDetail"), {
-          ...ex_device,
-          liveStream: {
-            streamType: "sub",
-            streamUrl: PLAY,
-          },
-        }),
+        responses: ok(ref("RespBizDeviceDetail"), ex_device),
       },
     },
     "/api/biz/devices/live": {

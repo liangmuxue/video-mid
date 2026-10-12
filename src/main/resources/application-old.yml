@@ -101,7 +101,7 @@ record:
 open-api:
   public-base-url: http://8.130.74.232:8090
 
-# 极知 AI：设备状态变更同步 POST {base-url}/aidemo/device/updateStatus
+# 极知 AI：新增 POST {base-url}/aidemo/device/save；设备有改动 POST {base-url}/aidemo/device/update
 jizhi-ai:
   sync:
     enabled: false

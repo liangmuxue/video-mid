@@ -187,6 +187,43 @@ public class ZlmClient {
         }
     }
 
+    /**
+     * 拉取已带查询参数的 RTSP。地址先编码，再用 URI 提交，避免 % 被编码第二次后对方验签失败。
+     */
+    public boolean addDirectPullProxy(String app, String stream, String sourceUrl) {
+        if (app == null || app.isBlank() || stream == null || stream.isBlank()
+                || sourceUrl == null || sourceUrl.isBlank()) {
+            return false;
+        }
+        String url = api("/index/api/addStreamProxy")
+                .queryParam("vhost", "__defaultVhost__")
+                .queryParam("app", app.trim())
+                .queryParam("stream", stream.trim())
+                .queryParam("url", sourceUrl.trim())
+                .queryParam("retry_count", -1)
+                .queryParam("rtp_type", 0)
+                .queryParam("timeout_sec", 15)
+                .queryParam("enable_hls", 1)
+                .queryParam("enable_rtmp", 1)
+                .toUriString();
+        log.info("[本服务→ZLM] addDirectPullProxy app={} stream={}", app, stream);
+        try {
+            String body = proxyRestTemplate.getForObject(java.net.URI.create(url), String.class);
+            JsonNode resp = objectMapper.readTree(body);
+            int code = resp == null ? -1 : resp.path("code").asInt(-1);
+            String msg = resp == null ? "" : resp.path("msg").asText("");
+            if (code == 0 || msg.toLowerCase().contains("exist")) {
+                log.info("[本服务→ZLM] addDirectPullProxy 成功 app={} stream={} code={} msg={}", app, stream, code, msg);
+                return true;
+            }
+            log.warn("[本服务→ZLM] addDirectPullProxy 失败 app={} stream={} code={} msg={}", app, stream, code, msg);
+            return false;
+        } catch (Exception e) {
+            log.warn("[本服务→ZLM] addDirectPullProxy 异常 app={} stream={} error={}", app, stream, e.getMessage());
+            return false;
+        }
+    }
+
     /** 回放拉流：不无限重连，避免录像结束后一直重试。 */
     public boolean addPlaybackProxy(String app, String stream, String sourceUrl) {
         return addPlaybackProxy(app, stream, sourceUrl, null);

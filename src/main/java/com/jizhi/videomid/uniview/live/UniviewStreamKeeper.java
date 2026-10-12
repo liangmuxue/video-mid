@@ -87,6 +87,9 @@ public class UniviewStreamKeeper {
 
     /** 无人观看时停掉向摄像机的拉流。刚 ensure 过的短暂空窗不关。 */
     public void stopIfIdle(DeviceStream stream) {
+        if (stream.getPullUrl() != null && !stream.getPullUrl().isBlank()) {
+            return;
+        }
         if (!UniviewStreamIds.isPull(stream)) {
             return;
         }

@@ -128,6 +128,7 @@ CREATE TABLE `device_stream` (
   `stream_index`  INT          DEFAULT NULL COMMENT 'LAPI 码流序号，主码流 0，子码流 1',
   `zlm_app`       VARCHAR(64)  DEFAULT NULL COMMENT 'ZLM app，宇视拉流为 live',
   `zlm_stream`    VARCHAR(128) DEFAULT NULL COMMENT 'ZLM stream，宇视拉流标识',
+  `pull_url`      VARCHAR(1024) DEFAULT NULL COMMENT '直接拉流的原始 RTSP，不返回给业务端',
   `created_at`    BIGINT       NOT NULL COMMENT '创建时间（毫秒时间戳）',
   `updated_at`    BIGINT       NOT NULL COMMENT '更新时间（毫秒时间戳）',
   PRIMARY KEY (`id`),

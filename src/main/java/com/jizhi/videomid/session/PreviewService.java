@@ -7,6 +7,7 @@ import com.jizhi.videomid.device.VendorDevices;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
 import com.jizhi.videomid.media.ZlmClient;
+import com.jizhi.videomid.rtsp.RtspPullService;
 import com.jizhi.videomid.uniview.live.UniviewStreamIds;
 import com.jizhi.videomid.uniview.live.UniviewStreamKeeper;
 import org.slf4j.Logger;
@@ -36,17 +37,20 @@ public class PreviewService {
     private final StringRedisTemplate redis;
     private final ZlmClient zlmClient;
     private final UniviewStreamKeeper univiewStreamKeeper;
+    private final RtspPullService rtspPullService;
 
     public PreviewService(DeviceStreamRepository streamRepository,
                           DeviceRepository deviceRepository,
                           StringRedisTemplate redis,
                           ZlmClient zlmClient,
-                          UniviewStreamKeeper univiewStreamKeeper) {
+                          UniviewStreamKeeper univiewStreamKeeper,
+                          RtspPullService rtspPullService) {
         this.streamRepository = streamRepository;
         this.deviceRepository = deviceRepository;
         this.redis = redis;
         this.zlmClient = zlmClient;
         this.univiewStreamKeeper = univiewStreamKeeper;
+        this.rtspPullService = rtspPullService;
     }
 
     public Map<String, Object> start(String deviceId, String streamType) {
@@ -59,7 +63,9 @@ public class PreviewService {
         }
         DeviceStream stream = streamRepository.findByDeviceIdAndType(deviceId, type)
                 .orElseThrow(() -> new IllegalArgumentException("码流未注册: " + deviceId + "/" + type));
-        if (vendor == AccessVendor.UNIVIEW && UniviewStreamIds.isPull(stream)) {
+        if (vendor == AccessVendor.RTSP) {
+            stream = rtspPullService.ensure(device, stream);
+        } else if (vendor == AccessVendor.UNIVIEW && UniviewStreamIds.isPull(stream)) {
             stream = univiewStreamKeeper.ensure(device, stream);
         }
         if (stream.getStreamUrl() == null || stream.getStreamUrl().isBlank()) {
@@ -130,6 +136,7 @@ public class PreviewService {
         clearPlayerSessions(s.getDeviceId(), s.getStreamType());
         long ref = setRef(s.getDeviceId(), s.getStreamType(), 0);
         univiewStreamKeeper.stopIfIdle(s);
+        rtspPullService.stopIfIdle(s);
         return ref;
     }
 
@@ -152,6 +159,7 @@ public class PreviewService {
             if (actual <= 0) {
                 clearPlayerSessions(s.getDeviceId(), s.getStreamType());
                 univiewStreamKeeper.stopIfIdle(s);
+                rtspPullService.stopIfIdle(s);
             }
         }
     }

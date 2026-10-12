@@ -132,7 +132,7 @@
             <option :value="2">已停用</option>
           </select>
         </label>
-        <p class="tip">「不可用」由系统按推流自动判定；停用后不会被巡检改写。</p>
+        <p class="tip">「不可用」只按推流是否在线自动判定。直接拉流没人看时仍保持已启用。选「已停用」后不会被巡检改写。</p>
         <label><span>厂家</span><input v-model.trim="form.manufacturer" /></label>
         <label><span>型号</span><input v-model.trim="form.model" /></label>
         <label><span>安装地址</span><input v-model.trim="form.address" /></label>
@@ -143,9 +143,14 @@
             <option value="MOCK">模拟</option>
             <option value="UNIVIEW">宇视</option>
             <option value="HIKVISION">海康</option>
+            <option value="RTSP">直接拉流</option>
           </select>
         </label>
-        <p class="tip">一台设备只对接一个平台。海康尚未接入。</p>
+        <p class="tip">一台设备只对接一个平台。海康尚未接入。直接拉流只保存对方给的 RTSP，有人播放才拉。</p>
+        <template v-if="form.vendor === 'RTSP'">
+          <label><span>拉流地址</span><input v-model.trim="form.pullUrl" placeholder="rtsp://主机:端口/路径" /></label>
+          <p class="tip">编辑时留空则不修改。地址里的签名会保存，业务接口不返回这段原始地址。</p>
+        </template>
         <template v-if="form.vendor === 'UNIVIEW'">
         <label><span>宇视 IP</span><input v-model.trim="form.host" placeholder="摄像机地址" /></label>
         <label><span>端口</span><input v-model.number="form.port" type="number" min="1" max="65535" /></label>
@@ -275,6 +280,7 @@ import { useBackdropClose } from '../composables/useBackdropClose'
 function vendorLabel(vendor) {
   if (vendor === 'UNIVIEW') return '宇视'
   if (vendor === 'HIKVISION') return '海康'
+  if (vendor === 'RTSP') return '直接拉流'
   return '模拟'
 }
 
@@ -322,6 +328,7 @@ const form = reactive({
   gatewayId: '',
   platformId: '',
   vendor: 'MOCK',
+  pullUrl: '',
   host: '',
   port: null,
   username: '',
@@ -488,6 +495,7 @@ function openDevice(d = null) {
     gatewayId: d?.gatewayId || '',
     platformId: d?.platformId || '',
     vendor: d?.vendor || (d?.host || d?.recordDeviceId ? 'UNIVIEW' : 'MOCK'),
+    pullUrl: d?.pullUrl || '',
     host: d?.host || '',
     port: d?.port ?? null,
     username: d?.username || '',
@@ -534,6 +542,7 @@ async function save() {
     if (!payload.lanIp) payload.lanIp = null
     delete payload.recordChannel
     delete payload.recordChannelName
+    if (payload.vendor !== 'RTSP') payload.pullUrl = null
     if (payload.vendor !== 'UNIVIEW') {
       payload.host = null
       payload.port = null

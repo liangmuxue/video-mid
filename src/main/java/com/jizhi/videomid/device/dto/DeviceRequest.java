@@ -11,8 +11,10 @@ public class DeviceRequest {
     private Integer deviceType;
     private String name;
     private String platformId;
-    /** MOCK / UNIVIEW / HIKVISION */
+    /** MOCK / UNIVIEW / HIKVISION / RTSP */
     private String vendor;
+    /** vendor=RTSP 时的拉流地址。编辑时留空表示不修改。 */
+    private String pullUrl;
     private Long folderId;
     /** 1=已启用 2=已停用（0 不可用仅系统写入） */
     private Integer status;
@@ -43,6 +45,8 @@ public class DeviceRequest {
     public void setPlatformId(String platformId) { this.platformId = platformId; }
     public String getVendor() { return vendor; }
     public void setVendor(String vendor) { this.vendor = vendor; }
+    public String getPullUrl() { return pullUrl; }
+    public void setPullUrl(String pullUrl) { this.pullUrl = pullUrl; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
     public Integer getStatus() { return status; }

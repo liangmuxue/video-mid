@@ -36,6 +36,7 @@ public class DeviceStreamRepository {
         if (!rs.wasNull()) s.setStreamIndex(streamIndex);
         s.setZlmApp(rs.getString("zlm_app"));
         s.setZlmStream(rs.getString("zlm_stream"));
+        s.setPullUrl(rs.getString("pull_url"));
         s.setCreatedAt(readMillis(rs, "created_at"));
         s.setUpdatedAt(readMillis(rs, "updated_at"));
         return s;
@@ -45,6 +46,16 @@ public class DeviceStreamRepository {
 
     public DeviceStreamRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+        addColumnIfMissing("pull_url", "VARCHAR(1024) DEFAULT NULL COMMENT '直接拉流的原始 RTSP，不返回给业务端'");
+    }
+
+    private void addColumnIfMissing(String column, String definition) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device_stream' AND COLUMN_NAME = ?",
+                Integer.class, column);
+        if (count == null || count == 0) {
+            jdbc.execute("ALTER TABLE device_stream ADD COLUMN " + column + " " + definition);
+        }
     }
 
     public List<DeviceStream> findByDeviceId(String deviceId) {
@@ -81,7 +92,7 @@ public class DeviceStreamRepository {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device_stream (device_id, stream_type, channel_id, stream_url, stream_name, status, sort_no, live_enabled, stream_index, zlm_app, zlm_stream, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device_stream (device_id, stream_type, channel_id, stream_url, stream_name, status, sort_no, live_enabled, stream_index, zlm_app, zlm_stream, pull_url, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, s.getDeviceId());
             ps.setString(2, s.getStreamType());
@@ -94,8 +105,9 @@ public class DeviceStreamRepository {
             if (s.getStreamIndex() == null) ps.setNull(9, java.sql.Types.INTEGER); else ps.setInt(9, s.getStreamIndex());
             ps.setString(10, s.getZlmApp());
             ps.setString(11, s.getZlmStream());
-            ps.setLong(12, now);
+            ps.setString(12, blankToNull(s.getPullUrl()));
             ps.setLong(13, now);
+            ps.setLong(14, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
@@ -108,11 +120,11 @@ public class DeviceStreamRepository {
         long now = TsUtil.nowMillis();
         s.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device_stream SET channel_id=?, stream_url=?, stream_name=?, status=?, sort_no=?, live_enabled=?, stream_index=?, zlm_app=?, zlm_stream=?, updated_at=? WHERE id=?",
+                "UPDATE device_stream SET channel_id=?, stream_url=?, stream_name=?, status=?, sort_no=?, live_enabled=?, stream_index=?, zlm_app=?, zlm_stream=?, pull_url=?, updated_at=? WHERE id=?",
                 blankToNull(s.getChannelId()), s.getStreamUrl(), s.getStreamName(),
                 s.getStatus(), s.getSortNo() == null ? 0 : s.getSortNo(),
                 Boolean.TRUE.equals(s.getLiveEnabled()) ? 1 : 0,
-                s.getStreamIndex(), s.getZlmApp(), s.getZlmStream(),
+                s.getStreamIndex(), s.getZlmApp(), s.getZlmStream(), blankToNull(s.getPullUrl()),
                 now, s.getId());
     }
 

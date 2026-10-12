@@ -19,13 +19,13 @@ import org.springframework.web.client.RestTemplate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** 新增/状态变更时同步极知 AI {@code /aidemo/device/save}、{@code /aidemo/device/updateStatus}。 */
+/** 新增同步 {@code /aidemo/device/save}，之后任何改动同步 {@code /aidemo/device/update}。 */
 @Component
 public class JizhiAiDeviceSyncClient {
 
     private static final Logger log = LoggerFactory.getLogger(JizhiAiDeviceSyncClient.class);
     private static final String SUCCESS_CODE = "00000000";
-    private static final String UPDATE_STATUS_PATH = "/aidemo/device/updateStatus";
+    private static final String UPDATE_DEVICE_PATH = "/aidemo/device/update";
     private static final String SAVE_DEVICE_PATH = "/aidemo/device/save";
 
     private final JizhiAiProperties properties;
@@ -42,17 +42,21 @@ public class JizhiAiDeviceSyncClient {
     }
 
     /**
-     * @param deviceId    业务设备编号（与中台 device_id 一致）
-     * @param deviceState 0=不可用 1=已启用 2=已停用
+     * 设备已有记录后的同步。名称、地址、目录、状态、直播地址等任一变化都调用。
+     * 缺 RTSP 或 deviceNo 时省略对应字段，仍提交。
      */
-    public void syncDeviceStatus(String deviceId, int deviceState) {
-        if (deviceId == null || deviceId.isBlank()) {
+    public void syncDeviceUpdate(Device device, String fullStreamPath) {
+        if (device == null || device.getDeviceId() == null || device.getDeviceId().isBlank()) {
             return;
         }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("deviceId", deviceId.trim());
-        body.put("deviceState", deviceState);
-        postJson(UPDATE_STATUS_PATH, body, "updateStatus", deviceId);
+        Map<String, Object> body;
+        try {
+            body = buildBody(device, fullStreamPath);
+        } catch (Exception e) {
+            log.warn("[极知AI] 组装 update 请求失败 deviceId={} err={}", device.getDeviceId(), e.getMessage());
+            return;
+        }
+        postJson(UPDATE_DEVICE_PATH, body, "update", device.getDeviceId());
     }
 
     /**
@@ -74,7 +78,7 @@ public class JizhiAiDeviceSyncClient {
         }
         Map<String, Object> body;
         try {
-            body = buildSaveBody(device, fullStreamPath.trim());
+            body = buildBody(device, fullStreamPath.trim());
         } catch (Exception e) {
             log.warn("[极知AI] 组装 save 请求失败 deviceId={} err={}", device.getDeviceId(), e.getMessage());
             return;
@@ -82,7 +86,7 @@ public class JizhiAiDeviceSyncClient {
         postJson(SAVE_DEVICE_PATH, body, "save", device.getDeviceId());
     }
 
-    private Map<String, Object> buildSaveBody(Device device, String fullStreamPath) throws Exception {
+    private Map<String, Object> buildBody(Device device, String fullStreamPath) throws Exception {
         int deviceState = DeviceStatus.normalize(device.getStatus());
         int deviceType = DeviceType.normalize(device.getDeviceType());
         String deviceName = device.getName();
@@ -92,8 +96,12 @@ public class JizhiAiDeviceSyncClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("deviceName", deviceName);
         body.put("deviceId", device.getDeviceId().trim());
-        body.put("buildingNo", String.valueOf(device.getDeviceNo()));
-        body.put("fullStreamPath", fullStreamPath);
+        if (device.getDeviceNo() != null) {
+            body.put("buildingNo", String.valueOf(device.getDeviceNo()));
+        }
+        if (fullStreamPath != null && !fullStreamPath.isBlank()) {
+            body.put("fullStreamPath", fullStreamPath.trim());
+        }
         body.put("key", objectMapper.writeValueAsString(DeviceType.capabilityKeys(deviceType)));
         body.put("isPush", String.valueOf(deviceType));
         body.put("deviceState", deviceState);

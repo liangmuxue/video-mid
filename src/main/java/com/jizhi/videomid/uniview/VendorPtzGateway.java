@@ -125,6 +125,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
             case UNIVIEW -> uniview.get();
             case MOCK -> mock.get();
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
+            case RTSP -> throw new IllegalArgumentException(VendorDevices.RTSP_NO_PTZ);
         };
     }
 

@@ -5,6 +5,7 @@ import com.jizhi.videomid.device.dto.StreamRegisterRequest;
 import com.jizhi.videomid.gb28181.Gb28181PlayService;
 import com.jizhi.videomid.integration.jizhiai.JizhiAiDeviceSyncClient;
 import com.jizhi.videomid.media.ZlmClient;
+import com.jizhi.videomid.rtsp.RtspPullService;
 import com.jizhi.videomid.session.PreviewService;
 import com.jizhi.videomid.uniview.live.UniviewStreamDiscovery;
 import com.jizhi.videomid.uniview.live.UniviewStreamIds;
@@ -33,6 +34,7 @@ public class DeviceService {
     private final NvrRecordingService nvrRecordingService;
     private final LiveStreamRtspResolver liveStreamRtspResolver;
     private final JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient;
+    private final RtspPullService rtspPullService;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
@@ -43,7 +45,8 @@ public class DeviceService {
                          UniviewStreamDiscovery streamDiscovery,
                          NvrRecordingService nvrRecordingService,
                          LiveStreamRtspResolver liveStreamRtspResolver,
-                         JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient) {
+                         JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient,
+                         RtspPullService rtspPullService) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
@@ -54,6 +57,7 @@ public class DeviceService {
         this.nvrRecordingService = nvrRecordingService;
         this.liveStreamRtspResolver = liveStreamRtspResolver;
         this.jizhiAiDeviceSyncClient = jizhiAiDeviceSyncClient;
+        this.rtspPullService = rtspPullService;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -177,6 +181,8 @@ public class DeviceService {
         deviceRepository.saveUniview(d);
         if (hasUniviewLogin(d)) {
             syncUniviewStreams(d);
+        } else if (AccessVendor.RTSP.name().equals(d.getVendor())) {
+            rtspPullService.sync(d, req.getPullUrl());
         }
         Device persisted = deviceRepository.findById(id).orElse(d);
         notifyJizhiAiSave(persisted);
@@ -212,19 +218,18 @@ public class DeviceService {
         }
         assertLoginFree(d, existing.getId());
         bindRecord(d, existing.getId());
-        int previousStatus = DeviceStatus.normalize(existing.getStatus());
-        int nextStatus = DeviceStatus.normalize(d.getStatus());
         deviceRepository.update(d);
-        if (previousStatus != nextStatus) {
-            notifyJizhiAiStatus(existing.getDeviceId(), nextStatus);
-        }
         deviceRepository.saveUniview(d);
         if (hasUniviewLogin(d)) {
             syncUniviewStreams(d);
+        } else if (AccessVendor.RTSP.name().equals(d.getVendor())) {
+            rtspPullService.sync(d, req.getPullUrl());
         } else {
             removePullStreams(d.getDeviceId());
         }
-        return toDeviceView(deviceRepository.findById(id).orElse(d));
+        Device persisted = deviceRepository.findById(id).orElse(d);
+        notifyJizhiAiUpdate(persisted);
+        return toDeviceView(persisted);
     }
 
     @Transactional
@@ -247,7 +252,8 @@ public class DeviceService {
         String deviceId = req.getDeviceId().trim();
 
         Optional<Device> deviceOpt = deviceRepository.findByDeviceId(deviceId);
-        if (deviceOpt.isEmpty()) {
+        boolean created = deviceOpt.isEmpty();
+        if (created) {
             Device d = new Device();
             d.setDeviceId(deviceId);
             d.setName(req.getDeviceName() == null || req.getDeviceName().isBlank() ? deviceId : req.getDeviceName());
@@ -288,12 +294,19 @@ public class DeviceService {
         }
         // 显式指定直播，或该设备尚无直播流时按默认规则（优先 sub）
         if (Boolean.TRUE.equals(req.getLiveEnabled())) {
-            setLiveStream(s.getId());
+            markLiveStream(s.getId());
             s = streamRepository.findById(s.getId()).orElse(s);
         } else {
             ensureDefaultLiveStream(deviceId);
             s = streamRepository.findById(s.getId()).orElse(s);
         }
+        deviceRepository.findByDeviceId(deviceId).ifPresent(device -> {
+            if (created) {
+                notifyJizhiAiSave(device);
+            } else {
+                notifyJizhiAiUpdate(device);
+            }
+        });
         Map<String, Object> view = toStreamView(s);
         view.put("playCount", previewService.getRef(deviceId, type));
         return view;
@@ -304,6 +317,15 @@ public class DeviceService {
      */
     @Transactional
     public Map<String, Object> setLiveStream(Long streamId) {
+        DeviceStream current = streamRepository.findById(streamId)
+                .orElseThrow(() -> new IllegalArgumentException("码流不存在"));
+        String deviceId = current.getDeviceId();
+        Map<String, Object> view = markLiveStream(streamId);
+        deviceRepository.findByDeviceId(deviceId).ifPresent(this::notifyJizhiAiUpdate);
+        return view;
+    }
+
+    private Map<String, Object> markLiveStream(Long streamId) {
         DeviceStream s = streamRepository.findById(streamId)
                 .orElseThrow(() -> new IllegalArgumentException("码流不存在"));
         streamRepository.clearLiveByDeviceId(s.getDeviceId());
@@ -338,7 +360,7 @@ public class DeviceService {
         }
         DeviceStream s = found.get();
         if (!Boolean.TRUE.equals(s.getLiveEnabled())) {
-            setLiveStream(s.getId());
+            markLiveStream(s.getId());
             return streamRepository.findById(s.getId());
         }
         return found;
@@ -351,6 +373,7 @@ public class DeviceService {
         return switch (VendorDevices.of(device)) {
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
             case UNIVIEW -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
+            case RTSP -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
             case MOCK -> startMockLive(deviceId);
         };
     }
@@ -387,6 +410,7 @@ public class DeviceService {
         if (wasLive) {
             ensureDefaultLiveStream(deviceId);
         }
+        deviceRepository.findByDeviceId(deviceId).ifPresent(this::notifyJizhiAiUpdate);
     }
 
     private Device fromDeviceRequest(DeviceRequest req) {
@@ -437,7 +461,7 @@ public class DeviceService {
             try {
                 return AccessVendor.from(raw);
             } catch (IllegalArgumentException ex) {
-                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION");
+                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP");
             }
         }
         if (d.getHost() != null || d.getLanIp() != null || d.getRecordDeviceId() != null) {
@@ -515,7 +539,7 @@ public class DeviceService {
                         ? "main" : streams.get(0).streamType();
             }
             streamRepository.findByDeviceIdAndType(d.getDeviceId(), liveType)
-                    .ifPresent(s -> setLiveStream(s.getId()));
+                    .ifPresent(s -> markLiveStream(s.getId()));
         }
     }
 
@@ -576,7 +600,8 @@ public class DeviceService {
     }
 
     /**
-     * 定时巡检：非「已停用」设备按 ZLM 推流在线情况切换 已启用 / 不可用。
+     * 定时巡检：非「已停用」的推流设备按 ZLM 在线情况切换 已启用 / 不可用。
+     * 宇视登录设备和直接拉流不走这里：没人看时本来就不在 ZLM 上。
      * ZLM 接口失败时跳过该设备，避免误杀。
      */
     public void reconcilePushStatus() {
@@ -590,6 +615,15 @@ public class DeviceService {
             if (hasUniviewLogin(d)) {
                 continue;
             }
+            if (AccessVendor.RTSP.name().equals(d.getVendor())) {
+                if (DeviceStatus.isUnavailable(current)) {
+                    deviceRepository.updateStatus(d.getId(), DeviceStatus.ENABLED);
+                    deviceRepository.findById(d.getId()).ifPresent(this::notifyJizhiAiUpdate);
+                    changed++;
+                    log.info("直接拉流不按推流巡检，恢复已启用 deviceId={}", d.getDeviceId());
+                }
+                continue;
+            }
             Boolean online = isDevicePushing(d.getDeviceId());
             if (online == null) {
                 continue;
@@ -597,7 +631,7 @@ public class DeviceService {
             int target = online ? DeviceStatus.ENABLED : DeviceStatus.UNAVAILABLE;
             if (target != current) {
                 deviceRepository.updateStatus(d.getId(), target);
-                notifyJizhiAiStatus(d.getDeviceId(), target);
+                deviceRepository.findById(d.getId()).ifPresent(this::notifyJizhiAiUpdate);
                 changed++;
                 log.info("设备推流巡检 deviceId={} {} -> {}", d.getDeviceId(), current, target);
             }
@@ -643,8 +677,10 @@ public class DeviceService {
         return anyOnline;
     }
 
-    private void notifyJizhiAiStatus(String deviceId, int deviceState) {
-        jizhiAiDeviceSyncClient.syncDeviceStatus(deviceId, deviceState);
+    private void notifyJizhiAiUpdate(Device device) {
+        Map<String, Object> live = liveStreamForDevice(device.getDeviceId());
+        String rtsp = live == null ? null : (String) live.get("streamUrl");
+        jizhiAiDeviceSyncClient.syncDeviceUpdate(device, rtsp);
     }
 
     private void notifyJizhiAiSave(Device device) {
@@ -663,6 +699,10 @@ public class DeviceService {
         m.put("name", d.getName());
         m.put("platformId", d.getPlatformId());
         m.put("vendor", d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
+        if (AccessVendor.RTSP.name().equals(d.getVendor())) {
+            streamRepository.findByDeviceIdAndType(d.getDeviceId(), "main")
+                    .ifPresent(s -> m.put("pullUrl", s.getPullUrl()));
+        }
         m.put("folderId", d.getFolderId());
         m.put("status", DeviceStatus.normalize(d.getStatus()));
         m.put("manufacturer", d.getManufacturer());

@@ -13,6 +13,8 @@ public class DeviceStream {
     private Integer streamIndex;
     private String zlmApp;
     private String zlmStream;
+    /** 直接拉流的原始 RTSP。业务接口不返回。 */
+    private String pullUrl;
     private Long createdAt;
     private Long updatedAt;
 
@@ -40,6 +42,8 @@ public class DeviceStream {
     public void setZlmApp(String zlmApp) { this.zlmApp = zlmApp; }
     public String getZlmStream() { return zlmStream; }
     public void setZlmStream(String zlmStream) { this.zlmStream = zlmStream; }
+    public String getPullUrl() { return pullUrl; }
+    public void setPullUrl(String pullUrl) { this.pullUrl = pullUrl; }
     public Long getCreatedAt() { return createdAt; }
     public void setCreatedAt(Long createdAt) { this.createdAt = createdAt; }
     public Long getUpdatedAt() { return updatedAt; }

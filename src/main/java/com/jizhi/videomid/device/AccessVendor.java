@@ -6,7 +6,9 @@ package com.jizhi.videomid.device;
 public enum AccessVendor {
     MOCK,
     UNIVIEW,
-    HIKVISION;
+    HIKVISION,
+    /** 地址已经给出，由本服务按该 RTSP 拉流。 */
+    RTSP;
 
     public static AccessVendor from(String raw) {
         if (raw == null || raw.isBlank()) {

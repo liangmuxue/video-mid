@@ -6,6 +6,7 @@ package com.jizhi.videomid.device;
 public final class VendorDevices {
 
     public static final String HIKVISION_UNSUPPORTED = "海康尚未对接";
+    public static final String RTSP_NO_PTZ = "该设备不支持云台";
 
     private VendorDevices() {
     }
@@ -17,7 +18,7 @@ public final class VendorDevices {
         try {
             return AccessVendor.from(device.getVendor());
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION");
+            throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP");
         }
     }
 }

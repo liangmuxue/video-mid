@@ -6,7 +6,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 每 2 分钟检查设备推流是否正常：未推流则标为「不可用」，恢复推流则回到「已启用」。
+ * 每 2 分钟检查推流设备是否在线：未推流则标为「不可用」，恢复推流则回到「已启用」。
+ * 直接拉流没人看时本来就不在线，不参与这个判断；若已被误标为不可用，则改回已启用。
  * 「已停用」不受巡检影响。
  */
 @Component

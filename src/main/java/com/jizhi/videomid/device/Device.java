@@ -9,7 +9,7 @@ public class Device {
     private Integer deviceType;
     private String name;
     private String platformId;
-    /** MOCK / UNIVIEW / HIKVISION。一台设备只对应一个平台。 */
+    /** MOCK / UNIVIEW / HIKVISION / RTSP。一台设备只对应一个平台。 */
     private String vendor;
     private Long folderId;
     private Integer status;
