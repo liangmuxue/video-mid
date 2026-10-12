@@ -217,11 +217,24 @@ public class DeviceService {
             d.setAccessError(existing.getAccessError());
         }
         assertLoginFree(d, existing.getId());
-        bindRecord(d, existing.getId());
+        if (sameRecordBinding(existing, d) && existing.getRecordChannel() != null) {
+            d.setRecordChannel(existing.getRecordChannel());
+            d.setRecordChannelName(existing.getRecordChannelName());
+        } else {
+            bindRecord(d, existing.getId());
+        }
         deviceRepository.update(d);
         deviceRepository.saveUniview(d);
         if (hasUniviewLogin(d)) {
-            syncUniviewStreams(d);
+            if (loginChanged) {
+                syncUniviewStreams(d);
+            } else {
+                try {
+                    syncUniviewStreams(d);
+                } catch (RuntimeException e) {
+                    log.warn("宇视码流未刷新，保留原码流 deviceId={} err={}", d.getDeviceId(), e.getMessage());
+                }
+            }
         } else if (AccessVendor.RTSP.name().equals(d.getVendor())) {
             rtspPullService.sync(d, req.getPullUrl());
         } else {
@@ -591,6 +604,11 @@ public class DeviceService {
             return null;
         }
         return value.trim();
+    }
+
+    private static boolean sameRecordBinding(Device existing, Device next) {
+        return Objects.equals(existing.getRecordDeviceId(), next.getRecordDeviceId())
+                && sameText(existing.getLanIp(), next.getLanIp());
     }
 
     private static boolean sameText(String a, String b) {
