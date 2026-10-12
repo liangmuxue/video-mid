@@ -56,29 +56,41 @@ public class Gb28181SipStackManager {
         stackProps.setProperty("gov.nist.javax.sip.REENTRANT_LISTENER", "true");
         stackProps.setProperty("gov.nist.javax.sip.MESSAGE_PROCESSOR_FACTORY",
                 "gov.nist.javax.sip.stack.NioMessageProcessorFactory");
-        stackProps.setProperty("gov.nist.javax.sip.STACK_LOGGER", "gov.nist.core.StackLoggerImpl");
-        stackProps.setProperty("gov.nist.javax.sip.SERVER_LOGGER", "gov.nist.core.ServerLoggerImpl");
         stackProps.setProperty("gov.nist.javax.sip.TRACE_LEVEL", "0");
 
-        sipStack = sipFactory.createSipStack(stackProps);
-        addressFactory = sipFactory.createAddressFactory();
-        headerFactory = sipFactory.createHeaderFactory();
-        messageFactory = sipFactory.createMessageFactory();
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(Gb28181SipStackManager.class.getClassLoader());
+        try {
+            sipStack = sipFactory.createSipStack(stackProps);
+            addressFactory = sipFactory.createAddressFactory();
+            headerFactory = sipFactory.createHeaderFactory();
+            messageFactory = sipFactory.createMessageFactory();
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
 
         String bindIp = props.getLive().getBindIp();
         if (bindIp == null || bindIp.isBlank()) {
             bindIp = "0.0.0.0";
         }
         int port = props.getUpper().getSipPort();
-        ListeningPoint lp = sipStack.createListeningPoint(bindIp.trim(), port, ListeningPoint.UDP);
-        sipProvider = sipStack.createSipProvider(lp);
+        ListeningPoint udp = sipStack.createListeningPoint(bindIp.trim(), port, ListeningPoint.UDP);
+        sipProvider = sipStack.createSipProvider(udp);
+        boolean tcpListening = false;
+        try {
+            ListeningPoint tcp = sipStack.createListeningPoint(bindIp.trim(), port, ListeningPoint.TCP);
+            sipProvider.addListeningPoint(tcp);
+            tcpListening = true;
+        } catch (Exception e) {
+            log.warn("[GB28181-SIP] TCP 监听失败 {}:{} err={}", bindIp, port, e.getMessage());
+        }
         sipProvider.addSipListener(listener);
         listener.bind(this);
         boundListener = listener;
 
         running = true;
-        log.info("[GB28181-SIP] JAIN-SIP 已监听 {}:{} upperId={}",
-                bindIp, port, props.getUpper().getSipId());
+        log.info("[GB28181-SIP] JAIN-SIP 已监听 {}:{} udp=true tcp={} upperId={}",
+                bindIp, port, tcpListening, props.getUpper().getSipId());
     }
 
     public synchronized void stop() {

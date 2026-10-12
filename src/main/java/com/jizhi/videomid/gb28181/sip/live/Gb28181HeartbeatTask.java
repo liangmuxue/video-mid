@@ -1,6 +1,7 @@
 package com.jizhi.videomid.gb28181.sip.live;
 
 import com.jizhi.videomid.config.Gb28181Properties;
+import com.jizhi.videomid.gb28181.live.Gb28181DeviceProvisioner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,17 +21,29 @@ public class Gb28181HeartbeatTask {
     private final Gb28181Properties props;
     private final Gb28181SipSessionStore sessionStore;
     private final Gb28181SipOutboundClient outboundClient;
+    private final Gb28181DeviceProvisioner deviceProvisioner;
 
     public Gb28181HeartbeatTask(Gb28181Properties props,
                                 Gb28181SipSessionStore sessionStore,
-                                Gb28181SipOutboundClient outboundClient) {
+                                Gb28181SipOutboundClient outboundClient,
+                                Gb28181DeviceProvisioner deviceProvisioner) {
         this.props = props;
         this.sessionStore = sessionStore;
         this.outboundClient = outboundClient;
+        this.deviceProvisioner = deviceProvisioner;
     }
 
     @Scheduled(fixedDelayString = "#{${gb28181.upper.heartbeat-interval:30} * 1000}")
     public void sendKeepalive() {
+        for (String deviceId : sessionStore.pollExpired()) {
+            sessionStore.ifStillAbsent(deviceId, id -> {
+                try {
+                    deviceProvisioner.markOffline(id);
+                } catch (Exception e) {
+                    log.warn("[GB28181-SIP] 注册过期下线失败 deviceId={} err={}", id, e.getMessage());
+                }
+            });
+        }
         if (!props.getLive().isEnableSipStack() || !outboundClient.isReady()) {
             return;
         }

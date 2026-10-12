@@ -18,7 +18,7 @@ public final class VendorDevices {
         try {
             return AccessVendor.from(device.getVendor());
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP");
+            throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP、GB28181");
         }
     }
 }

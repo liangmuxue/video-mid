@@ -136,6 +136,7 @@ import {
   startBizLive
 } from '../api/device'
 import { statusClass as deviceStatusClass, statusLabel as deviceStatusLabel } from '../utils/deviceStatus'
+import { gb28181Bye } from '../api/gb28181'
 
 const folderTree = ref([])
 const devices = ref([])
@@ -258,12 +259,21 @@ async function onToggleCheck({ device, checked }) {
   }
 }
 
+function stopGbSession(session) {
+  if (session?.transport === 'gb28181' && session.channelId) {
+    gb28181Bye(session.channelId).catch(() => {})
+  }
+}
+
 function uncheckDevice(deviceId) {
+  const session = liveSessions.value.find((s) => s.deviceId === deviceId)
+  stopGbSession(session)
   checkedIds.value = checkedIds.value.filter((id) => id !== deviceId)
   liveSessions.value = liveSessions.value.filter((s) => s.deviceId !== deviceId)
 }
 
 function clearAllLive() {
+  liveSessions.value.forEach(stopGbSession)
   checkedIds.value = []
   liveSessions.value = []
 }

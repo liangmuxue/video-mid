@@ -8,7 +8,9 @@ public enum AccessVendor {
     UNIVIEW,
     HIKVISION,
     /** 地址已经给出，由本服务按该 RTSP 拉流。 */
-    RTSP;
+    RTSP,
+    /** 摄像机向本服务注册国标，按视频通道自动入库。 */
+    GB28181;
 
     public static AccessVendor from(String raw) {
         if (raw == null || raw.isBlank()) {

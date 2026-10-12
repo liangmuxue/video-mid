@@ -41,12 +41,13 @@ public class ZlmRtpBridge {
         String app = gbProps.getLive().getZlmApp();
         int rtpPort = portAllocator.allocate();
         channelPorts.put(channelId.trim(), rtpPort);
-        int ssrc = ssrcSeq.getAndIncrement();
-        String ssrcHex = String.format("%08X", ssrc);
+        int ssrc = ssrcSeq.getAndIncrement() & 0x7fffffff;
+        String ssrcHex = String.format("%010d", ssrc % 10_000_000_000L);
 
+        boolean tcp = isTcp(gbProps.getMedia().getTransport());
         boolean zlmOk = false;
         try {
-            zlmOk = zlmClient.openRtpServer(rtpPort, streamId, app);
+            zlmOk = zlmClient.openRtpServer(rtpPort, streamId, app, tcp ? 1 : 0);
         } catch (Exception e) {
             log.warn("[GB28181-live] openRtpServer 失败 channelId={} port={} err={}", channelId, rtpPort, e.getMessage());
         }
@@ -81,6 +82,25 @@ public class ZlmRtpBridge {
         return m;
     }
 
+    public boolean waitUntilReady(String app, String streamId, long timeoutMs) {
+        if (app == null || app.isBlank() || streamId == null || streamId.isBlank()) {
+            return false;
+        }
+        long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
+        while (System.currentTimeMillis() < deadline) {
+            if (Boolean.TRUE.equals(zlmClient.isMediaOnline(app, streamId).orElse(false))) {
+                return true;
+            }
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return Boolean.TRUE.equals(zlmClient.isMediaOnline(app, streamId).orElse(false));
+    }
+
     public void closeReceive(String channelId) {
         if (channelId == null || channelId.isBlank()) {
             return;
@@ -97,6 +117,10 @@ public class ZlmRtpBridge {
         } catch (Exception e) {
             log.debug("[GB28181-live] closeRtpServer channelId={} err={}", id, e.getMessage());
         }
+    }
+
+    private static boolean isTcp(String transport) {
+        return transport != null && "TCP".equalsIgnoreCase(transport.trim());
     }
 
     private String streamIdFor(String channelId) {

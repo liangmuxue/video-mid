@@ -107,7 +107,7 @@
     <div v-if="formOpen" class="mask" @click.self="formOpen = false">
       <form class="modal" @submit.prevent="save">
         <h2>{{ editingId ? '编辑设备' : '新增设备' }}</h2>
-        <label><span>设备ID</span><input v-model.trim="form.deviceId" required :disabled="!!editingId" /></label>
+        <label><span>设备ID</span><input v-model.trim="form.deviceId" required :disabled="!!editingId" :placeholder="form.vendor === 'GB28181' ? '20位摄像机编号，类型132' : ''" /></label>
         <label><span>位置编号</span>
           <input v-model.number="form.deviceNo" type="number" min="0" step="1" placeholder="如 101，展示为 0101" />
         </label>
@@ -132,21 +132,27 @@
             <option :value="2">已停用</option>
           </select>
         </label>
-        <p class="tip">「不可用」只按推流是否在线自动判定。直接拉流没人看时仍保持已启用。选「已停用」后不会被巡检改写。</p>
+        <p class="tip">「不可用」对推流设备按是否在线自动判定。直接拉流没人看时仍保持已启用。国标设备注册后自动出现，掉线后变为不可用。选「已停用」后不会被自动改回。</p>
         <label><span>厂家</span><input v-model.trim="form.manufacturer" /></label>
         <label><span>型号</span><input v-model.trim="form.model" /></label>
         <label><span>安装地址</span><input v-model.trim="form.address" /></label>
         <label><span>网关ID</span><input v-model.trim="form.gatewayId" /></label>
         <label><span>平台ID</span><input v-model.trim="form.platformId" /></label>
         <label><span>接入平台</span>
-          <select v-model="form.vendor">
+          <select v-model="form.vendor" :disabled="!!editingId && form.vendor === 'GB28181'">
             <option value="MOCK">模拟</option>
             <option value="UNIVIEW">宇视</option>
             <option value="HIKVISION">海康</option>
             <option value="RTSP">直接拉流</option>
+            <option value="GB28181">国标</option>
           </select>
         </label>
-        <p class="tip">一台设备只对接一个平台。海康尚未接入。直接拉流只保存对方给的 RTSP，有人播放才拉。</p>
+        <p class="tip">一台设备只对接一个平台。海康尚未接入。直接拉流只保存对方给的 RTSP，有人播放才拉。国标可以先在这里编号，再去摄像机填写；也可以等摄像机注册后自动出现。</p>
+        <template v-if="form.vendor === 'GB28181'">
+          <label><span>视频通道ID</span><input v-model.trim="form.videoChannelId" required placeholder="20位，类型132，可与设备ID相同" /></label>
+          <label><span>音频通道ID</span><input v-model.trim="form.audioChannelId" required placeholder="20位，类型137" /></label>
+          <p class="tip">把设备ID、视频通道ID、音频通道ID原样填到摄像机的对应项。摄像机按这三个编号注册后，会对应到这台设备。</p>
+        </template>
         <template v-if="form.vendor === 'RTSP'">
           <label><span>拉流地址</span><input v-model.trim="form.pullUrl" placeholder="rtsp://主机:端口/路径" /></label>
           <p class="tip">编辑时留空则不修改。地址里的签名会保存，业务接口不返回这段原始地址。</p>
@@ -281,6 +287,7 @@ function vendorLabel(vendor) {
   if (vendor === 'UNIVIEW') return '宇视'
   if (vendor === 'HIKVISION') return '海康'
   if (vendor === 'RTSP') return '直接拉流'
+  if (vendor === 'GB28181') return '国标'
   return '模拟'
 }
 
@@ -337,7 +344,9 @@ const form = reactive({
   lanIp: '',
   recordDeviceId: null,
   recordChannel: null,
-  recordChannelName: ''
+  recordChannelName: '',
+  videoChannelId: '',
+  audioChannelId: ''
 })
 
 const folderFormOpen = ref(false)
@@ -504,7 +513,9 @@ function openDevice(d = null) {
     lanIp: d?.lanIp || '',
     recordDeviceId: d?.recordDeviceId ?? null,
     recordChannel: d?.recordChannel ?? null,
-    recordChannelName: d?.recordChannelName || ''
+    recordChannelName: d?.recordChannelName || '',
+    videoChannelId: d?.videoChannelId || '',
+    audioChannelId: d?.audioChannelId || ''
   })
   formOpen.value = true
 }
@@ -543,6 +554,10 @@ async function save() {
     delete payload.recordChannel
     delete payload.recordChannelName
     if (payload.vendor !== 'RTSP') payload.pullUrl = null
+    if (payload.vendor !== 'GB28181') {
+      payload.videoChannelId = null
+      payload.audioChannelId = null
+    }
     if (payload.vendor !== 'UNIVIEW') {
       payload.host = null
       payload.port = null

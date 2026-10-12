@@ -84,7 +84,9 @@ CREATE TABLE `device` (
   `gateway_id`    VARCHAR(64)  DEFAULT NULL COMMENT '边缘网关 ID',
   `longitude`     DOUBLE       DEFAULT NULL COMMENT '经度',
   `latitude`      DOUBLE       DEFAULT NULL COMMENT '纬度',
-  `vendor`        VARCHAR(16)  NOT NULL DEFAULT 'MOCK' COMMENT 'MOCK / UNIVIEW / HIKVISION，一台设备只对接一个平台',
+  `vendor`        VARCHAR(16)  NOT NULL DEFAULT 'MOCK' COMMENT 'MOCK / UNIVIEW / HIKVISION / RTSP / GB28181，一台设备只对接一个平台',
+  `gb_register_id` VARCHAR(32) DEFAULT NULL COMMENT '国标 REGISTER 的设备编号，视频通道注销时按它下线',
+  `gb_audio_id`   VARCHAR(32)  DEFAULT NULL COMMENT '国标音频通道编号，类型 137',
   `created_at`    BIGINT       NOT NULL COMMENT '创建时间（毫秒时间戳）',
   `updated_at`    BIGINT       NOT NULL COMMENT '更新时间（毫秒时间戳）',
   PRIMARY KEY (`id`),
@@ -93,6 +95,8 @@ CREATE TABLE `device` (
   KEY `idx_folder_id` (`folder_id`),
   KEY `idx_status` (`status`),
   KEY `idx_vendor` (`vendor`),
+  KEY `idx_gb_register_id` (`gb_register_id`),
+  UNIQUE KEY `uk_gb_audio_id` (`gb_audio_id`),
   KEY `idx_device_no` (`device_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='视频设备';
 

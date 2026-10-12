@@ -84,8 +84,8 @@ public class LiveGb28181SipService implements Gb28181SipPort {
         try {
             stackManager.start(sipListener);
         } catch (Exception e) {
-            startError = e.getMessage();
-            log.error("[GB28181-live] JAIN-SIP 启动失败: {}", e.getMessage(), e);
+            startError = rootMessage(e);
+            log.error("[GB28181-live] JAIN-SIP 启动失败: {}", startError, e);
         }
         started = true;
         log.info("[GB28181-live] 上级启动 catalogDevices={} sipStack={} sipSessions={}",
@@ -101,5 +101,21 @@ public class LiveGb28181SipService implements Gb28181SipPort {
 
     public void reloadCatalogFromDb() {
         seeder.seedFromDb();
+    }
+
+    private static String rootMessage(Throwable error) {
+        StringBuilder text = new StringBuilder();
+        Throwable current = error;
+        while (current != null) {
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                if (text.length() > 0) {
+                    text.append(" | ");
+                }
+                text.append(current.getMessage());
+            }
+            Throwable next = current.getCause();
+            current = next == current ? null : next;
+        }
+        return text.length() == 0 ? error.getClass().getSimpleName() : text.toString();
     }
 }

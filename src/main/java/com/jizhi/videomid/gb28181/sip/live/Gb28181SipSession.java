@@ -13,6 +13,9 @@ public class Gb28181SipSession {
     private final long expiresSeconds;
     private final Instant registeredAt;
     private volatile Instant expiresAt;
+    /** 最近一次 UDP 包的来源。邀请沿这条路回去，才能穿过 frp。 */
+    private volatile String signalHost;
+    private volatile int signalPort;
 
     public Gb28181SipSession(String deviceId,
                            String contactHost,
@@ -30,6 +33,24 @@ public class Gb28181SipSession {
         this.expiresAt = expiresSeconds <= 0
                 ? Instant.now()
                 : registeredAt.plusSeconds(expiresSeconds);
+        this.signalHost = this.contactHost;
+        this.signalPort = this.contactPort;
+    }
+
+    public void updateSignal(String host, int port) {
+        if (host == null || host.isBlank() || port <= 0) {
+            return;
+        }
+        this.signalHost = host.trim();
+        this.signalPort = port;
+    }
+
+    public String signalHost() {
+        return signalHost == null || signalHost.isBlank() ? contactHost : signalHost;
+    }
+
+    public int signalPort() {
+        return signalPort > 0 ? signalPort : contactPort;
     }
 
     public String getDeviceId() {

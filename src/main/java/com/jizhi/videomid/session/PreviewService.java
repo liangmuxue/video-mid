@@ -61,6 +61,9 @@ public class PreviewService {
         if (vendor == AccessVendor.HIKVISION) {
             throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
         }
+        if (vendor == AccessVendor.GB28181) {
+            throw new IllegalArgumentException("国标设备请从业务端直播");
+        }
         DeviceStream stream = streamRepository.findByDeviceIdAndType(deviceId, type)
                 .orElseThrow(() -> new IllegalArgumentException("码流未注册: " + deviceId + "/" + type));
         if (vendor == AccessVendor.RTSP) {

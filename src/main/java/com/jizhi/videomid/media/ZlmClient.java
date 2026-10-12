@@ -317,18 +317,20 @@ public class ZlmClient {
         }
     }
 
-    /** 国标 live：在 ZLM 开启 RTP 接收（GB28181 PS 流） */
-    public boolean openRtpServer(int port, String streamId, String app) {
+    /** 国标 live：在 ZLM 开启 RTP 接收。tcpMode 0=UDP，1=TCP 被动等待摄像机来连。 */
+    public boolean openRtpServer(int port, String streamId, String app, int tcpMode) {
         if (port <= 0 || streamId == null || streamId.isBlank()) {
             return false;
         }
         String rtpApp = (app == null || app.isBlank()) ? "rtp" : app.trim();
+        int mode = tcpMode == 1 ? 1 : 0;
         String url = api("/index/api/openRtpServer")
                 .queryParam("port", port)
                 .queryParam("stream_id", streamId.trim())
                 .queryParam("app", rtpApp)
+                .queryParam("tcp_mode", mode)
                 .toUriString();
-        log.info("[本服务→ZLM] openRtpServer port={} streamId={} app={}", port, streamId, rtpApp);
+        log.info("[本服务→ZLM] openRtpServer port={} streamId={} app={} tcpMode={}", port, streamId, rtpApp, mode);
         try {
             String body = restTemplate.getForObject(url, String.class);
             JsonNode resp = objectMapper.readTree(body);

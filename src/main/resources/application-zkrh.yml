@@ -42,23 +42,23 @@ uniview:
   nvr:
     library-path: /home/zkrh/videomid/lib
 
-# 国标 GB28181：前期 mock 模拟下级，live 接真实 SIP（不用 RTSP）
+# 国标 GB28181：live 时本服务作为 SIP 上级，在 sip-port 上收摄像机注册
 gb28181:
   enabled: true
-  data-source: mock
+  data-source: live
   prefer-for-biz-live: true
   upper:
     sip-id: "34020000002000000001"
     sip-domain: "3402000000"
     sip-ip: 119.3.161.125
-    sip-port: 5060
+    sip-port: 7095
     password: "12345678"
     register-expires: 3600
     heartbeat-interval: 30
   media:
-    rtp-port-min: 30000
-    rtp-port-max: 30500
-    transport: UDP
+    rtp-port-min: 7096
+    rtp-port-max: 7099
+    transport: TCP
   mock:
     auto-register: true
     preview-base-url: http://119.3.161.125:7094/live

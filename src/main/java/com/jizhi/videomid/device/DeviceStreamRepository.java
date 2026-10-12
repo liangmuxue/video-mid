@@ -73,6 +73,16 @@ public class DeviceStreamRepository {
         return list.stream().findFirst();
     }
 
+    public Optional<DeviceStream> findByChannelId(String channelId) {
+        if (channelId == null || channelId.isBlank()) {
+            return Optional.empty();
+        }
+        List<DeviceStream> list = jdbc.query(
+                "SELECT * FROM device_stream WHERE channel_id = ? LIMIT 1",
+                MAPPER, channelId.trim());
+        return list.stream().findFirst();
+    }
+
     public Optional<DeviceStream> findByDeviceIdAndType(String deviceId, String streamType) {
         List<DeviceStream> list = jdbc.query(
                 "SELECT * FROM device_stream WHERE device_id = ? AND stream_type = ? LIMIT 1",

@@ -2,6 +2,7 @@ package com.jizhi.videomid.device;
 
 import com.jizhi.videomid.device.dto.DeviceRequest;
 import com.jizhi.videomid.device.dto.StreamRegisterRequest;
+import com.jizhi.videomid.gb28181.Gb28181Ids;
 import com.jizhi.videomid.gb28181.Gb28181PlayService;
 import com.jizhi.videomid.integration.jizhiai.JizhiAiDeviceSyncClient;
 import com.jizhi.videomid.media.ZlmClient;
@@ -174,6 +175,9 @@ public class DeviceService {
             throw new IllegalArgumentException("deviceId 已存在");
         }
         Device d = fromDeviceRequest(req);
+        if (AccessVendor.GB28181.name().equals(d.getVendor())) {
+            prepareGb(d, req, null);
+        }
         assertLoginFree(d, null);
         bindRecord(d, null);
         long id = deviceRepository.insert(d);
@@ -183,6 +187,8 @@ public class DeviceService {
             syncUniviewStreams(d);
         } else if (AccessVendor.RTSP.name().equals(d.getVendor())) {
             rtspPullService.sync(d, req.getPullUrl());
+        } else if (AccessVendor.GB28181.name().equals(d.getVendor())) {
+            saveGbVideoChannel(d.getDeviceId(), req.getVideoChannelId(), d.getName());
         }
         Device persisted = deviceRepository.findById(id).orElse(d);
         notifyJizhiAiSave(persisted);
@@ -193,6 +199,9 @@ public class DeviceService {
     public Map<String, Object> updateDevice(Long id, DeviceRequest req) {
         Device existing = deviceRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("设备不存在"));
+        if (AccessVendor.GB28181.name().equals(existing.getVendor())) {
+            return updateGbDevice(existing, req);
+        }
         Device d = fromDeviceRequest(req);
         d.setId(existing.getId());
         d.setDeviceId(existing.getDeviceId());
@@ -388,7 +397,33 @@ public class DeviceService {
             case UNIVIEW -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
             case RTSP -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
             case MOCK -> startMockLive(deviceId);
+            case GB28181 -> gb28181PlayService.startLive(deviceId)
+                    .orElseThrow(() -> new IllegalArgumentException("国标点播未返回播放地址"));
         };
+    }
+
+    /** 国标设备可改资料和通道编号。设备编号、注册编号保持不变。 */
+    private Map<String, Object> updateGbDevice(Device existing, DeviceRequest req) {
+        prepareGb(existing, req, existing.getId());
+        existing.setDeviceNo(req.getDeviceNo());
+        existing.setDeviceType(DeviceType.normalize(req.getDeviceType()));
+        existing.setName(req.getName());
+        existing.setPlatformId(req.getPlatformId());
+        existing.setFolderId(req.getFolderId());
+        existing.setStatus(DeviceStatus.normalizeManual(req.getStatus() == null ? DeviceStatus.ENABLED : req.getStatus()));
+        existing.setManufacturer(req.getManufacturer());
+        existing.setModel(req.getModel());
+        existing.setAddress(req.getAddress());
+        existing.setPtzType(req.getPtzType() == null ? 0 : req.getPtzType());
+        existing.setGatewayId(req.getGatewayId());
+        existing.setLongitude(req.getLongitude());
+        existing.setLatitude(req.getLatitude());
+        existing.setVendor(AccessVendor.GB28181.name());
+        deviceRepository.update(existing);
+        saveGbVideoChannel(existing.getDeviceId(), req.getVideoChannelId(), existing.getName());
+        Device persisted = deviceRepository.findById(existing.getId()).orElse(existing);
+        notifyJizhiAiUpdate(persisted);
+        return toDeviceView(persisted);
     }
 
     private Map<String, Object> startMockLive(String deviceId) {
@@ -468,13 +503,79 @@ public class DeviceService {
         return d;
     }
 
+    private void prepareGb(Device device, DeviceRequest req, Long excludeId) {
+        String deviceId = device.getDeviceId() == null ? "" : device.getDeviceId().trim();
+        if (!Gb28181Ids.isVideoChannel(deviceId)) {
+            throw new IllegalArgumentException("国标设备ID必须是20位数字，类型为131或132");
+        }
+        String video = requireGbVideo(req.getVideoChannelId());
+        String audio = requireGbAudio(req.getAudioChannelId());
+        if (audio.equals(deviceId) || audio.equals(video)) {
+            throw new IllegalArgumentException("音频通道ID不能和设备ID、视频通道ID相同");
+        }
+        streamRepository.findByChannelId(video).ifPresent(stream -> {
+            if (!deviceId.equals(stream.getDeviceId())) {
+                throw new IllegalArgumentException("该视频通道ID已被设备 " + stream.getDeviceId() + " 使用");
+            }
+        });
+        deviceRepository.findOtherByGbAudio(audio, excludeId).ifPresent(other -> {
+            throw new IllegalArgumentException("该音频通道ID已被设备 " + other.getDeviceId() + " 使用");
+        });
+        device.setGbAudioId(audio);
+        if (device.getGbRegisterId() == null || device.getGbRegisterId().isBlank()) {
+            device.setGbRegisterId(deviceId);
+        }
+    }
+
+    private void saveGbVideoChannel(String deviceId, String videoChannelId, String name) {
+        String video = requireGbVideo(videoChannelId);
+        String streamName = name == null || name.isBlank() ? video : name.trim();
+        Optional<DeviceStream> main = streamRepository.findByDeviceIdAndType(deviceId, "main");
+        if (main.isPresent()) {
+            DeviceStream stream = main.get();
+            stream.setChannelId(video);
+            if (stream.getStreamName() == null || stream.getStreamName().isBlank()) {
+                stream.setStreamName(streamName);
+            }
+            streamRepository.update(stream);
+            if (!Boolean.TRUE.equals(stream.getLiveEnabled())
+                    && streamRepository.findLiveByDeviceId(deviceId).isEmpty()) {
+                streamRepository.setLive(stream.getId(), true);
+            }
+            return;
+        }
+        DeviceStream stream = new DeviceStream();
+        stream.setDeviceId(deviceId);
+        stream.setStreamType("main");
+        stream.setChannelId(video);
+        stream.setStreamName(streamName);
+        stream.setStatus("OFF");
+        stream.setSortNo(1);
+        stream.setLiveEnabled(true);
+        streamRepository.insert(stream);
+    }
+
+    private static String requireGbVideo(String videoChannelId) {
+        if (!Gb28181Ids.isVideoChannel(videoChannelId)) {
+            throw new IllegalArgumentException("视频通道ID必须是20位数字，类型为131或132");
+        }
+        return videoChannelId.trim();
+    }
+
+    private static String requireGbAudio(String audioChannelId) {
+        if (!Gb28181Ids.isAudioChannel(audioChannelId)) {
+            throw new IllegalArgumentException("音频通道ID必须是20位数字，类型为137");
+        }
+        return audioChannelId.trim();
+    }
+
     private static AccessVendor resolveVendor(DeviceRequest req, Device d) {
         String raw = req.getVendor();
         if (raw != null && !raw.isBlank()) {
             try {
                 return AccessVendor.from(raw);
             } catch (IllegalArgumentException ex) {
-                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP");
+                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP、GB28181");
             }
         }
         if (d.getHost() != null || d.getLanIp() != null || d.getRecordDeviceId() != null) {
@@ -619,7 +720,7 @@ public class DeviceService {
 
     /**
      * 定时巡检：非「已停用」的推流设备按 ZLM 在线情况切换 已启用 / 不可用。
-     * 宇视登录设备和直接拉流不走这里：没人看时本来就不在 ZLM 上。
+     * 宇视登录设备、直接拉流和国标不走这里。国标上下线跟着 SIP 注册。
      * ZLM 接口失败时跳过该设备，避免误杀。
      */
     public void reconcilePushStatus() {
@@ -631,6 +732,9 @@ public class DeviceService {
                 continue;
             }
             if (hasUniviewLogin(d)) {
+                continue;
+            }
+            if (AccessVendor.GB28181.name().equals(d.getVendor())) {
                 continue;
             }
             if (AccessVendor.RTSP.name().equals(d.getVendor())) {
@@ -720,6 +824,11 @@ public class DeviceService {
         if (AccessVendor.RTSP.name().equals(d.getVendor())) {
             streamRepository.findByDeviceIdAndType(d.getDeviceId(), "main")
                     .ifPresent(s -> m.put("pullUrl", s.getPullUrl()));
+        }
+        if (AccessVendor.GB28181.name().equals(d.getVendor())) {
+            m.put("audioChannelId", d.getGbAudioId());
+            streamRepository.findByDeviceIdAndType(d.getDeviceId(), "main")
+                    .ifPresent(s -> m.put("videoChannelId", s.getChannelId()));
         }
         m.put("folderId", d.getFolderId());
         m.put("status", DeviceStatus.normalize(d.getStatus()));

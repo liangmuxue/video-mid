@@ -9,8 +9,12 @@ public class Device {
     private Integer deviceType;
     private String name;
     private String platformId;
-    /** MOCK / UNIVIEW / HIKVISION / RTSP。一台设备只对应一个平台。 */
+    /** MOCK / UNIVIEW / HIKVISION / RTSP / GB28181。一台设备只对应一个平台。 */
     private String vendor;
+    /** 国标 REGISTER 的 20 位设备编号。视频通道设备用它在注销时一起下线。 */
+    private String gbRegisterId;
+    /** 国标音频通道编号，类型 137。 */
+    private String gbAudioId;
     private Long folderId;
     private Integer status;
     private String manufacturer;
@@ -48,6 +52,10 @@ public class Device {
     public void setPlatformId(String platformId) { this.platformId = platformId; }
     public String getVendor() { return vendor; }
     public void setVendor(String vendor) { this.vendor = vendor; }
+    public String getGbRegisterId() { return gbRegisterId; }
+    public void setGbRegisterId(String gbRegisterId) { this.gbRegisterId = gbRegisterId; }
+    public String getGbAudioId() { return gbAudioId; }
+    public void setGbAudioId(String gbAudioId) { this.gbAudioId = gbAudioId; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
     public Integer getStatus() { return status; }

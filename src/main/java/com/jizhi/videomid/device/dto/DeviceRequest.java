@@ -11,8 +11,12 @@ public class DeviceRequest {
     private Integer deviceType;
     private String name;
     private String platformId;
-    /** MOCK / UNIVIEW / HIKVISION / RTSP */
+    /** MOCK / UNIVIEW / HIKVISION / RTSP / GB28181 */
     private String vendor;
+    /** vendor=GB28181 时的视频通道编号。 */
+    private String videoChannelId;
+    /** vendor=GB28181 时的音频通道编号。 */
+    private String audioChannelId;
     /** vendor=RTSP 时的拉流地址。编辑时留空表示不修改。 */
     private String pullUrl;
     private Long folderId;
@@ -45,6 +49,10 @@ public class DeviceRequest {
     public void setPlatformId(String platformId) { this.platformId = platformId; }
     public String getVendor() { return vendor; }
     public void setVendor(String vendor) { this.vendor = vendor; }
+    public String getVideoChannelId() { return videoChannelId; }
+    public void setVideoChannelId(String videoChannelId) { this.videoChannelId = videoChannelId; }
+    public String getAudioChannelId() { return audioChannelId; }
+    public void setAudioChannelId(String audioChannelId) { this.audioChannelId = audioChannelId; }
     public String getPullUrl() { return pullUrl; }
     public void setPullUrl(String pullUrl) { this.pullUrl = pullUrl; }
     public Long getFolderId() { return folderId; }

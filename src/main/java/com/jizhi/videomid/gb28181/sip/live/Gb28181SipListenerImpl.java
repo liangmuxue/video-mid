@@ -1,6 +1,7 @@
 package com.jizhi.videomid.gb28181.sip.live;
 
 import com.jizhi.videomid.config.Gb28181Properties;
+import com.jizhi.videomid.gb28181.live.Gb28181DeviceProvisioner;
 import com.jizhi.videomid.gb28181.live.ZlmRtpBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,8 @@ import javax.sip.header.ExpiresHeader;
 import javax.sip.header.WWWAuthenticateHeader;
 import javax.sip.message.Request;
 import javax.sip.message.Response;
+import java.net.InetAddress;
+import gov.nist.javax.sip.message.SIPRequest;
 import java.nio.charset.Charset;
 import java.util.Iterator;
 import java.util.List;
@@ -41,6 +44,7 @@ public class Gb28181SipListenerImpl implements SipListener {
     private final Gb28181SipResponseHandler responseHandler;
     private final Gb28181InviteSessionStore inviteStore;
     private final ZlmRtpBridge rtpBridge;
+    private final Gb28181DeviceProvisioner deviceProvisioner;
 
     private Gb28181SipStackManager stackManager;
 
@@ -52,7 +56,8 @@ public class Gb28181SipListenerImpl implements SipListener {
                                     Gb28181DigestAuth digestAuth,
                                     Gb28181SipResponseHandler responseHandler,
                                     Gb28181InviteSessionStore inviteStore,
-                                    ZlmRtpBridge rtpBridge) {
+                                    ZlmRtpBridge rtpBridge,
+                                    Gb28181DeviceProvisioner deviceProvisioner) {
         this.props = props;
         this.sessionStore = sessionStore;
         this.catalogMerger = catalogMerger;
@@ -62,6 +67,7 @@ public class Gb28181SipListenerImpl implements SipListener {
         this.responseHandler = responseHandler;
         this.inviteStore = inviteStore;
         this.rtpBridge = rtpBridge;
+        this.deviceProvisioner = deviceProvisioner;
     }
 
     void bind(Gb28181SipStackManager stackManager) {
@@ -116,6 +122,7 @@ public class Gb28181SipListenerImpl implements SipListener {
             sessionStore.remove(deviceId);
             sendResponse(event, Response.OK);
             log.info("[GB28181-SIP] REGISTER 注销 deviceId={}", deviceId);
+            sessionStore.ifStillAbsent(deviceId, this::markOffline);
             return;
         }
 
@@ -130,23 +137,74 @@ public class Gb28181SipListenerImpl implements SipListener {
         int port = uri.getPort() > 0 ? uri.getPort() : 5060;
         String transport = uri.getTransportParam();
         if (transport == null || transport.isBlank()) {
+            javax.sip.header.ViaHeader via = (javax.sip.header.ViaHeader) request.getHeader(javax.sip.header.ViaHeader.NAME);
+            transport = via == null ? null : via.getTransport();
+        }
+        if (transport == null || transport.isBlank()) {
             transport = "UDP";
         }
 
         Gb28181SipSession session = new Gb28181SipSession(
                 deviceId, host, port, transport, contact.toString(), expires);
-        sessionStore.upsert(session);
+        rememberSignalPath(session, request);
+        sessionStore.upsert(session, deviceProvisioner::markOnline);
         sendResponse(event, Response.OK);
-        log.info("[GB28181-SIP] REGISTER 成功 deviceId={} contact={}:{} expires={}",
-                deviceId, host, port, expires);
+        log.info("[GB28181-SIP] REGISTER 成功 deviceId={} contact={}:{} signal={}:{} expires={}",
+                deviceId, host, port, session.signalHost(), session.signalPort(), expires);
 
         if (props.getLive().isAutoCatalogQuery()) {
             outboundClient.sendCatalogQuery(deviceId);
+        }
+        scheduleProvision(deviceId);
+    }
+
+    private void scheduleProvision(String deviceId) {
+        try {
+            deviceProvisioner.scheduleRegisterFallback(deviceId);
+        } catch (Exception e) {
+            log.warn("[GB28181-SIP] 注册入库调度失败 deviceId={} err={}", deviceId, e.getMessage());
+        }
+    }
+
+    private void provisionCatalog(String registerId, List<Map<String, String>> items) {
+        try {
+            deviceProvisioner.provisionCatalog(registerId, items);
+        } catch (Exception e) {
+            log.warn("[GB28181-SIP] 目录入库失败 deviceId={} err={}", registerId, e.getMessage());
+        }
+    }
+
+    private static void rememberSignalPath(Gb28181SipSession session, Request request) {
+        if (!(request instanceof SIPRequest sip)) {
+            return;
+        }
+        // getRemotePort() 是摄像机 Via 里的 5060，不是这个 UDP 包的来源端口。
+        // 包要从 frp 原路回去，必须用真正的来源地址。
+        InetAddress packet = sip.getPeerPacketSourceAddress();
+        int packetPort = sip.getPeerPacketSourcePort();
+        if (packet != null && packetPort > 0) {
+            session.updateSignal(packet.getHostAddress(), packetPort);
+            return;
+        }
+        InetAddress remote = sip.getRemoteAddress();
+        int remotePort = sip.getRemotePort();
+        if (remote == null || remotePort <= 0) {
+            return;
+        }
+        session.updateSignal(remote.getHostAddress(), remotePort);
+    }
+
+    private void markOffline(String deviceId) {
+        try {
+            deviceProvisioner.markOffline(deviceId);
+        } catch (Exception e) {
+            log.warn("[GB28181-SIP] 设备下线失败 deviceId={} err={}", deviceId, e.getMessage());
         }
     }
 
     private void handleMessage(RequestEvent event) throws Exception {
         Request request = event.getRequest();
+        sessionStore.findByDeviceId(sipUser(request)).ifPresent(session -> rememberSignalPath(session, request));
         byte[] raw = request.getRawContent();
         String body = raw == null ? "" : new String(raw, GB2312);
 
@@ -159,6 +217,7 @@ public class Gb28181SipListenerImpl implements SipListener {
             if (complete.isPresent()) {
                 catalogMerger.mergeCatalogResponse(rootId, complete.get());
                 log.info("[GB28181-SIP] Catalog 完成 deviceId={} items={}", rootId, complete.get().size());
+                provisionCatalog(rootId, complete.get());
             } else {
                 int sum = Gb28181XmlHelper.parseSumNum(body);
                 log.info("[GB28181-SIP] Catalog 分包 deviceId={} sumNum={}", rootId, sum);

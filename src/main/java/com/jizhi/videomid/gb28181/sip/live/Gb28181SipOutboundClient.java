@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import javax.sip.ClientTransaction;
 import javax.sip.Dialog;
 import javax.sip.DialogState;
+import javax.sip.ListeningPoint;
 import javax.sip.address.Address;
 import javax.sip.address.SipURI;
 import javax.sip.header.CSeqHeader;
@@ -92,7 +93,8 @@ public class Gb28181SipOutboundClient {
                                               String gbDeviceId,
                                               int rtpPort,
                                               String ssrcHex,
-                                              String streamId) {
+                                              String streamId,
+                                              boolean tcpMedia) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sent", false);
         if (!isReady()) {
@@ -105,7 +107,7 @@ public class Gb28181SipOutboundClient {
             return result;
         }
         try {
-            String sdp = buildInviteSdp(stackManager.mediaIp(), rtpPort, ssrcHex);
+            String sdp = buildInviteSdp(stackManager.mediaIp(), rtpPort, ssrcHex, tcpMedia);
             Request invite = buildInviteRequest(session.get(), channelId, sdp);
             CallIdHeader callId = (CallIdHeader) invite.getHeader(CallIdHeader.NAME);
             inviteStore.register(new Gb28181InviteSession(
@@ -118,9 +120,10 @@ public class Gb28181SipOutboundClient {
             result.put("gbDeviceId", gbDeviceId);
             result.put("rtpPort", rtpPort);
             result.put("ssrc", ssrcHex);
-            result.put("contact", session.get().getContactHost() + ":" + session.get().getContactPort());
-            log.info("[GB28181-SIP] INVITE 已发送 channelId={} deviceId={} rtpPort={}",
-                    channelId, gbDeviceId, rtpPort);
+            result.put("contact", session.get().signalHost() + ":" + session.get().signalPort());
+            log.info("[GB28181-SIP] INVITE 已发送 channelId={} deviceId={} rtpPort={} media={} signal={}:{}",
+                    channelId, gbDeviceId, rtpPort, tcpMedia ? "TCP" : "UDP",
+                    session.get().signalHost(), session.get().signalPort());
         } catch (Exception e) {
             result.put("reason", e.getMessage());
             log.warn("[GB28181-SIP] INVITE 失败 channelId={} err={}", channelId, e.getMessage());
@@ -167,7 +170,8 @@ public class Gb28181SipOutboundClient {
         Request request = buildRequestBase(session, channelId, Request.INVITE);
         ContentTypeHeader ct = stackManager.headerFactory().createContentTypeHeader("application", "sdp");
         request.setContent(sdp.getBytes(), ct);
-        SubjectHeader subject = stackManager.headerFactory().createSubjectHeader(channelId + ":0,0");
+        SubjectHeader subject = stackManager.headerFactory().createSubjectHeader(
+                channelId + ":0," + stackManager.upperSipId() + ":0");
         request.addHeader(subject);
         return request;
     }
@@ -177,8 +181,8 @@ public class Gb28181SipOutboundClient {
         String upperId = stackManager.upperSipId();
 
         SipURI requestUri = stackManager.addressFactory().createSipURI(targetDeviceId, domain);
-        requestUri.setPort(session.getContactPort());
-        requestUri.setHost(session.getContactHost());
+        requestUri.setPort(session.signalPort());
+        requestUri.setHost(session.signalHost());
         requestUri.setTransportParam(session.getTransport().toLowerCase());
 
         Address fromAddress = stackManager.addressFactory().createAddress(
@@ -191,8 +195,14 @@ public class Gb28181SipOutboundClient {
 
         List<ViaHeader> viaHeaders = new ArrayList<>();
         String host = stackManager.mediaIp();
-        int port = stackManager.sipProvider().getListeningPoint("udp").getPort();
-        ViaHeader via = stackManager.headerFactory().createViaHeader(host, port, "udp", tag());
+        String viaTransport = "TCP".equalsIgnoreCase(session.getTransport()) ? "tcp" : "udp";
+        ListeningPoint listeningPoint = stackManager.sipProvider().getListeningPoint(viaTransport);
+        if (listeningPoint == null) {
+            viaTransport = "udp";
+            listeningPoint = stackManager.sipProvider().getListeningPoint(viaTransport);
+        }
+        int port = listeningPoint.getPort();
+        ViaHeader via = stackManager.headerFactory().createViaHeader(host, port, viaTransport, tag());
         viaHeaders.add(via);
 
         CallIdHeader callId = stackManager.sipProvider().getNewCallId();
@@ -204,23 +214,53 @@ public class Gb28181SipOutboundClient {
 
         SipURI contactUri = stackManager.addressFactory().createSipURI(upperId, host);
         contactUri.setPort(port);
+        contactUri.setTransportParam(viaTransport);
         Address contactAddress = stackManager.addressFactory().createAddress(contactUri);
         ContactHeader contact = stackManager.headerFactory().createContactHeader(contactAddress);
         request.addHeader(contact);
         return request;
     }
 
-    static String buildInviteSdp(String mediaIp, int rtpPort, String ssrcHex) {
-        String y = ssrcHex == null ? "0100000001" : ssrcHex.replaceAll("^0x", "");
+    static String buildInviteSdp(String mediaIp, int rtpPort, String ssrc) {
+        return buildInviteSdp(mediaIp, rtpPort, ssrc, false);
+    }
+
+    /** tcp 时平台监听，摄像机主动连上来。 */
+    static String buildInviteSdp(String mediaIp, int rtpPort, String ssrc, boolean tcp) {
+        String y = gbSsrc(ssrc);
+        String protocol = tcp ? "TCP/RTP/AVP" : "RTP/AVP";
+        String setup = tcp ? "a=setup:passive\r\na=connection:new\r\n" : "";
         return "v=0\r\n"
                 + "o=34020000002000000001 0 0 IN IP4 " + mediaIp + "\r\n"
                 + "s=Play\r\n"
                 + "c=IN IP4 " + mediaIp + "\r\n"
                 + "t=0 0\r\n"
-                + "m=video " + rtpPort + " RTP/AVP 96\r\n"
+                + "m=video " + rtpPort + " " + protocol + " 96\r\n"
+                + "a=recvonly\r\n"
                 + "a=rtpmap:96 PS/90000\r\n"
-                + "a=sendonly\r\n"
+                + setup
                 + "y=" + y + "\r\n";
+    }
+
+    /** 国标 y= 是 10 位十进制 SSRC。 */
+    static String gbSsrc(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "0100000001";
+        }
+        String value = raw.trim();
+        if (value.startsWith("0x") || value.startsWith("0X")) {
+            value = value.substring(2);
+        }
+        boolean hex = value.chars().anyMatch(c -> (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+        try {
+            long number = hex ? Long.parseLong(value, 16) : Long.parseLong(value);
+            if (number < 0) {
+                number = 0;
+            }
+            return String.format("%010d", number % 10_000_000_000L);
+        } catch (NumberFormatException e) {
+            return "0100000001";
+        }
     }
 
     private static String tag() {

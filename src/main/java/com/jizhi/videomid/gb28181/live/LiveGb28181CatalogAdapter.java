@@ -54,25 +54,48 @@ public class LiveGb28181CatalogAdapter implements Gb28181CatalogPort {
         result.put("deviceId", ch.get("deviceId"));
         result.put("deviceName", ch.get("deviceName"));
 
-        if (props.getLive().isSendInviteOnPlay() && sipClient.isReady()) {
-            Object gbDeviceId = ch.get("gbDeviceId");
-            Object rtpPort = result.get("rtpPort");
-            Object ssrc = result.get("ssrc");
-            Object streamId = result.get("streamId");
-            if (gbDeviceId != null && rtpPort instanceof Number n) {
-                Map<String, Object> sipInvite = sipClient.sendPlayInvite(
-                        channelId,
-                        String.valueOf(gbDeviceId),
-                        n.intValue(),
-                        String.valueOf(ssrc),
-                        streamId != null ? String.valueOf(streamId) : channelId);
-                result.put("sipInvite", sipInvite);
-                if (Boolean.TRUE.equals(sipInvite.get("sent"))) {
-                    result.put("signaling", "SIP INVITE 已发送");
-                } else {
-                    result.put("signaling", "SIP INVITE 未发送: " + sipInvite.get("reason"));
-                }
-            }
+        if (!Boolean.TRUE.equals(result.get("zlmRtpReady"))) {
+            rtpBridge.closeReceive(channelId);
+            throw new IllegalArgumentException("视频端口没有打开");
+        }
+        if (!(props.getLive().isSendInviteOnPlay() && sipClient.isReady())) {
+            rtpBridge.closeReceive(channelId);
+            throw new IllegalArgumentException("国标信令未就绪");
+        }
+        Object gbDeviceId = ch.get("gbDeviceId");
+        Object rtpPort = result.get("rtpPort");
+        Object ssrc = result.get("ssrc");
+        Object streamId = result.get("streamId");
+        if (!(rtpPort instanceof Number n) || gbDeviceId == null) {
+            rtpBridge.closeReceive(channelId);
+            throw new IllegalArgumentException("国标通道缺少注册编号");
+        }
+        boolean tcpMedia = "TCP".equalsIgnoreCase(props.getMedia().getTransport());
+        Map<String, Object> sipInvite = sipClient.sendPlayInvite(
+                channelId,
+                String.valueOf(gbDeviceId),
+                n.intValue(),
+                String.valueOf(ssrc),
+                streamId != null ? String.valueOf(streamId) : channelId,
+                tcpMedia);
+        result.put("sipInvite", sipInvite);
+        if (!Boolean.TRUE.equals(sipInvite.get("sent"))) {
+            rtpBridge.closeReceive(channelId);
+            Object reason = sipInvite.get("reason");
+            throw new IllegalArgumentException(reason == null ? "国标邀请没有发出" : String.valueOf(reason));
+        }
+        result.put("signaling", "SIP INVITE 已发送");
+        String app = result.get("zlmApp") == null ? "" : String.valueOf(result.get("zlmApp"));
+        String stream = streamId == null ? "" : String.valueOf(streamId);
+        long waitMs = tcpMedia ? 12_000 : 8_000;
+        if (!rtpBridge.waitUntilReady(app, stream, waitMs)) {
+            sipClient.sendBye(channelId);
+            rtpBridge.closeReceive(channelId);
+            throw new IllegalArgumentException("摄像机没有把视频推上来");
+        }
+        Object rtpPlayUrl = result.get("rtpPlayUrl");
+        if (rtpPlayUrl != null && !String.valueOf(rtpPlayUrl).isBlank()) {
+            result.put("playUrl", rtpPlayUrl);
         }
         return result;
     }

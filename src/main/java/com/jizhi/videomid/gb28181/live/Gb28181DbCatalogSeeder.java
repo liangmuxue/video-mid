@@ -76,6 +76,12 @@ public class Gb28181DbCatalogSeeder {
     }
 
     private static String gbDeviceId(Device d) {
+        if ("GB28181".equals(d.getVendor())) {
+            if (d.getGbRegisterId() != null && !d.getGbRegisterId().isBlank()) {
+                return d.getGbRegisterId();
+            }
+            return d.getDeviceId();
+        }
         if (d.getPlatformId() != null && !d.getPlatformId().isBlank()) {
             return d.getPlatformId();
         }
