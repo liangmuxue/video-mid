@@ -8,6 +8,8 @@ import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
 import com.jizhi.videomid.device.DeviceType;
 import com.jizhi.videomid.gb28181.Gb28181Ids;
+import com.jizhi.videomid.gb28181.sip.live.Gb28181InviteSession;
+import com.jizhi.videomid.gb28181.sip.live.Gb28181InviteSessionStore;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,7 @@ public class Gb28181DeviceProvisioner {
     private final DeviceRepository deviceRepository;
     private final DeviceStreamRepository streamRepository;
     private final Gb28181DeviceRegistry registry;
+    private final Gb28181InviteSessionStore inviteSessionStore;
     private final TransactionTemplate transactionTemplate;
     private final ConcurrentHashMap<String, Object> locks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> fallbackPending = new ConcurrentHashMap<>();
@@ -53,10 +56,12 @@ public class Gb28181DeviceProvisioner {
     public Gb28181DeviceProvisioner(DeviceRepository deviceRepository,
                                     DeviceStreamRepository streamRepository,
                                     Gb28181DeviceRegistry registry,
+                                    Gb28181InviteSessionStore inviteSessionStore,
                                     PlatformTransactionManager transactionManager) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.registry = registry;
+        this.inviteSessionStore = inviteSessionStore;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -115,9 +120,24 @@ public class Gb28181DeviceProvisioner {
             if (!DeviceStatus.isEnabled(status)) {
                 continue;
             }
+            if (isLiveInviteActive(device)) {
+                log.info("[GB28181] 注册过期但仍在点播，暂不下线 deviceId={}", device.getDeviceId());
+                continue;
+            }
             deviceRepository.updateStatus(device.getId(), DeviceStatus.UNAVAILABLE);
             log.info("[GB28181] 设备下线 deviceId={}", device.getDeviceId());
         }
+    }
+
+    private boolean isLiveInviteActive(Device device) {
+        String channelId = streamRepository.findByDeviceIdAndType(device.getDeviceId(), "main")
+                .map(DeviceStream::getChannelId)
+                .filter(c -> c != null && !c.isBlank())
+                .orElse(device.getDeviceId());
+        return inviteSessionStore.findByChannelId(channelId)
+                .map(s -> s.getStatus() == Gb28181InviteSession.Status.PENDING
+                        || s.getStatus() == Gb28181InviteSession.Status.PLAYING)
+                .orElse(false);
     }
 
     private void upsert(String channelId, String registerId, String name, String manufacturer, String model, String audioId) {

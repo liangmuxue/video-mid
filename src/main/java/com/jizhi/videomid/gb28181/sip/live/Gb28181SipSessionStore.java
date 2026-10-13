@@ -69,6 +69,26 @@ public class Gb28181SipSessionStore {
         return locks.computeIfAbsent(deviceId, key -> new Object());
     }
 
+    /**
+     * 下级 Keepalive / MESSAGE 时续期注册，避免只发心跳不重 REGISTER 时被误判过期下线。
+     */
+    public void renewRegistration(String deviceId, long expiresSeconds, Consumer<Gb28181SipSession> whileActive) {
+        if (deviceId == null || deviceId.isBlank() || expiresSeconds <= 0) {
+            return;
+        }
+        String id = deviceId.trim();
+        synchronized (lock(id)) {
+            Gb28181SipSession session = byDeviceId.get(id);
+            if (session == null) {
+                return;
+            }
+            session.refreshExpiry(expiresSeconds);
+            if (whileActive != null) {
+                whileActive.accept(session);
+            }
+        }
+    }
+
     public Optional<Gb28181SipSession> findByDeviceId(String deviceId) {
         if (deviceId == null || deviceId.isBlank()) {
             return Optional.empty();

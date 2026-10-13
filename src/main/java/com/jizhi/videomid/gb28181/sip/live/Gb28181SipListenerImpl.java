@@ -144,8 +144,9 @@ public class Gb28181SipListenerImpl implements SipListener {
             transport = "UDP";
         }
 
+        long renewSeconds = expires > 0 ? expires : registrationRenewSeconds();
         Gb28181SipSession session = new Gb28181SipSession(
-                deviceId, host, port, transport, contact.toString(), expires);
+                deviceId, host, port, transport, contact.toString(), renewSeconds);
         rememberSignalPath(session, request);
         sessionStore.upsert(session, deviceProvisioner::markOnline);
         sendResponse(event, Response.OK);
@@ -204,7 +205,9 @@ public class Gb28181SipListenerImpl implements SipListener {
 
     private void handleMessage(RequestEvent event) throws Exception {
         Request request = event.getRequest();
-        sessionStore.findByDeviceId(sipUser(request)).ifPresent(session -> rememberSignalPath(session, request));
+        String deviceId = sipUser(request);
+        long renewSeconds = registrationRenewSeconds();
+        sessionStore.renewRegistration(deviceId, renewSeconds, session -> rememberSignalPath(session, request));
         byte[] raw = request.getRawContent();
         String body = raw == null ? "" : new String(raw, GB2312);
 
@@ -223,10 +226,16 @@ public class Gb28181SipListenerImpl implements SipListener {
                 log.info("[GB28181-SIP] Catalog 分包 deviceId={} sumNum={}", rootId, sum);
             }
         } else if (Gb28181XmlHelper.isKeepalive(body)) {
-            log.debug("[GB28181-SIP] Keepalive from {}", sipUser(request));
+            log.debug("[GB28181-SIP] Keepalive from {} renew={}s", deviceId, renewSeconds);
         }
 
         sendResponse(event, Response.OK);
+    }
+
+    /** 续期时长：优先用下级 REGISTER 里的 Expires，否则用配置 register-expires。 */
+    private long registrationRenewSeconds() {
+        long configured = props.getUpper().getRegisterExpires();
+        return configured > 0 ? configured : 3600;
     }
 
     private void handleBye(RequestEvent event) throws Exception {
