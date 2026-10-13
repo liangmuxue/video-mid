@@ -93,14 +93,17 @@ public class Gb28181SipSessionStore {
         if (deviceId == null || deviceId.isBlank()) {
             return Optional.empty();
         }
-        Gb28181SipSession s = byDeviceId.get(deviceId.trim());
-        if (s == null || s.isExpired()) {
-            if (s != null && byDeviceId.remove(deviceId.trim(), s)) {
-                expiredIds.add(deviceId.trim());
+        String id = deviceId.trim();
+        synchronized (lock(id)) {
+            Gb28181SipSession s = byDeviceId.get(id);
+            if (s == null || s.isExpired()) {
+                if (s != null && byDeviceId.remove(id, s)) {
+                    expiredIds.add(id);
+                }
+                return Optional.empty();
             }
-            return Optional.empty();
+            return Optional.of(s);
         }
-        return Optional.of(s);
     }
 
     public int activeCount() {
@@ -143,9 +146,12 @@ public class Gb28181SipSessionStore {
     }
 
     private void purgeExpired() {
-        for (Map.Entry<String, Gb28181SipSession> entry : byDeviceId.entrySet()) {
-            if (entry.getValue().isExpired() && byDeviceId.remove(entry.getKey(), entry.getValue())) {
-                expiredIds.add(entry.getKey());
+        for (String id : new ArrayList<>(byDeviceId.keySet())) {
+            synchronized (lock(id)) {
+                Gb28181SipSession current = byDeviceId.get(id);
+                if (current != null && current.isExpired() && byDeviceId.remove(id, current)) {
+                    expiredIds.add(id);
+                }
             }
         }
     }

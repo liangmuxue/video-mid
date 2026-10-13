@@ -51,6 +51,11 @@ public class Gb28181HeartbeatTask {
         for (Map<String, Object> s : sessions) {
             String deviceId = String.valueOf(s.get("deviceId"));
             try {
+                deviceProvisioner.markOnline(deviceId);
+            } catch (Exception e) {
+                log.warn("[GB28181-SIP] 注册在线但恢复已启用失败 deviceId={} err={}", deviceId, e.getMessage());
+            }
+            try {
                 outboundClient.sendKeepalive(deviceId);
             } catch (Exception e) {
                 log.debug("[GB28181-SIP] Keepalive 失败 deviceId={} err={}", deviceId, e.getMessage());

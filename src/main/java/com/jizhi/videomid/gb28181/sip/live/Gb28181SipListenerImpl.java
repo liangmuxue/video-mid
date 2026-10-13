@@ -207,7 +207,11 @@ public class Gb28181SipListenerImpl implements SipListener {
         Request request = event.getRequest();
         String deviceId = sipUser(request);
         long renewSeconds = registrationRenewSeconds();
-        sessionStore.renewRegistration(deviceId, renewSeconds, session -> rememberSignalPath(session, request));
+        sessionStore.renewRegistration(deviceId, renewSeconds, session -> {
+            rememberSignalPath(session, request);
+            // 注销和过期可能把状态写成不可用。心跳说明注册还在，这里改回已启用。
+            deviceProvisioner.markOnline(deviceId);
+        });
         byte[] raw = request.getRawContent();
         String body = raw == null ? "" : new String(raw, GB2312);
 
