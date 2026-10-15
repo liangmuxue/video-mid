@@ -37,4 +37,24 @@ public final class LiveStreamSupport {
         }
         return Optional.empty();
     }
+
+    /** 从已加载的码流里选业务直播流：已标记优先，否则按辅码流到主码流的顺序。 */
+    public static Optional<DeviceStream> pick(List<DeviceStream> streams) {
+        if (streams == null || streams.isEmpty()) {
+            return Optional.empty();
+        }
+        for (DeviceStream stream : streams) {
+            if (Boolean.TRUE.equals(stream.getLiveEnabled())) {
+                return Optional.of(stream);
+            }
+        }
+        for (String type : PRIORITY) {
+            for (DeviceStream stream : streams) {
+                if (type.equals(stream.getStreamType())) {
+                    return Optional.of(stream);
+                }
+            }
+        }
+        return Optional.empty();
+    }
 }

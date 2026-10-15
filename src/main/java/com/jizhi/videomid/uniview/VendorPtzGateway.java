@@ -5,6 +5,7 @@ import com.jizhi.videomid.device.Device;
 import com.jizhi.videomid.device.DevicePtzPresetService;
 import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.VendorDevices;
+import com.jizhi.videomid.uniview.cloud.UniviewCloudPtz;
 import com.jizhi.videomid.uniview.live.LiveUniviewPtzAdapter;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
@@ -31,13 +32,16 @@ public class VendorPtzGateway implements UniviewPtzPort {
     private final DeviceRepository deviceRepository;
     private final DevicePtzPresetService presetService;
     private final LiveUniviewPtzAdapter livePtz;
+    private final UniviewCloudPtz cloudPtz;
 
     public VendorPtzGateway(DeviceRepository deviceRepository,
                             DevicePtzPresetService presetService,
-                            LiveUniviewPtzAdapter livePtz) {
+                            LiveUniviewPtzAdapter livePtz,
+                            UniviewCloudPtz cloudPtz) {
         this.deviceRepository = deviceRepository;
         this.presetService = presetService;
         this.livePtz = livePtz;
+        this.cloudPtz = cloudPtz;
     }
 
     @Override
@@ -60,6 +64,20 @@ public class VendorPtzGateway implements UniviewPtzPort {
             item.put("presets", presetService.listMaps(device.getDeviceId()));
             devices.add(item);
         }
+        for (Device device : deviceRepository.findAll()) {
+            if (VendorDevices.of(device) != AccessVendor.UNIVIEW_CLOUD) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("deviceId", device.getDeviceId());
+            item.put("name", device.getName());
+            try {
+                item.put("presets", cloudPtz.listPresets(device.getDeviceId()));
+            } catch (RuntimeException e) {
+                item.put("presets", List.of());
+            }
+            devices.add(item);
+        }
         return devices;
     }
 
@@ -67,6 +85,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
     public Map<String, Object> move(String deviceId, String direction, int speed) {
         int cmd = directionCmd(direction);
         return route(deviceId, () -> livePtz.move(deviceId, direction, speed),
+                () -> cloudPtz.move(deviceId, direction, speed),
                 () -> mockOk("move", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))));
     }
 
@@ -74,6 +93,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
     public Map<String, Object> zoom(String deviceId, String action, int speed) {
         int cmd = zoomCmd(action);
         return route(deviceId, () -> livePtz.zoom(deviceId, action, speed),
+                () -> cloudPtz.zoom(deviceId, action, speed),
                 () -> mockOk("zoom", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))));
     }
 
@@ -81,18 +101,21 @@ public class VendorPtzGateway implements UniviewPtzPort {
     public Map<String, Object> focus(String deviceId, String action, int speed) {
         int cmd = focusCmd(action);
         return route(deviceId, () -> livePtz.focus(deviceId, action, speed),
+                () -> cloudPtz.focus(deviceId, action, speed),
                 () -> mockOk("focus", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))));
     }
 
     @Override
     public Map<String, Object> wideAngle(String deviceId) {
         return route(deviceId, () -> livePtz.wideAngle(deviceId),
+                () -> cloudPtz.wideAngle(deviceId),
                 () -> mockOk("wide-angle", deviceId, Map.of("ptzCmd", CMD_ZOOM_OUT, "speed", 4)));
     }
 
     @Override
     public Map<String, Object> gotoPreset(String deviceId, int presetIndex) {
-        return route(deviceId, () -> livePtz.gotoPreset(deviceId, presetIndex), () -> {
+        return route(deviceId, () -> livePtz.gotoPreset(deviceId, presetIndex),
+                () -> cloudPtz.gotoPreset(deviceId, presetIndex), () -> {
             presetService.require(deviceId, presetIndex);
             return mockOk("goto-preset", deviceId, Map.of("presetIndex", presetIndex));
         });
@@ -100,7 +123,8 @@ public class VendorPtzGateway implements UniviewPtzPort {
 
     @Override
     public Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite) {
-        return route(deviceId, () -> livePtz.setPreset(deviceId, presetIndex, name, overwrite), () -> {
+        return route(deviceId, () -> livePtz.setPreset(deviceId, presetIndex, name, overwrite),
+                () -> cloudPtz.setPreset(deviceId, presetIndex, name), () -> {
             presetService.save(deviceId, presetIndex, name, null, overwrite);
             return mockOk("set-preset", deviceId, Map.of(
                     "presetIndex", presetIndex,
@@ -114,15 +138,18 @@ public class VendorPtzGateway implements UniviewPtzPort {
     public Map<String, Object> snapshot(String deviceId, String channelType) {
         String channel = channelType == null || channelType.isBlank() ? "visible" : channelType;
         return route(deviceId, () -> livePtz.snapshot(deviceId, channel),
+                () -> cloudPtz.snapshot(deviceId, channel),
                 () -> mockOk("snapshot", deviceId, Map.of("channelType", channel)));
     }
 
     private Map<String, Object> route(String deviceId, java.util.function.Supplier<Map<String, Object>> uniview,
+                                      java.util.function.Supplier<Map<String, Object>> cloud,
                                       java.util.function.Supplier<Map<String, Object>> mock) {
         Device device = deviceRepository.findByDeviceId(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
         return switch (VendorDevices.of(device)) {
             case UNIVIEW -> uniview.get();
+            case UNIVIEW_CLOUD -> cloud.get();
             case MOCK -> mock.get();
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
             case RTSP, GB28181 -> throw new IllegalArgumentException(VendorDevices.RTSP_NO_PTZ);

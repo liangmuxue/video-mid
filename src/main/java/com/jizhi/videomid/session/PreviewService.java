@@ -8,6 +8,7 @@ import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
 import com.jizhi.videomid.media.ZlmClient;
 import com.jizhi.videomid.rtsp.RtspPullService;
+import com.jizhi.videomid.uniview.cloud.UniviewCloudPlayService;
 import com.jizhi.videomid.uniview.live.UniviewStreamIds;
 import com.jizhi.videomid.uniview.live.UniviewStreamKeeper;
 import org.slf4j.Logger;
@@ -38,19 +39,22 @@ public class PreviewService {
     private final ZlmClient zlmClient;
     private final UniviewStreamKeeper univiewStreamKeeper;
     private final RtspPullService rtspPullService;
+    private final UniviewCloudPlayService univiewCloudPlayService;
 
     public PreviewService(DeviceStreamRepository streamRepository,
                           DeviceRepository deviceRepository,
                           StringRedisTemplate redis,
                           ZlmClient zlmClient,
                           UniviewStreamKeeper univiewStreamKeeper,
-                          RtspPullService rtspPullService) {
+                          RtspPullService rtspPullService,
+                          UniviewCloudPlayService univiewCloudPlayService) {
         this.streamRepository = streamRepository;
         this.deviceRepository = deviceRepository;
         this.redis = redis;
         this.zlmClient = zlmClient;
         this.univiewStreamKeeper = univiewStreamKeeper;
         this.rtspPullService = rtspPullService;
+        this.univiewCloudPlayService = univiewCloudPlayService;
     }
 
     public Map<String, Object> start(String deviceId, String streamType) {
@@ -63,6 +67,9 @@ public class PreviewService {
         }
         if (vendor == AccessVendor.GB28181) {
             throw new IllegalArgumentException("国标设备请从业务端直播");
+        }
+        if (vendor == AccessVendor.UNIVIEW_CLOUD) {
+            return univiewCloudPlayService.startLive(deviceId);
         }
         DeviceStream stream = streamRepository.findByDeviceIdAndType(deviceId, type)
                 .orElseThrow(() -> new IllegalArgumentException("码流未注册: " + deviceId + "/" + type));

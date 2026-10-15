@@ -61,6 +61,7 @@ public class VendorCatalogGateway implements UniviewCatalogPort {
                 .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
         return switch (VendorDevices.of(device)) {
             case UNIVIEW -> liveCatalog.getDevice(deviceId);
+            case UNIVIEW_CLOUD -> mockView(device);
             case MOCK -> mockView(device);
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
             case RTSP, GB28181 -> throw new IllegalArgumentException(VendorDevices.RTSP_NO_PTZ);

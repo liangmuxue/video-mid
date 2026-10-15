@@ -133,7 +133,7 @@ public class BizPortalController {
 
     private List<Map<String, Object>> listDevices(Long folderId, boolean includeChildren) {
         List<Map<String, Object>> slim = new java.util.ArrayList<>();
-        for (Map<String, Object> m : deviceService.listDevices(folderId, includeChildren)) {
+        for (Map<String, Object> m : deviceService.listBizCatalog(folderId, includeChildren)) {
             slim.add(bizDevice(m));
         }
         return slim;

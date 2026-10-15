@@ -6,6 +6,8 @@ package com.jizhi.videomid.device;
 public enum AccessVendor {
     MOCK,
     UNIVIEW,
+    /** 宇视云开放平台。设备在云上，不走摄像机本机 LAPI。 */
+    UNIVIEW_CLOUD,
     HIKVISION,
     /** 地址已经给出，由本服务按该 RTSP 拉流。 */
     RTSP,

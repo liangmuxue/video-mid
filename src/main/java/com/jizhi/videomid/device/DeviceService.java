@@ -8,6 +8,9 @@ import com.jizhi.videomid.integration.jizhiai.JizhiAiDeviceSyncClient;
 import com.jizhi.videomid.media.ZlmClient;
 import com.jizhi.videomid.rtsp.RtspPullService;
 import com.jizhi.videomid.session.PreviewService;
+import com.jizhi.videomid.uniview.cloud.UniviewCloudDeviceIds;
+import com.jizhi.videomid.uniview.cloud.UniviewCloudPlayService;
+import com.jizhi.videomid.uniview.cloud.UniviewCloudSyncService;
 import com.jizhi.videomid.uniview.live.UniviewStreamDiscovery;
 import com.jizhi.videomid.uniview.live.UniviewStreamIds;
 import com.jizhi.videomid.uniview.live.UniviewVideoStream;
@@ -36,6 +39,7 @@ public class DeviceService {
     private final LiveStreamRtspResolver liveStreamRtspResolver;
     private final JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient;
     private final RtspPullService rtspPullService;
+    private final UniviewCloudPlayService univiewCloudPlayService;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
@@ -47,7 +51,8 @@ public class DeviceService {
                          NvrRecordingService nvrRecordingService,
                          LiveStreamRtspResolver liveStreamRtspResolver,
                          JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient,
-                         RtspPullService rtspPullService) {
+                         RtspPullService rtspPullService,
+                         UniviewCloudPlayService univiewCloudPlayService) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
@@ -59,6 +64,7 @@ public class DeviceService {
         this.liveStreamRtspResolver = liveStreamRtspResolver;
         this.jizhiAiDeviceSyncClient = jizhiAiDeviceSyncClient;
         this.rtspPullService = rtspPullService;
+        this.univiewCloudPlayService = univiewCloudPlayService;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -122,6 +128,79 @@ public class DeviceService {
             result.add(m);
         }
         return result;
+    }
+
+    /**
+     * 业务端目录。码流一次查出再挂到 liveStream，不逐台访问摄像机。
+     */
+    public List<Map<String, Object>> listBizCatalog(Long folderId, boolean includeChildren) {
+        Set<Long> folderIds = null;
+        if (folderId != null) {
+            if (includeChildren) {
+                folderIds = folderService.collectSelfAndDescendantIds(folderId);
+            } else {
+                folderIds = Set.of(folderId);
+            }
+            if (folderIds.isEmpty()) {
+                return List.of();
+            }
+        }
+        Map<String, List<DeviceStream>> streamsByDevice = new HashMap<>();
+        for (DeviceStream stream : streamRepository.findAll()) {
+            if (stream.getDeviceId() == null) {
+                continue;
+            }
+            streamsByDevice.computeIfAbsent(stream.getDeviceId(), key -> new ArrayList<>()).add(stream);
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Device d : deviceRepository.findAll()) {
+            if (folderIds != null && (d.getFolderId() == null || !folderIds.contains(d.getFolderId()))) {
+                continue;
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("deviceId", d.getDeviceId());
+            m.put("deviceType", DeviceType.normalize(d.getDeviceType()));
+            m.put("keys", DeviceType.capabilityKeys(d.getDeviceType()));
+            m.put("name", d.getName());
+            m.put("address", d.getAddress());
+            m.put("folderId", d.getFolderId());
+            m.put("status", DeviceStatus.normalize(d.getStatus()));
+            m.put("liveStream", liveStreamForList(d, streamsByDevice.get(d.getDeviceId())));
+            result.add(m);
+        }
+        return result;
+    }
+
+    private Map<String, Object> liveStreamForList(Device device, List<DeviceStream> streams) {
+        if (VendorDevices.of(device) == AccessVendor.UNIVIEW_CLOUD) {
+            if (!DeviceStatus.isEnabled(device.getStatus())) {
+                return storedLiveStream(streams);
+            }
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("streamType", "main");
+            view.put("streamUrl", univiewCloudPlayService.listedPlayUrl(device.getDeviceId()));
+            return view;
+        }
+        return storedLiveStream(streams);
+    }
+
+    /** 与设备详情的 liveStream 相同：streamType + streamUrl。占位地址不当成播放地址。 */
+    private Map<String, Object> storedLiveStream(List<DeviceStream> streams) {
+        DeviceStream live = LiveStreamSupport.pick(streams).orElse(null);
+        if (live == null) {
+            return null;
+        }
+        String stored = live.getStreamUrl();
+        String url = null;
+        if (LiveStreamRtspResolver.isRtsp(stored)) {
+            url = stored.trim();
+        } else if (stored != null && !UniviewCloudSyncService.STREAM_PLACEHOLDER.equals(stored.trim())) {
+            url = LiveStreamRtspResolver.zlmProxyRtsp(live, stored);
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("streamType", live.getStreamType());
+        view.put("streamUrl", url);
+        return view;
     }
 
     /** 对外查询：按 name / deviceId 模糊或精确筛选（均可选） */
@@ -395,6 +474,7 @@ public class DeviceService {
         return switch (VendorDevices.of(device)) {
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
             case UNIVIEW -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
+            case UNIVIEW_CLOUD -> previewService.start(deviceId, "main");
             case RTSP -> previewService.start(deviceId, requireLiveStream(deviceId).getStreamType());
             case MOCK -> startMockLive(deviceId);
             case GB28181 -> gb28181PlayService.startLive(deviceId)
@@ -485,6 +565,9 @@ public class DeviceService {
         d.setLanIp(blank(req.getLanIp()));
         d.setRecordDeviceId(req.getRecordDeviceId());
         d.setVendor(resolveVendor(req, d).name());
+        if (AccessVendor.UNIVIEW_CLOUD.name().equals(d.getVendor())) {
+            UniviewCloudDeviceIds.parse(d.getDeviceId());
+        }
         if (!AccessVendor.UNIVIEW.name().equals(d.getVendor())) {
             clearUniview(d);
         } else if (d.getHost() == null) {
@@ -575,7 +658,7 @@ public class DeviceService {
             try {
                 return AccessVendor.from(raw);
             } catch (IllegalArgumentException ex) {
-                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、HIKVISION、RTSP、GB28181");
+                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、UNIVIEW_CLOUD、HIKVISION、RTSP、GB28181");
             }
         }
         if (d.getHost() != null || d.getLanIp() != null || d.getRecordDeviceId() != null) {
@@ -735,6 +818,9 @@ public class DeviceService {
                 continue;
             }
             if (AccessVendor.GB28181.name().equals(d.getVendor())) {
+                continue;
+            }
+            if (AccessVendor.UNIVIEW_CLOUD.name().equals(d.getVendor())) {
                 continue;
             }
             if (AccessVendor.RTSP.name().equals(d.getVendor())) {

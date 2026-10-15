@@ -137,6 +137,7 @@ import {
 } from '../api/device'
 import { statusClass as deviceStatusClass, statusLabel as deviceStatusLabel } from '../utils/deviceStatus'
 import { gb28181Bye } from '../api/gb28181'
+import { stopUniviewCloudLive } from '../api/univiewCloud'
 
 const folderTree = ref([])
 const devices = ref([])
@@ -265,15 +266,23 @@ function stopGbSession(session) {
   }
 }
 
+function stopCloudSession(session) {
+  if (session?.transport === 'uniview-cloud') {
+    stopUniviewCloudLive(session.deviceId).catch(() => {})
+  }
+}
+
 function uncheckDevice(deviceId) {
   const session = liveSessions.value.find((s) => s.deviceId === deviceId)
   stopGbSession(session)
+  stopCloudSession(session)
   checkedIds.value = checkedIds.value.filter((id) => id !== deviceId)
   liveSessions.value = liveSessions.value.filter((s) => s.deviceId !== deviceId)
 }
 
 function clearAllLive() {
   liveSessions.value.forEach(stopGbSession)
+  liveSessions.value.forEach(stopCloudSession)
   checkedIds.value = []
   liveSessions.value = []
 }

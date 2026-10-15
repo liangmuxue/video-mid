@@ -48,6 +48,7 @@
             <input v-model="includeChildren" type="checkbox" @change="loadDevices" />
             含下级目录
           </label>
+          <button type="button" class="ghost" :disabled="syncingCloud" @click="syncCloud">同步宇视云</button>
           <button type="button" class="ghost" @click="openRecordDevices">录像设备</button>
           <button type="button" class="ghost" :disabled="loading" @click="reloadAll">刷新</button>
         </section>
@@ -142,12 +143,13 @@
           <select v-model="form.vendor" :disabled="!!editingId && form.vendor === 'GB28181'">
             <option value="MOCK">模拟</option>
             <option value="UNIVIEW">宇视</option>
+            <option value="UNIVIEW_CLOUD">宇视云</option>
             <option value="HIKVISION">海康</option>
             <option value="RTSP">直接拉流</option>
             <option value="GB28181">国标</option>
           </select>
         </label>
-        <p class="tip">一台设备只对接一个平台。海康尚未接入。直接拉流只保存对方给的 RTSP，有人播放才拉。国标可以先在这里编号，再去摄像机填写；也可以等摄像机注册后自动出现。</p>
+        <p class="tip">一台设备只对接一个平台。海康尚未接入。直接拉流只保存对方给的 RTSP，有人播放才拉。国标可以先在这里编号，再去摄像机填写；也可以等摄像机注册后自动出现。宇视云设备请用「同步宇视云」，编号是序列号:通道号，IPC 通道号为 0。</p>
         <template v-if="form.vendor === 'GB28181'">
           <label><span>视频通道ID</span><input v-model.trim="form.videoChannelId" required placeholder="20位，类型132，可与设备ID相同" /></label>
           <label><span>音频通道ID</span><input v-model.trim="form.audioChannelId" required placeholder="20位，类型137" /></label>
@@ -274,6 +276,7 @@ import {
   updateDeviceFolder,
   updateRecordDevice
 } from '../api/device'
+import { syncUniviewCloud } from '../api/univiewCloud'
 import {
   STATUS_DISABLED,
   STATUS_ENABLED,
@@ -285,6 +288,7 @@ import { useBackdropClose } from '../composables/useBackdropClose'
 
 function vendorLabel(vendor) {
   if (vendor === 'UNIVIEW') return '宇视'
+  if (vendor === 'UNIVIEW_CLOUD') return '宇视云'
   if (vendor === 'HIKVISION') return '海康'
   if (vendor === 'RTSP') return '直接拉流'
   if (vendor === 'GB28181') return '国标'
@@ -314,6 +318,7 @@ function deviceTypeLabel(deviceType) {
 const devices = ref([])
 const folderTree = ref([])
 const loading = ref(false)
+const syncingCloud = ref(false)
 const error = ref('')
 const keyword = ref('')
 const selectedFolderId = ref(null)
@@ -420,6 +425,23 @@ async function loadDevices() {
     error.value = e.message || '加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function syncCloud() {
+  syncingCloud.value = true
+  error.value = ''
+  try {
+    const result = await syncUniviewCloud()
+    await reloadAll()
+    const created = result?.created ?? 0
+    const updated = result?.updated ?? 0
+    error.value = ''
+    window.alert(`宇视云同步完成，新增 ${created} 台，更新 ${updated} 台`)
+  } catch (e) {
+    error.value = e.message || '宇视云同步失败'
+  } finally {
+    syncingCloud.value = false
   }
 }
 

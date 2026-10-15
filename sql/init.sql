@@ -2,7 +2,7 @@
 -- video-mid 唯一数据库脚本：建库 + 建表 + 初始化数据
 --
 -- 表：sys_user / device_folder / record_device / device / uniview_device / device_stream / device_ptz_preset
--- device.vendor：MOCK / UNIVIEW / HIKVISION，一台设备只对接一个平台
+-- device.vendor：MOCK / UNIVIEW / UNIVIEW_CLOUD / HIKVISION / RTSP / GB28181，一台设备只对接一个平台
 -- 设备 status：INT  0=不可用 1=已启用 2=已停用
 -- 时间字段：BIGINT 毫秒时间戳
 --
@@ -84,7 +84,7 @@ CREATE TABLE `device` (
   `gateway_id`    VARCHAR(64)  DEFAULT NULL COMMENT '边缘网关 ID',
   `longitude`     DOUBLE       DEFAULT NULL COMMENT '经度',
   `latitude`      DOUBLE       DEFAULT NULL COMMENT '纬度',
-  `vendor`        VARCHAR(16)  NOT NULL DEFAULT 'MOCK' COMMENT 'MOCK / UNIVIEW / HIKVISION / RTSP / GB28181，一台设备只对接一个平台',
+  `vendor`        VARCHAR(16)  NOT NULL DEFAULT 'MOCK' COMMENT 'MOCK / UNIVIEW / UNIVIEW_CLOUD / HIKVISION / RTSP / GB28181，一台设备只对接一个平台',
   `gb_register_id` VARCHAR(32) DEFAULT NULL COMMENT '国标 REGISTER 的设备编号，视频通道注销时按它下线',
   `gb_audio_id`   VARCHAR(32)  DEFAULT NULL COMMENT '国标音频通道编号，类型 137',
   `created_at`    BIGINT       NOT NULL COMMENT '创建时间（毫秒时间戳）',

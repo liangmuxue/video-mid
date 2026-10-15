@@ -11,7 +11,7 @@ public class DeviceRequest {
     private Integer deviceType;
     private String name;
     private String platformId;
-    /** MOCK / UNIVIEW / HIKVISION / RTSP / GB28181 */
+    /** MOCK / UNIVIEW / UNIVIEW_CLOUD / HIKVISION / RTSP / GB28181 */
     private String vendor;
     /** vendor=GB28181 时的视频通道编号。 */
     private String videoChannelId;

@@ -24,6 +24,7 @@ spring:
 zlm:
   base-url: http://127.0.0.1:8080
   play-base-url: http://119.3.161.125:7094
+  rtsp-base-url: rtsp://119.3.161.125:554
   secret: "w2tiwFe6qNQSjtuuENkrWhj8MAR79Qft"
   play-count-sync-ms: 5000
 
@@ -41,6 +42,16 @@ uniview:
     api-type: lapi
   nvr:
     library-path: /home/zkrh/videomid/lib
+
+# 宇视云开放平台。和上面的本机 LAPI 分开，一台设备只走其中一个。
+uniview-cloud:
+  base-url: https://ezcloud.uniview.com
+  app-id: "920170595956555776"
+  secret-key: "91e304c8d4382ac34708525c26bb840f"
+  # 1=辅码流。主码流在这条公网链路上容易把播放器撑断。
+  quality: 1
+  # 4=FLV，交给 ZLM 再转给浏览器。
+  protocol: 4
 
 # 国标 GB28181：live 时本服务作为 SIP 上级，在 sip-port 上收摄像机注册
 gb28181:
