@@ -34,6 +34,12 @@ public class MockUniviewPtzAdapter implements UniviewPtzPort {
     }
 
     @Override
+    public List<Map<String, Object>> listPresets(String deviceId) {
+        dataLoader.requireDevice(deviceId);
+        return presetService.listMaps(deviceId);
+    }
+
+    @Override
     public Map<String, Object> move(String deviceId, String direction, int speed) {
         dataLoader.requireDevice(deviceId);
         return ok("mock-move", Map.of(

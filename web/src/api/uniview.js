@@ -2,8 +2,10 @@ import http from './http'
 
 export const fetchUniviewConfig = () => http.get('/api/uniview/config')
 export const fetchUniviewDevices = () => http.get('/api/uniview/devices')
-export const fetchUniviewDevice = (deviceId) =>
-  http.get(`/api/ptz/devices/${encodeURIComponent(deviceId)}`)
+export const fetchUniviewDevice = (deviceId, opts = {}) =>
+  http.get(`/api/ptz/devices/${encodeURIComponent(deviceId)}`, {
+    params: opts.presets ? { presets: true } : undefined
+  })
 export const fetchPtzDevices = () => http.get('/api/ptz/devices')
 
 export const ptzMove = (deviceId, direction, speed = 4) =>

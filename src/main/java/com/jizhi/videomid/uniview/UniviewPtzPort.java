@@ -8,6 +8,9 @@ public interface UniviewPtzPort {
 
     List<Map<String, Object>> listPtzDevices();
 
+    /** 只查一台设备的预置位。 */
+    List<Map<String, Object>> listPresets(String deviceId);
+
     Map<String, Object> move(String deviceId, String direction, int speed);
 
     Map<String, Object> zoom(String deviceId, String action, int speed);

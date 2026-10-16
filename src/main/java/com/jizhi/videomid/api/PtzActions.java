@@ -41,6 +41,10 @@ public class PtzActions {
         return catalogPort.getDevice(requireText(deviceId, "deviceId"));
     }
 
+    public List<Map<String, Object>> presets(String deviceId) {
+        return ptzPort.listPresets(requireText(deviceId, "deviceId"));
+    }
+
     public Map<String, Object> move(PtzMoveRequest req) {
         if (req == null) {
             throw new IllegalArgumentException("请求体不能为空");

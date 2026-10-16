@@ -36,6 +36,11 @@ public class LiveUniviewPtzAdapter implements UniviewPtzPort {
     }
 
     @Override
+    public List<Map<String, Object>> listPresets(String deviceId) {
+        return loadPresets(requireDevice(deviceId));
+    }
+
+    @Override
     public List<Map<String, Object>> listPtzDevices() {
         List<Map<String, Object>> devices = new ArrayList<>();
         for (Device device : deviceRepository.findAll()) {

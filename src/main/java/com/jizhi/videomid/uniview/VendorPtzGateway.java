@@ -81,6 +81,20 @@ public class VendorPtzGateway implements UniviewPtzPort {
         return devices;
     }
 
+    /** 只查这一台的预置位。设备列表接口仍一次返回全部，避免改对外结构。 */
+    @Override
+    public List<Map<String, Object>> listPresets(String deviceId) {
+        Device device = deviceRepository.findByDeviceId(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
+        return switch (VendorDevices.of(device)) {
+            case UNIVIEW -> livePtz.listPresets(deviceId);
+            case UNIVIEW_CLOUD -> cloudPtz.listPresets(deviceId);
+            case MOCK -> presetService.listMaps(deviceId);
+            case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
+            case RTSP, GB28181 -> throw new IllegalArgumentException(VendorDevices.RTSP_NO_PTZ);
+        };
+    }
+
     @Override
     public Map<String, Object> move(String deviceId, String direction, int speed) {
         int cmd = directionCmd(direction);

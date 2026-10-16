@@ -18,7 +18,7 @@ export const deleteRecordDevice = (id) => http.delete(`/api/record-devices/${id}
 export const registerStream = (data) => http.post('/api/streams/register', data)
 export const deleteStream = (id) => http.delete(`/api/streams/${id}`)
 export const setStreamLive = (id) => http.put(`/api/streams/${id}/live`)
-export const previewStart = (data) => http.post('/api/preview/start', data)
+export const previewStart = (data, config = {}) => http.post('/api/preview/start', data, config)
 
 /** 业务端 */
 export const fetchBizFolderTree = () => http.get('/api/biz/folders/tree')

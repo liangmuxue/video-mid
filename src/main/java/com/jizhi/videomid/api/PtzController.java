@@ -12,7 +12,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.LinkedHashMap;
 
 import java.util.List;
 import java.util.Map;
@@ -36,8 +39,15 @@ public class PtzController {
     }
 
     @GetMapping("/devices/{deviceId}")
-    public ApiResponse<Map<String, Object>> device(@PathVariable String deviceId) {
-        return ApiResponse.ok(actions.device(deviceId));
+    public ApiResponse<Map<String, Object>> device(@PathVariable String deviceId,
+                                                   @RequestParam(name = "presets", required = false) Boolean includePresets) {
+        Map<String, Object> view = actions.device(deviceId);
+        if (!Boolean.TRUE.equals(includePresets)) {
+            return ApiResponse.ok(view);
+        }
+        Map<String, Object> withPresets = new LinkedHashMap<>(view);
+        withPresets.put("presets", actions.presets(deviceId));
+        return ApiResponse.ok(withPresets);
     }
 
     @PostMapping("/move")
