@@ -59,7 +59,9 @@
               <tr>
                 <th>设备ID</th>
                 <th>位置编号</th>
-                <th>设备类型</th>
+                <th>摄像头类型</th>
+                <th>设备能力</th>
+                <th>楼栋编号</th>
                 <th>名称</th>
                 <th>状态</th>
                 <th>平台</th>
@@ -75,6 +77,8 @@
                 <td class="mono">{{ d.deviceId }}</td>
                 <td class="mono">{{ formatDeviceNo(d.deviceNo) }}</td>
                 <td>{{ deviceTypeLabel(d.deviceType) }}</td>
+                <td>{{ deviceFeatureLabel(d.deviceFeature) }}</td>
+                <td class="mono">{{ d.buildingNo || '-' }}</td>
                 <td>{{ d.name || '-' }}</td>
                 <td>
                   <span class="badge" :class="statusClass(d.status)">{{ statusLabel(d.status) }}</span>
@@ -97,7 +101,7 @@
                 </td>
               </tr>
               <tr v-if="!filtered.length">
-                <td colspan="11" class="empty">暂无设备</td>
+                <td colspan="13" class="empty">暂无设备</td>
               </tr>
             </tbody>
           </table>
@@ -113,8 +117,18 @@
           <input v-model.number="form.deviceNo" type="number" min="0" step="1" placeholder="如 101，展示为 0101" />
         </label>
         <p class="tip">数字类型：前两位可表示楼层，后两位表示该层序号，如 101 表示一层第一个摄像头。</p>
-        <label><span>设备类型</span>
+        <label><span>摄像头类型</span>
           <select v-model.number="form.deviceType">
+            <option :value="0">云台</option>
+            <option :value="1">天台</option>
+            <option :value="2">楼梯</option>
+            <option :value="3">电梯</option>
+            <option :value="4">大厅</option>
+            <option :value="5">地下室</option>
+          </select>
+        </label>
+        <label><span>设备能力</span>
+          <select v-model.number="form.deviceFeature">
             <option :value="0">抓拍</option>
             <option :value="1">视频流</option>
             <option :value="2">视频流 + 抓拍</option>
@@ -159,11 +173,11 @@
           <label><span>拉流地址</span><input v-model.trim="form.pullUrl" placeholder="rtsp://主机:端口/路径" /></label>
           <p class="tip">编辑时留空则不修改。地址里的签名会保存，业务接口不返回这段原始地址。</p>
         </template>
-        <template v-if="form.vendor === 'UNIVIEW'">
-        <label><span>宇视 IP</span><input v-model.trim="form.host" placeholder="摄像机地址" /></label>
-        <label><span>端口</span><input v-model.number="form.port" type="number" min="1" max="65535" /></label>
-        <label><span>用户名</span><input v-model.trim="form.username" autocomplete="off" /></label>
+        <label><span>摄像头 IP</span><input v-model.trim="form.cameraIp" placeholder="摄像机地址" /></label>
+        <label><span>端口</span><input v-model.number="form.cameraPort" type="number" min="1" max="65535" /></label>
+        <label><span>账号</span><input v-model.trim="form.cameraUsername" autocomplete="off" /></label>
         <label><span>密码</span><input v-model="form.password" type="password" autocomplete="new-password" placeholder="编辑时留空则不修改" /></label>
+        <template v-if="form.vendor === 'UNIVIEW'">
         <label><span>通道号</span><input v-model.trim="form.accessChannel" placeholder="IPC 一般为 0" /></label>
         <p class="tip">保存时向摄像机查询实际启用的码流，再写入码流表。有人播放才拉流，没人看就停。</p>
         <label><span>录像设备</span>
@@ -309,7 +323,13 @@ function liveStreamLabel(liveStream) {
 }
 
 function deviceTypeLabel(deviceType) {
+  const labels = ['云台', '天台', '楼梯', '电梯', '大厅', '地下室']
   const v = Number(deviceType)
+  return labels[v] ?? '云台'
+}
+
+function deviceFeatureLabel(deviceFeature) {
+  const v = Number(deviceFeature)
   if (v === 0) return '抓拍'
   if (v === 2) return '视频+抓拍'
   return '视频流'
@@ -330,7 +350,8 @@ const formError = ref('')
 const form = reactive({
   deviceId: '',
   deviceNo: null,
-  deviceType: 1,
+  deviceType: 0,
+  deviceFeature: 1,
   name: '',
   folderId: null,
   status: STATUS_ENABLED,
@@ -341,9 +362,9 @@ const form = reactive({
   platformId: '',
   vendor: 'MOCK',
   pullUrl: '',
-  host: '',
-  port: null,
-  username: '',
+  cameraIp: '',
+  cameraPort: null,
+  cameraUsername: '',
   password: '',
   accessChannel: '0',
   lanIp: '',
@@ -399,7 +420,7 @@ const filtered = computed(() => {
   const q = keyword.value.toLowerCase()
   if (!q) return devices.value
   return devices.value.filter((d) =>
-    [d.deviceNo, formatDeviceNo(d.deviceNo), deviceTypeLabel(d.deviceType), d.deviceId, d.name, d.manufacturer, d.address, d.model]
+    [d.deviceNo, formatDeviceNo(d.deviceNo), deviceTypeLabel(d.deviceType), deviceFeatureLabel(d.deviceFeature), d.deviceId, d.name, d.manufacturer, d.address, d.model]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -516,7 +537,8 @@ function openDevice(d = null) {
   Object.assign(form, {
     deviceId: d?.deviceId || '',
     deviceNo: d?.deviceNo ?? null,
-    deviceType: d?.deviceType ?? 1,
+    deviceType: d?.deviceType ?? 0,
+    deviceFeature: d?.deviceFeature ?? 1,
     name: d?.name || '',
     folderId: d?.folderId ?? selectedFolderId.value ?? null,
     status: manual,
@@ -527,9 +549,9 @@ function openDevice(d = null) {
     platformId: d?.platformId || '',
     vendor: d?.vendor || (d?.host || d?.recordDeviceId ? 'UNIVIEW' : 'MOCK'),
     pullUrl: d?.pullUrl || '',
-    host: d?.host || '',
-    port: d?.port ?? null,
-    username: d?.username || '',
+    cameraIp: d?.cameraIp ?? d?.host ?? '',
+    cameraPort: d?.cameraPort ?? d?.port ?? null,
+    cameraUsername: d?.cameraUsername ?? d?.username ?? '',
     password: '',
     accessChannel: d?.accessChannel || '0',
     lanIp: d?.lanIp || '',
@@ -568,9 +590,15 @@ async function save() {
   formError.value = ''
   try {
     const payload = { ...form, folderId: form.folderId ?? null }
-    if (payload.port === '' || Number.isNaN(payload.port)) payload.port = null
+    if (payload.cameraPort === '' || Number.isNaN(payload.cameraPort)) payload.cameraPort = null
+    if (payload.vendor === 'UNIVIEW') {
+      payload.host = payload.cameraIp || null
+      payload.port = payload.cameraPort
+      payload.username = payload.cameraUsername || null
+    }
     if (payload.deviceNo === '' || Number.isNaN(payload.deviceNo)) payload.deviceNo = null
-    if (payload.deviceType === '' || Number.isNaN(payload.deviceType)) payload.deviceType = 1
+    if (payload.deviceType === '' || Number.isNaN(payload.deviceType)) payload.deviceType = 0
+    if (payload.deviceFeature === '' || Number.isNaN(payload.deviceFeature)) payload.deviceFeature = 1
     if (!payload.recordDeviceId) payload.recordDeviceId = null
     if (!payload.lanIp) payload.lanIp = null
     delete payload.recordChannel
@@ -581,14 +609,15 @@ async function save() {
       payload.audioChannelId = null
     }
     if (payload.vendor !== 'UNIVIEW') {
-      payload.host = null
-      payload.port = null
-      payload.username = null
-      payload.password = null
       payload.accessChannel = null
       payload.lanIp = null
       payload.recordDeviceId = null
-    } else if (!payload.host) {
+      payload.host = null
+      payload.port = null
+      payload.username = null
+    } else if (!payload.cameraIp && !payload.host) {
+      payload.cameraPort = null
+      payload.cameraUsername = null
       payload.port = null
       payload.username = null
       payload.password = null

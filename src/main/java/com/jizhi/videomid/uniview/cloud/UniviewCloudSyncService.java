@@ -10,7 +10,7 @@ import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.DeviceStatus;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
-import com.jizhi.videomid.device.DeviceType;
+import com.jizhi.videomid.device.DeviceFeature;
 import com.jizhi.videomid.device.dto.DeviceFolderRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,7 +149,7 @@ public class UniviewCloudSyncService {
     private void insert(String deviceId, String name, String model, int online, Long folderId) {
         Device created = new Device();
         created.setDeviceId(deviceId);
-        created.setDeviceType(DeviceType.VIDEO);
+        created.setDeviceFeature(DeviceFeature.VIDEO);
         created.setName(name);
         created.setVendor(AccessVendor.UNIVIEW_CLOUD.name());
         created.setStatus(online == 1 ? DeviceStatus.ENABLED : DeviceStatus.UNAVAILABLE);

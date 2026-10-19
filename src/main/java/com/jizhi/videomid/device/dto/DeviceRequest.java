@@ -7,8 +7,10 @@ public class DeviceRequest {
     private String deviceId;
     /** 位置编号，如 101（一层第一个）；可选 */
     private Integer deviceNo;
-    /** 设备类型：0=抓拍，1=视频流，2=两者；默认 1 */
+    /** 摄像头类型：0=云台 … 5=地下室；默认 0 */
     private Integer deviceType;
+    /** 设备能力特性：0=抓拍，1=视频流，2=两者；默认 1 */
+    private Integer deviceFeature;
     private String name;
     private String platformId;
     /** MOCK / UNIVIEW / UNIVIEW_CLOUD / HIKVISION / RTSP / GB28181 */
@@ -29,6 +31,10 @@ public class DeviceRequest {
     private String gatewayId;
     private Double longitude;
     private Double latitude;
+    /** 摄像头 IP / 端口 / 账号（写入 device 表；宇视仍兼容 host/port/username） */
+    private String cameraIp;
+    private Integer cameraPort;
+    private String cameraUsername;
     private String host;
     private Integer port;
     private String username;
@@ -43,6 +49,8 @@ public class DeviceRequest {
     public void setDeviceNo(Integer deviceNo) { this.deviceNo = deviceNo; }
     public Integer getDeviceType() { return deviceType; }
     public void setDeviceType(Integer deviceType) { this.deviceType = deviceType; }
+    public Integer getDeviceFeature() { return deviceFeature; }
+    public void setDeviceFeature(Integer deviceFeature) { this.deviceFeature = deviceFeature; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getPlatformId() { return platformId; }
@@ -73,6 +81,12 @@ public class DeviceRequest {
     public void setLongitude(Double longitude) { this.longitude = longitude; }
     public Double getLatitude() { return latitude; }
     public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public String getCameraIp() { return cameraIp; }
+    public void setCameraIp(String cameraIp) { this.cameraIp = cameraIp; }
+    public Integer getCameraPort() { return cameraPort; }
+    public void setCameraPort(Integer cameraPort) { this.cameraPort = cameraPort; }
+    public String getCameraUsername() { return cameraUsername; }
+    public void setCameraUsername(String cameraUsername) { this.cameraUsername = cameraUsername; }
     public String getHost() { return host; }
     public void setHost(String host) { this.host = host; }
     public Integer getPort() { return port; }

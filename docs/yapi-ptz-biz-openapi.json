@@ -682,7 +682,7 @@
           "业务端"
         ],
         "summary": "业务端-设备列表",
-        "description": "含已停用设备。返回 deviceType、keys、liveStream。liveStream.streamUrl 为 RTSP，没有可解析地址时 liveStream 为 null。用 playable、livePlayable 判断可否回放/直播。不返回登录信息和码流明细。Body 可传 {}。",
+        "description": "含已停用设备。返回 deviceFeature、keys、liveStream。liveStream.streamUrl 为 RTSP，没有可解析地址时 liveStream 为 null。用 playable、livePlayable 判断可否回放/直播。不返回登录信息和码流明细。Body 可传 {}。",
         "operationId": "bizDevices",
         "requestBody": {
           "required": false,
@@ -713,7 +713,7 @@
                   "data": [
                     {
                       "deviceId": "UV_10135",
-                      "deviceType": 1,
+                      "deviceFeature": 1,
                       "keys": [
                         "photo"
                       ],
@@ -771,7 +771,7 @@
                   "message": "success",
                   "data": {
                     "deviceId": "UV_10135",
-                    "deviceType": 1,
+                    "deviceFeature": 1,
                     "keys": [
                       "photo"
                     ],
@@ -1340,7 +1340,7 @@
             "description": "设备业务编码，全局唯一",
             "example": "UV_10135"
           },
-          "deviceType": {
+          "deviceFeature": {
             "type": "integer",
             "description": "设备类型：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
             "example": 1,
@@ -1352,7 +1352,7 @@
           },
           "keys": {
             "type": "array",
-            "description": "业务能力，由 deviceType 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
+            "description": "业务能力，由 deviceFeature 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
             "items": {
               "type": "string",
               "description": "能力标识：photo=视频，snap_face=抓拍",
@@ -1466,7 +1466,7 @@
             "description": "设备业务编码，全局唯一",
             "example": "UV_10135"
           },
-          "deviceType": {
+          "deviceFeature": {
             "type": "integer",
             "description": "设备类型：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
             "example": 1,
@@ -1478,7 +1478,7 @@
           },
           "keys": {
             "type": "array",
-            "description": "业务能力，由 deviceType 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
+            "description": "业务能力，由 deviceFeature 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
             "items": {
               "type": "string",
               "description": "能力标识：photo=视频，snap_face=抓拍",
@@ -1996,7 +1996,7 @@
           "data": [
             {
               "deviceId": "UV_10135",
-              "deviceType": 1,
+              "deviceFeature": 1,
               "keys": [
                 "photo"
               ],
@@ -2037,7 +2037,7 @@
           "message": "success",
           "data": {
             "deviceId": "UV_10135",
-            "deviceType": 1,
+            "deviceFeature": 1,
             "keys": [
               "photo"
             ],

@@ -5,9 +5,18 @@ public class Device {
     private String deviceId;
     /** 位置编号，如 101 表示一层第一个摄像头（展示可格式化为 0101） */
     private Integer deviceNo;
-    /** 设备类型：0=抓拍，1=视频流，2=两者 */
+    /** 摄像头类型：0=云台，1=天台，2=楼梯，3=电梯，4=大厅，5=地下室 */
     private Integer deviceType;
+    /** 设备能力特性：0=抓拍，1=视频流，2=两者 */
+    private Integer deviceFeature;
     private String name;
+    /** 楼栋编号，由名称解析：楼号-单元-楼层-设备位 */
+    private String buildingNo;
+    /** 摄像头 IP（入库 device 表） */
+    private String cameraIp;
+    private Integer cameraPort;
+    private String cameraUsername;
+    private String cameraPassword;
     private String platformId;
     /** MOCK / UNIVIEW / HIKVISION / RTSP / GB28181。一台设备只对应一个平台。 */
     private String vendor;
@@ -46,8 +55,20 @@ public class Device {
     public void setDeviceNo(Integer deviceNo) { this.deviceNo = deviceNo; }
     public Integer getDeviceType() { return deviceType; }
     public void setDeviceType(Integer deviceType) { this.deviceType = deviceType; }
+    public Integer getDeviceFeature() { return deviceFeature; }
+    public void setDeviceFeature(Integer deviceFeature) { this.deviceFeature = deviceFeature; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public String getBuildingNo() { return buildingNo; }
+    public void setBuildingNo(String buildingNo) { this.buildingNo = buildingNo; }
+    public String getCameraIp() { return cameraIp; }
+    public void setCameraIp(String cameraIp) { this.cameraIp = cameraIp; }
+    public Integer getCameraPort() { return cameraPort; }
+    public void setCameraPort(Integer cameraPort) { this.cameraPort = cameraPort; }
+    public String getCameraUsername() { return cameraUsername; }
+    public void setCameraUsername(String cameraUsername) { this.cameraUsername = cameraUsername; }
+    public String getCameraPassword() { return cameraPassword; }
+    public void setCameraPassword(String cameraPassword) { this.cameraPassword = cameraPassword; }
     public String getPlatformId() { return platformId; }
     public void setPlatformId(String platformId) { this.platformId = platformId; }
     public String getVendor() { return vendor; }

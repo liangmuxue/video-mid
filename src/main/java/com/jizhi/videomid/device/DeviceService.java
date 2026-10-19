@@ -160,7 +160,8 @@ public class DeviceService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("deviceId", d.getDeviceId());
             m.put("deviceType", DeviceType.normalize(d.getDeviceType()));
-            m.put("keys", DeviceType.capabilityKeys(d.getDeviceType()));
+            m.put("deviceFeature", DeviceFeature.normalize(d.getDeviceFeature()));
+            m.put("keys", DeviceFeature.capabilityKeys(d.getDeviceFeature()));
             m.put("name", d.getName());
             m.put("address", d.getAddress());
             m.put("folderId", d.getFolderId());
@@ -284,17 +285,21 @@ public class DeviceService {
         Device d = fromDeviceRequest(req);
         d.setId(existing.getId());
         d.setDeviceId(existing.getDeviceId());
-        if (d.getHost() == null) {
+        if (d.getCameraIp() == null) {
+            d.setCameraPassword(null);
+            d.setCameraUsername(null);
+            d.setCameraPort(null);
             d.setPassword(null);
             d.setUsername(null);
             d.setPort(null);
             d.setAccessChannel(null);
         } else if (d.getPassword() == null || d.getPassword().isBlank()) {
             d.setPassword(existing.getPassword());
+            d.setCameraPassword(existing.getCameraPassword());
         }
-        boolean loginChanged = !sameText(existing.getHost(), d.getHost())
-                || !Objects.equals(existing.getPort(), d.getPort())
-                || !sameText(existing.getUsername(), d.getUsername())
+        boolean loginChanged = !sameText(existing.getCameraIp(), d.getCameraIp())
+                || !Objects.equals(existing.getCameraPort(), d.getCameraPort())
+                || !sameText(existing.getCameraUsername(), d.getCameraUsername())
                 || !sameText(existing.getAccessChannel(), d.getAccessChannel())
                 || (req.getPassword() != null && !req.getPassword().isBlank());
         if (loginChanged) {
@@ -359,7 +364,7 @@ public class DeviceService {
             d.setDeviceId(deviceId);
             d.setName(req.getDeviceName() == null || req.getDeviceName().isBlank() ? deviceId : req.getDeviceName());
             d.setStatus(DeviceStatus.ENABLED);
-            d.setDeviceType(DeviceType.VIDEO);
+            d.setDeviceFeature(DeviceFeature.VIDEO);
             d.setPtzType(0);
             deviceRepository.insert(d);
         } else if (req.getDeviceName() != null && !req.getDeviceName().isBlank()) {
@@ -487,7 +492,14 @@ public class DeviceService {
         prepareGb(existing, req, existing.getId());
         existing.setDeviceNo(req.getDeviceNo());
         existing.setDeviceType(DeviceType.normalize(req.getDeviceType()));
+        existing.setDeviceFeature(DeviceFeature.normalize(req.getDeviceFeature()));
         existing.setName(req.getName());
+        String prevCameraPassword = existing.getCameraPassword();
+        applyCameraCredentials(existing, req);
+        if (req.getPassword() == null || req.getPassword().isBlank()) {
+            existing.setCameraPassword(prevCameraPassword);
+            existing.setPassword(prevCameraPassword);
+        }
         existing.setPlatformId(req.getPlatformId());
         existing.setFolderId(req.getFolderId());
         existing.setStatus(DeviceStatus.normalizeManual(req.getStatus() == null ? DeviceStatus.ENABLED : req.getStatus()));
@@ -546,6 +558,7 @@ public class DeviceService {
         d.setDeviceId(req.getDeviceId().trim());
         d.setDeviceNo(req.getDeviceNo());
         d.setDeviceType(DeviceType.normalize(req.getDeviceType()));
+        d.setDeviceFeature(DeviceFeature.normalize(req.getDeviceFeature()));
         d.setName(req.getName());
         d.setPlatformId(req.getPlatformId());
         d.setFolderId(req.getFolderId());
@@ -558,10 +571,7 @@ public class DeviceService {
         d.setGatewayId(req.getGatewayId());
         d.setLongitude(req.getLongitude());
         d.setLatitude(req.getLatitude());
-        d.setHost(blank(req.getHost()));
-        d.setPort(req.getPort());
-        d.setUsername(blank(req.getUsername()));
-        d.setPassword(req.getPassword());
+        applyCameraCredentials(d, req);
         d.setLanIp(blank(req.getLanIp()));
         d.setRecordDeviceId(req.getRecordDeviceId());
         d.setVendor(resolveVendor(req, d).name());
@@ -570,7 +580,11 @@ public class DeviceService {
         }
         if (!AccessVendor.UNIVIEW.name().equals(d.getVendor())) {
             clearUniview(d);
-        } else if (d.getHost() == null) {
+        } else if (d.getCameraIp() == null) {
+            d.setCameraPort(null);
+            d.setCameraUsername(null);
+            d.setCameraPassword(null);
+            d.setHost(null);
             d.setPort(null);
             d.setUsername(null);
             d.setPassword(null);
@@ -578,7 +592,8 @@ public class DeviceService {
         } else {
             String channel = blank(req.getAccessChannel());
             d.setAccessChannel(channel == null ? "0" : channel);
-            if (d.getPort() == null) {
+            if (d.getCameraPort() == null) {
+                d.setCameraPort(80);
                 d.setPort(80);
             }
         }
@@ -668,15 +683,41 @@ public class DeviceService {
     }
 
     private static void clearUniview(Device d) {
-        d.setHost(null);
-        d.setPort(null);
-        d.setUsername(null);
-        d.setPassword(null);
         d.setAccessChannel(null);
         d.setLanIp(null);
         d.setRecordDeviceId(null);
         d.setRecordChannel(null);
         d.setRecordChannelName(null);
+    }
+
+    private static void applyCameraCredentials(Device d, DeviceRequest req) {
+        String ip = firstNonBlank(blank(req.getCameraIp()), blank(req.getHost()));
+        d.setCameraIp(ip);
+        d.setHost(ip);
+        Integer port = req.getCameraPort() != null ? req.getCameraPort() : req.getPort();
+        d.setCameraPort(port);
+        d.setPort(port);
+        String username = firstNonBlank(blank(req.getCameraUsername()), blank(req.getUsername()));
+        d.setCameraUsername(username);
+        d.setUsername(username);
+        String password = req.getPassword();
+        if (password != null && !password.isBlank()) {
+            d.setCameraPassword(password);
+            d.setPassword(password);
+        } else {
+            d.setCameraPassword(null);
+            d.setPassword(null);
+        }
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        if (b != null && !b.isBlank()) {
+            return b;
+        }
+        return null;
     }
 
     private void bindRecord(Device d, Long excludeId) {
@@ -902,8 +943,10 @@ public class DeviceService {
         m.put("id", d.getId());
         m.put("deviceId", d.getDeviceId());
         m.put("deviceNo", d.getDeviceNo());
+        m.put("buildingNo", d.getBuildingNo());
         m.put("deviceType", DeviceType.normalize(d.getDeviceType()));
-        m.put("keys", DeviceType.capabilityKeys(d.getDeviceType()));
+        m.put("deviceFeature", DeviceFeature.normalize(d.getDeviceFeature()));
+        m.put("keys", DeviceFeature.capabilityKeys(d.getDeviceFeature()));
         m.put("name", d.getName());
         m.put("platformId", d.getPlatformId());
         m.put("vendor", d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
@@ -922,9 +965,12 @@ public class DeviceService {
         m.put("model", d.getModel());
         m.put("address", d.getAddress());
         m.put("gatewayId", d.getGatewayId());
-        m.put("host", d.getHost());
-        m.put("port", d.getPort());
-        m.put("username", d.getUsername());
+        m.put("cameraIp", d.getCameraIp());
+        m.put("cameraPort", d.getCameraPort());
+        m.put("cameraUsername", d.getCameraUsername());
+        m.put("host", d.getCameraIp());
+        m.put("port", d.getCameraPort());
+        m.put("username", d.getCameraUsername());
         m.put("accessChannel", d.getAccessChannel());
         m.put("lanIp", d.getLanIp());
         m.put("recordDeviceId", d.getRecordDeviceId());

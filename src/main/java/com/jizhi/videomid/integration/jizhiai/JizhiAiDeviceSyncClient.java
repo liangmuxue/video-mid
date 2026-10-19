@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jizhi.videomid.config.JizhiAiProperties;
 import com.jizhi.videomid.device.Device;
 import com.jizhi.videomid.device.DeviceStatus;
-import com.jizhi.videomid.device.DeviceType;
+import com.jizhi.videomid.device.DeviceFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -43,7 +43,7 @@ public class JizhiAiDeviceSyncClient {
 
     /**
      * 设备已有记录后的同步。名称、地址、目录、状态、直播地址等任一变化都调用。
-     * 缺 RTSP 或 deviceNo 时省略对应字段，仍提交。
+     * 缺 RTSP 或 buildingNo 时省略对应字段，仍提交。
      */
     public void syncDeviceUpdate(Device device, String fullStreamPath) {
         if (device == null || device.getDeviceId() == null || device.getDeviceId().isBlank()) {
@@ -60,7 +60,7 @@ public class JizhiAiDeviceSyncClient {
     }
 
     /**
-     * 新增设备同步；无 RTSP、无 deviceNo（buildingNo）时跳过。
+     * 新增设备同步；无 RTSP、无 buildingNo 时跳过。
      *
      * @param fullStreamPath 业务直播 RTSP，为空则不同步
      */
@@ -72,8 +72,8 @@ public class JizhiAiDeviceSyncClient {
             log.info("[极知AI] 无可用 RTSP，跳过 save 同步 deviceId={}", device.getDeviceId());
             return;
         }
-        if (device.getDeviceNo() == null) {
-            log.info("[极知AI] 未填 deviceNo（buildingNo），跳过 save 同步 deviceId={}", device.getDeviceId());
+        if (device.getBuildingNo() == null || device.getBuildingNo().isBlank()) {
+            log.info("[极知AI] 无法从名称解析 buildingNo，跳过 save 同步 deviceId={}", device.getDeviceId());
             return;
         }
         Map<String, Object> body;
@@ -88,7 +88,7 @@ public class JizhiAiDeviceSyncClient {
 
     private Map<String, Object> buildBody(Device device, String fullStreamPath) throws Exception {
         int deviceState = DeviceStatus.normalize(device.getStatus());
-        int deviceType = DeviceType.normalize(device.getDeviceType());
+        int deviceFeature = DeviceFeature.normalize(device.getDeviceFeature());
         String deviceName = device.getName();
         if (deviceName == null || deviceName.isBlank()) {
             deviceName = device.getDeviceId();
@@ -96,14 +96,14 @@ public class JizhiAiDeviceSyncClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("deviceName", deviceName);
         body.put("deviceId", device.getDeviceId().trim());
-        if (device.getDeviceNo() != null) {
-            body.put("buildingNo", String.valueOf(device.getDeviceNo()));
+        if (device.getBuildingNo() != null && !device.getBuildingNo().isBlank()) {
+            body.put("buildingNo", device.getBuildingNo().trim());
         }
         if (fullStreamPath != null && !fullStreamPath.isBlank()) {
             body.put("fullStreamPath", fullStreamPath.trim());
         }
-        body.put("key", objectMapper.writeValueAsString(DeviceType.capabilityKeys(deviceType)));
-        body.put("isPush", String.valueOf(deviceType));
+        body.put("key", objectMapper.writeValueAsString(DeviceFeature.capabilityKeys(deviceFeature)));
+        body.put("isPush", String.valueOf(deviceFeature));
         body.put("deviceState", deviceState);
         if (device.getAddress() != null && !device.getAddress().isBlank()) {
             body.put("address", device.getAddress().trim());
