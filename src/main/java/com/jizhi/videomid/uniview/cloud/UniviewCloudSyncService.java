@@ -157,6 +157,7 @@ public class UniviewCloudSyncService {
         created.setModel(model);
         created.setPtzType(1);
         created.setFolderId(folderId);
+        created.setDeviceNo(UniviewCloudDeviceNos.of(name));
         long id = deviceRepository.insert(created);
         created.setId(id);
         ensureStream(deviceId, name);
@@ -176,6 +177,9 @@ public class UniviewCloudSyncService {
         }
         if (existing.getFolderId() == null && folderId != null) {
             existing.setFolderId(folderId);
+        }
+        if (existing.getDeviceNo() == null) {
+            existing.setDeviceNo(UniviewCloudDeviceNos.of(existing.getName()));
         }
         deviceRepository.update(existing);
         ensureStream(existing.getDeviceId(), existing.getName());
