@@ -1,4 +1,4 @@
 # 引用哪套配置：old = 旧服务器，zkrh = 新虚拟机。改这一行后重新打包。
 spring:
   profiles:
-    active: old
+    active: zkrh

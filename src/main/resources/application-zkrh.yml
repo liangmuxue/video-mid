@@ -24,7 +24,7 @@ spring:
 zlm:
   base-url: http://127.0.0.1:8080
   play-base-url: http://119.3.161.125:7094
-  rtsp-base-url: rtsp://119.3.161.125:554
+  rtsp-base-url: rtsp://119.3.161.125:7140
   secret: "w2tiwFe6qNQSjtuuENkrWhj8MAR79Qft"
   play-count-sync-ms: 5000
 
