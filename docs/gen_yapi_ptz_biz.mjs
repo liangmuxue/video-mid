@@ -109,7 +109,15 @@ const DEVICE_BASE = {
   deviceId: prop("string", "设备业务编码，全局唯一", "UV_10135"),
   deviceType: prop(
     "integer",
-    "设备类型：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
+    "摄像头类型：0=云台，1=天台，2=楼梯，3=电梯，4=大厅，5=地下室",
+    0,
+    false,
+    undefined,
+    [0, 1, 2, 3, 4, 5]
+  ),
+  deviceFeature: prop(
+    "integer",
+    "设备能力：0=抓拍，1=视频流，2=视频流+抓拍。未设置时按 1",
     1,
     false,
     undefined,
@@ -117,7 +125,7 @@ const DEVICE_BASE = {
   ),
   keys: {
     type: "array",
-    description: "业务能力，由 deviceType 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
+    description: "业务能力，由 deviceFeature 推导，不单独入库。0 只有 snap_face，1 只有 photo，2 为 photo 和 snap_face",
     items: prop("string", "能力标识：photo=视频，snap_face=抓拍", "photo"),
     example: ["photo"],
   },
@@ -152,7 +160,7 @@ const ex_catalog_stream = {
 
 const ex_device = {
   deviceId: DEV,
-  deviceType: 1,
+  deviceFeature: 1,
   keys: ["photo"],
   name: "演示球机",
   address: "宇视在线调试",
@@ -772,7 +780,7 @@ const doc = {
       post: {
         tags: ["业务端"],
         summary: "业务端-设备列表",
-        description: "含已停用设备。返回 deviceType、keys、liveStream。liveStream.streamUrl 为 RTSP，没有可解析地址时 liveStream 为 null。用 playable、livePlayable 判断可否回放/直播。不返回登录信息和码流明细。Body 可传 {}。",
+        description: "含已停用设备。返回 deviceFeature、keys、liveStream。liveStream.streamUrl 为 RTSP，没有可解析地址时 liveStream 为 null。用 playable、livePlayable 判断可否回放/直播。不返回登录信息和码流明细。Body 可传 {}。",
         operationId: "bizDevices",
         requestBody: jsonBody(ref("BizDeviceListRequest"), { folderId: 2, includeChildren: true }, false),
         responses: ok(ref("RespBizDeviceList"), [ex_device]),

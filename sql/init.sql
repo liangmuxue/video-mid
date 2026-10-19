@@ -72,8 +72,14 @@ CREATE TABLE `device` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `device_id`     VARCHAR(64)  NOT NULL COMMENT '业务设备编码，全局唯一',
   `device_no`     INT          DEFAULT NULL COMMENT '位置编号，如101表示一层第一个摄像头（展示可格式化为0101）',
-  `device_type`   INT          NOT NULL DEFAULT 1 COMMENT '设备类型：0抓拍 1视频流 2两者',
+  `device_type`   INT          NOT NULL DEFAULT 0 COMMENT '摄像头类型：0云台 1天台 2楼梯 3电梯 4大厅 5地下室',
+  `device_feature` INT         NOT NULL DEFAULT 1 COMMENT '设备能力：0抓拍 1视频流 2两者',
   `name`          VARCHAR(256) DEFAULT NULL COMMENT '设备名称',
+  `building_no`   VARCHAR(64)  DEFAULT NULL COMMENT '楼栋编号，由名称解析如 32-1-5-A',
+  `camera_ip`     VARCHAR(128) DEFAULT NULL COMMENT '摄像头 IP',
+  `camera_port`   INT          DEFAULT NULL COMMENT '摄像头端口',
+  `camera_username` VARCHAR(64) DEFAULT NULL COMMENT '摄像头登录账号',
+  `camera_password` VARCHAR(128) DEFAULT NULL COMMENT '摄像头登录密码',
   `platform_id`   VARCHAR(64)  DEFAULT NULL COMMENT '下级平台/国标 ID',
   `folder_id`     BIGINT       DEFAULT NULL COMMENT '所属目录 device_folder.id',
   `status`        INT          NOT NULL DEFAULT 2 COMMENT '0不可用 1已启用 2已停用',
@@ -170,10 +176,10 @@ INSERT INTO `record_device` (`id`, `name`, `host`, `port`, `username`, `password
 ALTER TABLE `record_device` AUTO_INCREMENT = 3;
 
 INSERT INTO `device`
-  (`id`, `device_id`, `device_no`, `device_type`, `name`, `platform_id`, `folder_id`, `status`, `manufacturer`, `model`, `address`,
+  (`id`, `device_id`, `device_no`, `device_type`, `device_feature`, `name`, `platform_id`, `folder_id`, `status`, `manufacturer`, `model`, `address`,
    `ptz_type`, `gateway_id`, `longitude`, `latitude`, `vendor`, `created_at`, `updated_at`)
 VALUES
-(1, 'UV_10135', 101, 2, '演示球机', '', 2, 1, '宇视', 'IPC-S6424-IR@P-X25-VF', '宇视在线调试',
+(1, 'UV_10135', 101, 0, 2, '演示球机', '', 2, 1, '宇视', 'IPC-S6424-IR@P-X25-VF', '宇视在线调试',
  0, '', NULL, NULL, 'UNIVIEW', 1790232886868, 1790471416722);
 ALTER TABLE `device` AUTO_INCREMENT = 2;
 

@@ -29,7 +29,21 @@ public class DeviceRepository {
             d.setDeviceNo(deviceNo);
         }
         d.setDeviceType(rs.getInt("device_type"));
+        d.setDeviceFeature(rs.getInt("device_feature"));
         d.setName(rs.getString("name"));
+        d.setBuildingNo(rs.getString("building_no"));
+        d.setCameraIp(coalesceText(rs.getString("camera_ip"), rs.getString("uv_host")));
+        Integer cameraPort = readOptionalInt(rs, "camera_port");
+        if (cameraPort == null) {
+            cameraPort = readOptionalInt(rs, "uv_port");
+        }
+        d.setCameraPort(cameraPort);
+        d.setCameraUsername(coalesceText(rs.getString("camera_username"), rs.getString("uv_username")));
+        d.setCameraPassword(coalesceText(rs.getString("camera_password"), rs.getString("uv_password")));
+        d.setHost(d.getCameraIp());
+        d.setPort(d.getCameraPort());
+        d.setUsername(d.getCameraUsername());
+        d.setPassword(d.getCameraPassword());
         d.setPlatformId(rs.getString("platform_id"));
         d.setVendor(rs.getString("vendor"));
         d.setGbRegisterId(rs.getString("gb_register_id"));
@@ -46,11 +60,6 @@ public class DeviceRepository {
         if (!rs.wasNull()) d.setLongitude(lon);
         double lat = rs.getDouble("latitude");
         if (!rs.wasNull()) d.setLatitude(lat);
-        d.setHost(rs.getString("host"));
-        int port = rs.getInt("port");
-        if (!rs.wasNull()) d.setPort(port);
-        d.setUsername(rs.getString("username"));
-        d.setPassword(rs.getString("password"));
         d.setAccessChannel(rs.getString("access_channel"));
         d.setAccessStatus(rs.getString("access_status"));
         d.setAccessError(rs.getString("access_error"));
@@ -73,9 +82,12 @@ public class DeviceRepository {
     }
 
     private static final String DEVICE_SELECT = """
-            SELECT d.id, d.device_id, d.device_no, d.device_type, d.name, d.platform_id, d.folder_id, d.status, d.manufacturer, d.model,
+            SELECT d.id, d.device_id, d.device_no, d.device_type, d.device_feature, d.name, d.building_no,
+                   d.camera_ip, d.camera_port, d.camera_username, d.camera_password,
+                   d.platform_id, d.folder_id, d.status, d.manufacturer, d.model,
                    d.address, d.ptz_type, d.gateway_id, d.longitude, d.latitude, d.vendor, d.gb_register_id, d.gb_audio_id, d.created_at, d.updated_at,
-                   u.host, u.port, u.username, u.password, u.access_channel, u.access_status, u.access_error,
+                   u.host AS uv_host, u.port AS uv_port, u.username AS uv_username, u.password AS uv_password,
+                   u.access_channel, u.access_status, u.access_error,
                    u.lan_ip, u.record_device_id, u.record_channel, u.record_channel_name
             FROM device d
             LEFT JOIN uniview_device u ON u.device_pk = d.id
@@ -88,7 +100,14 @@ public class DeviceRepository {
         addColumnIfMissing("gb_audio_id", "VARCHAR(32) DEFAULT NULL COMMENT '国标音频通道编号，类型 137'");
         addUniqueIndexIfMissing("uk_gb_audio_id", "gb_audio_id");
         addColumnIfMissing("device_no", "INT DEFAULT NULL COMMENT '位置编号，如101表示一层第一个摄像头'");
-        addColumnIfMissing("device_type", "INT NOT NULL DEFAULT 1 COMMENT '0抓拍 1视频流 2两者'");
+        ensureDeviceFeatureColumn();
+        addColumnIfMissing("device_type", "INT NOT NULL DEFAULT 0 COMMENT '摄像头类型：0云台 1天台 2楼梯 3电梯 4大厅 5地下室'");
+        addColumnIfMissing("building_no", "VARCHAR(64) DEFAULT NULL COMMENT '楼栋编号：由设备名称解析，如 32-1-5-A'");
+        addColumnIfMissing("camera_ip", "VARCHAR(128) DEFAULT NULL COMMENT '摄像头 IP'");
+        addColumnIfMissing("camera_port", "INT DEFAULT NULL COMMENT '摄像头端口'");
+        addColumnIfMissing("camera_username", "VARCHAR(64) DEFAULT NULL COMMENT '摄像头登录账号'");
+        addColumnIfMissing("camera_password", "VARCHAR(128) DEFAULT NULL COMMENT '摄像头登录密码'");
+        backfillCameraCredentialsFromUniview();
         jdbc.execute("""
                 CREATE TABLE IF NOT EXISTS uniview_device (
                   device_pk BIGINT NOT NULL COMMENT 'device.id',
@@ -206,6 +225,24 @@ public class DeviceRepository {
         }
     }
 
+    private void ensureDeviceFeatureColumn() {
+        Integer feature = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device' AND COLUMN_NAME = 'device_feature'",
+                Integer.class);
+        if (feature != null && feature > 0) {
+            return;
+        }
+        Integer legacy = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device' AND COLUMN_NAME = 'device_type'",
+                Integer.class);
+        if (legacy != null && legacy > 0) {
+            jdbc.execute(
+                    "ALTER TABLE device CHANGE COLUMN device_type device_feature INT NOT NULL DEFAULT 1 COMMENT '0抓拍 1视频流 2两者'");
+        } else {
+            addColumnIfMissing("device_feature", "INT NOT NULL DEFAULT 1 COMMENT '0抓拍 1视频流 2两者'");
+        }
+    }
+
     public List<Device> findAll() {
         return jdbc.query(DEVICE_SELECT + " ORDER BY d.id DESC", MAPPER);
     }
@@ -241,33 +278,44 @@ public class DeviceRepository {
         return list.stream().findFirst();
     }
 
+    private static void applyBuildingNoFromName(Device d) {
+        d.setBuildingNo(BuildingNoParser.fromDeviceName(d.getName()));
+    }
+
     public long insert(Device d) {
+        applyBuildingNoFromName(d);
         long now = TsUtil.nowMillis();
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO device (device_id, device_no, device_type, name, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, vendor, gb_register_id, gb_audio_id, created_at, updated_at) " +
-                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO device (device_id, device_no, device_type, device_feature, name, building_no, camera_ip, camera_port, camera_username, camera_password, platform_id, folder_id, status, manufacturer, model, address, ptz_type, gateway_id, longitude, latitude, vendor, gb_register_id, gb_audio_id, created_at, updated_at) " +
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, d.getDeviceId());
             if (d.getDeviceNo() == null) ps.setNull(2, Types.INTEGER); else ps.setInt(2, d.getDeviceNo());
-            ps.setInt(3, d.getDeviceType() == null ? DeviceType.VIDEO : d.getDeviceType());
-            ps.setString(4, d.getName());
-            ps.setString(5, d.getPlatformId());
-            if (d.getFolderId() == null) ps.setNull(6, Types.BIGINT); else ps.setLong(6, d.getFolderId());
-            ps.setInt(7, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
-            ps.setString(8, d.getManufacturer());
-            ps.setString(9, d.getModel());
-            ps.setString(10, d.getAddress());
-            ps.setInt(11, d.getPtzType() == null ? 0 : d.getPtzType());
-            ps.setString(12, d.getGatewayId());
-            if (d.getLongitude() == null) ps.setObject(13, null); else ps.setDouble(13, d.getLongitude());
-            if (d.getLatitude() == null) ps.setObject(14, null); else ps.setDouble(14, d.getLatitude());
-            ps.setString(15, d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
-            ps.setString(16, d.getGbRegisterId());
-            ps.setString(17, d.getGbAudioId());
-            ps.setLong(18, now);
-            ps.setLong(19, now);
+            ps.setInt(3, d.getDeviceType() == null ? DeviceType.PTZ : d.getDeviceType());
+            ps.setInt(4, d.getDeviceFeature() == null ? DeviceFeature.VIDEO : d.getDeviceFeature());
+            ps.setString(5, d.getName());
+            ps.setString(6, d.getBuildingNo());
+            ps.setString(7, blankToNull(d.getCameraIp()));
+            if (d.getCameraPort() == null) ps.setNull(8, Types.INTEGER); else ps.setInt(8, d.getCameraPort());
+            ps.setString(9, blankToNull(d.getCameraUsername()));
+            ps.setString(10, blankToNull(d.getCameraPassword()));
+            ps.setString(11, d.getPlatformId());
+            if (d.getFolderId() == null) ps.setNull(12, Types.BIGINT); else ps.setLong(12, d.getFolderId());
+            ps.setInt(13, d.getStatus() == null ? DeviceStatus.DISABLED : d.getStatus());
+            ps.setString(14, d.getManufacturer());
+            ps.setString(15, d.getModel());
+            ps.setString(16, d.getAddress());
+            ps.setInt(17, d.getPtzType() == null ? 0 : d.getPtzType());
+            ps.setString(18, d.getGatewayId());
+            if (d.getLongitude() == null) ps.setObject(19, null); else ps.setDouble(19, d.getLongitude());
+            if (d.getLatitude() == null) ps.setObject(20, null); else ps.setDouble(20, d.getLatitude());
+            ps.setString(21, d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor());
+            ps.setString(22, d.getGbRegisterId());
+            ps.setString(23, d.getGbAudioId());
+            ps.setLong(24, now);
+            ps.setLong(25, now);
             return ps;
         }, kh);
         Number key = kh.getKey();
@@ -278,11 +326,14 @@ public class DeviceRepository {
     }
 
     public int update(Device d) {
+        applyBuildingNoFromName(d);
         long now = TsUtil.nowMillis();
         d.setUpdatedAt(now);
         return jdbc.update(
-                "UPDATE device SET device_no=?, device_type=?, name=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, vendor=?, gb_register_id=?, gb_audio_id=?, updated_at=? WHERE id=?",
-                d.getDeviceNo(), d.getDeviceType() == null ? DeviceType.VIDEO : d.getDeviceType(), d.getName(), d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
+                "UPDATE device SET device_no=?, device_type=?, device_feature=?, name=?, building_no=?, camera_ip=?, camera_port=?, camera_username=?, camera_password=?, platform_id=?, folder_id=?, status=?, manufacturer=?, model=?, address=?, ptz_type=?, gateway_id=?, longitude=?, latitude=?, vendor=?, gb_register_id=?, gb_audio_id=?, updated_at=? WHERE id=?",
+                d.getDeviceNo(), d.getDeviceType() == null ? DeviceType.PTZ : d.getDeviceType(), d.getDeviceFeature() == null ? DeviceFeature.VIDEO : d.getDeviceFeature(), d.getName(), d.getBuildingNo(),
+                blankToNull(d.getCameraIp()), d.getCameraPort(), blankToNull(d.getCameraUsername()), blankToNull(d.getCameraPassword()),
+                d.getPlatformId(), d.getFolderId(), d.getStatus(), d.getManufacturer(), d.getModel(), d.getAddress(),
                 d.getPtzType() == null ? 0 : d.getPtzType(), d.getGatewayId(), d.getLongitude(), d.getLatitude(),
                 d.getVendor() == null || d.getVendor().isBlank() ? AccessVendor.MOCK.name() : d.getVendor(),
                 d.getGbRegisterId(), d.getGbAudioId(),
@@ -369,5 +420,40 @@ public class DeviceRepository {
     private static Long readMillis(ResultSet rs, String col) throws SQLException {
         long v = rs.getLong(col);
         return rs.wasNull() ? null : v;
+    }
+
+    private static Integer readOptionalInt(ResultSet rs, String col) throws SQLException {
+        int v = rs.getInt(col);
+        return rs.wasNull() ? null : v;
+    }
+
+    private static String coalesceText(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback;
+        }
+        return null;
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private void backfillCameraCredentialsFromUniview() {
+        jdbc.update("""
+                UPDATE device d
+                INNER JOIN uniview_device u ON u.device_pk = d.id
+                SET d.camera_ip = u.host,
+                    d.camera_port = u.port,
+                    d.camera_username = u.username,
+                    d.camera_password = u.password
+                WHERE (d.camera_ip IS NULL OR d.camera_ip = '')
+                  AND u.host IS NOT NULL AND u.host <> ''
+                """);
     }
 }

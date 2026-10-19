@@ -6,7 +6,7 @@ import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.DeviceStatus;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
-import com.jizhi.videomid.device.DeviceType;
+import com.jizhi.videomid.device.DeviceFeature;
 import com.jizhi.videomid.gb28181.Gb28181Ids;
 import com.jizhi.videomid.gb28181.sip.live.Gb28181InviteSession;
 import com.jizhi.videomid.gb28181.sip.live.Gb28181InviteSessionStore;
@@ -189,7 +189,7 @@ public class Gb28181DeviceProvisioner {
         created.setName(displayName(name, channelId));
         created.setVendor(AccessVendor.GB28181.name());
         created.setGbRegisterId(registerId);
-        created.setDeviceType(DeviceType.VIDEO);
+        created.setDeviceFeature(DeviceFeature.VIDEO);
         created.setStatus(DeviceStatus.ENABLED);
         created.setPtzType(0);
         created.setManufacturer(clip(manufacturer, 128));

@@ -43,13 +43,19 @@ DEVICE_BASE = {
     ),
     "deviceType": prop(
         "integer",
-        "设备类型：0=抓拍，1=视频流，2=视频流+抓拍",
+        "摄像头类型：0=云台，1=天台，2=楼梯，3=电梯，4=大厅，5=地下室",
+        0,
+        enum=[0, 1, 2, 3, 4, 5],
+    ),
+    "deviceFeature": prop(
+        "integer",
+        "设备能力：0=抓拍，1=视频流，2=视频流+抓拍",
         1,
         enum=[0, 1, 2],
     ),
     "keys": {
         "type": "array",
-        "description": "业务能力 key（不入库）：deviceType=0 仅 snap_face，1 仅 photo，2 为 photo+snap_face",
+        "description": "业务能力 key（不入库）：deviceFeature=0 仅 snap_face，1 仅 photo，2 为 photo+snap_face",
         "items": prop("string", "能力标识", "photo"),
         "example": ["photo", "snap_face"],
     },
@@ -339,9 +345,9 @@ DeviceRequest = obj(
             101,
             nullable=True,
         ),
-        "deviceType": prop(
+        "deviceFeature": prop(
             "integer",
-            "设备类型：0=抓拍，1=视频流，2=两者；默认 1",
+            "设备能力：0=抓拍，1=视频流，2=两者；默认 1",
             1,
             enum=[0, 1, 2],
         ),

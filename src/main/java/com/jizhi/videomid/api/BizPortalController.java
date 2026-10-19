@@ -151,6 +151,7 @@ public class BizPortalController {
         Map<String, Object> row = new java.util.LinkedHashMap<>();
         row.put("deviceId", source.get("deviceId"));
         row.put("deviceType", source.get("deviceType"));
+        row.put("deviceFeature", source.get("deviceFeature"));
         row.put("keys", source.get("keys"));
         row.put("name", source.get("name"));
         row.put("address", source.get("address"));
