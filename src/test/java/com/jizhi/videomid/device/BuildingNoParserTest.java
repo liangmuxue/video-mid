@@ -15,12 +15,37 @@ class BuildingNoParserTest {
 
     @Test
     void streetNumberWithFloorAndDeviceCode() {
-        assertEquals("40-1-3-B2", BuildingNoParser.fromDeviceName("邻海街40号3-B2"));
+        assertEquals("40-1-1-A", BuildingNoParser.fromDeviceName("邻海街40号1-1"));
+        assertEquals("40-1-1-B", BuildingNoParser.fromDeviceName("邻海街40号1-B1"));
+        assertEquals("40-1-4-C", BuildingNoParser.fromDeviceName("邻海街40号4-B2"));
     }
 
     @Test
     void streetFloorWithoutDeviceDefaultsA() {
         assertEquals("33-1-2-A", BuildingNoParser.fromDeviceName("邻海街33号2层侧门"));
+        assertEquals("33-1-2-B", BuildingNoParser.fromDeviceName("邻海街33号2层大堂"));
+    }
+
+    @Test
+    void roomLetterUsesBuildingUnitFloorAndSide() {
+        assertEquals("32-1-10-A", BuildingNoParser.fromDeviceName("邻海街32号10A"));
+        assertEquals("32-1-1-A", BuildingNoParser.fromDeviceName("邻海街32号1A"));
+        assertEquals("34-1-9-B", BuildingNoParser.fromDeviceName("邻海34号9B"));
+        assertEquals("34-1-12-B", BuildingNoParser.fromDeviceName("邻海园34号12B"));
+    }
+
+    @Test
+    void roofAndBasement() {
+        assertEquals("34-1-0-A", BuildingNoParser.fromDeviceName("邻海街34号天台A"));
+        assertEquals("34-1-0-B", BuildingNoParser.fromDeviceName("邻海街34号天台B"));
+        assertEquals("32-1-B1-A", BuildingNoParser.fromDeviceName("邻海街32号B1侧门"));
+        assertEquals("32-1-B1-B", BuildingNoParser.fromDeviceName("邻海街32号B1大堂"));
+        assertEquals("34-1-B1-A", BuildingNoParser.fromDeviceName("邻海街34号B1侧门"));
+        assertEquals("34-1-B1-B", BuildingNoParser.fromDeviceName("邻海街34号B1大堂"));
+        assertEquals("32-1-B2-A", BuildingNoParser.fromDeviceName("邻海街32号B2-A"));
+        assertEquals("32-1-B2-B", BuildingNoParser.fromDeviceName("邻海街32号B2-B"));
+        assertEquals("32-1-B3-A", BuildingNoParser.fromDeviceName("邻海街32号B3"));
+        assertEquals("34-1-B3-A", BuildingNoParser.fromDeviceName("邻海街34号B3"));
     }
 
     @Test

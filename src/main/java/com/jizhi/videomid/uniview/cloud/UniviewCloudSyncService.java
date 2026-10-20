@@ -7,10 +7,10 @@ import com.jizhi.videomid.device.DeviceFolder;
 import com.jizhi.videomid.device.DeviceFolderRepository;
 import com.jizhi.videomid.device.DeviceFolderService;
 import com.jizhi.videomid.device.DeviceRepository;
+import com.jizhi.videomid.device.DeviceFeature;
 import com.jizhi.videomid.device.DeviceStatus;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
-import com.jizhi.videomid.device.DeviceFeature;
 import com.jizhi.videomid.device.dto.DeviceFolderRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -157,7 +157,7 @@ public class UniviewCloudSyncService {
         created.setModel(model);
         created.setPtzType(1);
         created.setFolderId(folderId);
-        created.setDeviceNo(UniviewCloudDeviceNos.of(name));
+        created.setDeviceNo(deviceNoText(name));
         long id = deviceRepository.insert(created);
         created.setId(id);
         ensureStream(deviceId, name);
@@ -178,8 +178,8 @@ public class UniviewCloudSyncService {
         if (existing.getFolderId() == null && folderId != null) {
             existing.setFolderId(folderId);
         }
-        if (existing.getDeviceNo() == null) {
-            existing.setDeviceNo(UniviewCloudDeviceNos.of(existing.getName()));
+        if (existing.getDeviceNo() == null || existing.getDeviceNo().isBlank()) {
+            existing.setDeviceNo(deviceNoText(existing.getName()));
         }
         deviceRepository.update(existing);
         ensureStream(existing.getDeviceId(), existing.getName());
@@ -286,6 +286,11 @@ public class UniviewCloudSyncService {
         request.setSortNo(sortNo);
         Object id = folderService.create(request).get("id");
         return ((Number) id).longValue();
+    }
+
+    private static String deviceNoText(String name) {
+        Integer deviceNo = UniviewCloudDeviceNos.of(name);
+        return deviceNo == null ? null : String.valueOf(deviceNo);
     }
 
     private static String text(JsonNode node, String field, String fallback) {

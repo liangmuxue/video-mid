@@ -5,8 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 public class DeviceRequest {
     @NotBlank
     private String deviceId;
-    /** 位置编号，如 101（一层第一个）；可选 */
-    private Integer deviceNo;
+    /** 位置编号。纯数字如 101，或楼栋编号如 40-1-3-B2。可选 */
+    private String deviceNo;
     /** 摄像头类型：0=云台 … 5=地下室；默认 0 */
     private Integer deviceType;
     /** 设备能力特性：0=抓拍，1=视频流，2=两者；默认 1 */
@@ -45,8 +45,16 @@ public class DeviceRequest {
 
     public String getDeviceId() { return deviceId; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
-    public Integer getDeviceNo() { return deviceNo; }
-    public void setDeviceNo(Integer deviceNo) { this.deviceNo = deviceNo; }
+    public String getDeviceNo() { return deviceNo; }
+
+    public void setDeviceNo(Object deviceNo) {
+        if (deviceNo == null) {
+            this.deviceNo = null;
+            return;
+        }
+        String text = String.valueOf(deviceNo).trim();
+        this.deviceNo = text.isEmpty() ? null : text;
+    }
     public Integer getDeviceType() { return deviceType; }
     public void setDeviceType(Integer deviceType) { this.deviceType = deviceType; }
     public Integer getDeviceFeature() { return deviceFeature; }

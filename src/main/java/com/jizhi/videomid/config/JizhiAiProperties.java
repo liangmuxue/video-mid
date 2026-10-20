@@ -3,7 +3,7 @@ package com.jizhi.videomid.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 极知 AI 业务侧接口：新增 /aidemo/device/save，改动 /aidemo/device/update。
+ * 极知 AI 业务侧接口：新增和修改都调用 /aidemo/device/update。
  * {@code base-url} 填协议 + IP + 端口，不含路径，例如 {@code http://119.3.161.125:8080}。
  */
 @ConfigurationProperties(prefix = "jizhi-ai")

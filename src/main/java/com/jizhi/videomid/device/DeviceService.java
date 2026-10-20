@@ -926,10 +926,40 @@ public class DeviceService {
         return anyOnline;
     }
 
-    private void notifyJizhiAiUpdate(Device device) {
+    /** 把库里的全部设备按修改接口同步到极知。不看当前目录筛选。 */
+    public Map<String, Object> syncAllDevicesToJizhi() {
+        if (!jizhiAiDeviceSyncClient.isReady()) {
+            throw new IllegalArgumentException("极知同步未开启或未配置地址");
+        }
+        int success = 0;
+        int failed = 0;
+        int skipped = 0;
+        List<Device> devices = deviceRepository.findAll();
+        for (Device device : devices) {
+            if (device.getDeviceId() == null || device.getDeviceId().isBlank()) {
+                skipped++;
+                continue;
+            }
+            if (notifyJizhiAiUpdate(device)) {
+                success++;
+            } else {
+                failed++;
+            }
+        }
+        log.info("[极知AI] 全量同步完成 total={} success={} failed={} skipped={}",
+                devices.size(), success, failed, skipped);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", devices.size());
+        result.put("success", success);
+        result.put("failed", failed);
+        result.put("skipped", skipped);
+        return result;
+    }
+
+    private boolean notifyJizhiAiUpdate(Device device) {
         Map<String, Object> live = liveStreamForDevice(device.getDeviceId());
         String rtsp = live == null ? null : (String) live.get("streamUrl");
-        jizhiAiDeviceSyncClient.syncDeviceUpdate(device, rtsp);
+        return jizhiAiDeviceSyncClient.syncDeviceUpdate(device, rtsp);
     }
 
     private void notifyJizhiAiSave(Device device) {
@@ -943,7 +973,6 @@ public class DeviceService {
         m.put("id", d.getId());
         m.put("deviceId", d.getDeviceId());
         m.put("deviceNo", d.getDeviceNo());
-        m.put("buildingNo", d.getBuildingNo());
         m.put("deviceType", DeviceType.normalize(d.getDeviceType()));
         m.put("deviceFeature", DeviceFeature.normalize(d.getDeviceFeature()));
         m.put("keys", DeviceFeature.capabilityKeys(d.getDeviceFeature()));

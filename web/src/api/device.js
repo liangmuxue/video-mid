@@ -5,6 +5,7 @@ export const fetchDevice = (id) => http.get(`/api/devices/${id}`)
 export const fetchDeviceByDeviceId = (deviceId) =>
   http.get(`/api/devices/by-device-id/${encodeURIComponent(deviceId)}`)
 export const createDevice = (data) => http.post('/api/devices', data)
+export const syncAllDevicesToJizhi = () => http.post('/api/devices/sync-jizhi', {}, { timeout: 600000 })
 export const updateDevice = (id, data) => http.put(`/api/devices/${id}`, data)
 export const deleteDevice = (id) => http.delete(`/api/devices/${id}`)
 export const fetchDeviceFolderTree = () => http.get('/api/device-folders/tree')

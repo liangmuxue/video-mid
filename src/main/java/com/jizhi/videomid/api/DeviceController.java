@@ -41,6 +41,12 @@ public class DeviceController {
         return ApiResponse.ok(deviceService.getDevice(id));
     }
 
+    /** 把全部设备同步到极知 /aidemo/device/update。 */
+    @PostMapping("/devices/sync-jizhi")
+    public ApiResponse<Map<String, Object>> syncAllToJizhi() {
+        return ApiResponse.ok(deviceService.syncAllDevicesToJizhi());
+    }
+
     @PostMapping("/devices")
     public ApiResponse<Map<String, Object>> create(@Valid @RequestBody DeviceRequest request) {
         return ApiResponse.ok(deviceService.createDevice(request));

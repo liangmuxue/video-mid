@@ -49,6 +49,9 @@
             含下级目录
           </label>
           <button type="button" class="ghost" :disabled="syncingCloud" @click="syncCloud">同步宇视云</button>
+          <button type="button" class="ghost" :disabled="syncingJizhi" @click="syncAllJizhi">
+            {{ syncingJizhi ? '同步中…' : '同步全部设备' }}
+          </button>
           <button type="button" class="ghost" @click="openRecordDevices">录像设备</button>
           <button type="button" class="ghost" :disabled="loading" @click="reloadAll">刷新</button>
         </section>
@@ -61,7 +64,6 @@
                 <th>位置编号</th>
                 <th>摄像头类型</th>
                 <th>设备能力</th>
-                <th>楼栋编号</th>
                 <th>名称</th>
                 <th>状态</th>
                 <th>平台</th>
@@ -78,7 +80,6 @@
                 <td class="mono">{{ formatDeviceNo(d.deviceNo) }}</td>
                 <td>{{ deviceTypeLabel(d.deviceType) }}</td>
                 <td>{{ deviceFeatureLabel(d.deviceFeature) }}</td>
-                <td class="mono">{{ d.buildingNo || '-' }}</td>
                 <td>{{ d.name || '-' }}</td>
                 <td>
                   <span class="badge" :class="statusClass(d.status)">{{ statusLabel(d.status) }}</span>
@@ -101,7 +102,7 @@
                 </td>
               </tr>
               <tr v-if="!filtered.length">
-                <td colspan="13" class="empty">暂无设备</td>
+                <td colspan="12" class="empty">暂无设备</td>
               </tr>
             </tbody>
           </table>
@@ -114,9 +115,9 @@
         <h2>{{ editingId ? '编辑设备' : '新增设备' }}</h2>
         <label><span>设备ID</span><input v-model.trim="form.deviceId" required :disabled="!!editingId" :placeholder="form.vendor === 'GB28181' ? '20位摄像机编号，类型132' : ''" /></label>
         <label><span>位置编号</span>
-          <input v-model.number="form.deviceNo" type="number" min="0" step="1" placeholder="如 101，展示为 0101" />
+          <input v-model.trim="form.deviceNo" type="text" placeholder="如 101，或 40-1-3-B2" />
         </label>
-        <p class="tip">数字类型：前两位可表示楼层，后两位表示该层序号，如 101 表示一层第一个摄像头。</p>
+        <p class="tip">纯数字按 4 位展示，如 101 显示为 0101；楼栋编号如 40-1-3-B2 原样保存。</p>
         <label><span>摄像头类型</span>
           <select v-model.number="form.deviceType">
             <option :value="0">云台</option>
@@ -283,6 +284,7 @@ import {
   deleteRecordDevice,
   fetchRecordDevices,
   deleteDevice,
+  syncAllDevicesToJizhi,
   deleteDeviceFolder,
   fetchDeviceFolderTree,
   fetchDevices,
@@ -309,12 +311,12 @@ function vendorLabel(vendor) {
   return '模拟'
 }
 
-/** 列表展示：101 → 0101（4 位补零，可空） */
+/** 纯数字按 4 位补零，如 101 → 0101；楼栋编号原样显示。 */
 function formatDeviceNo(deviceNo) {
   if (deviceNo == null || deviceNo === '') return '-'
-  const n = Number(deviceNo)
-  if (Number.isNaN(n)) return '-'
-  return String(Math.trunc(n)).padStart(4, '0')
+  const text = String(deviceNo).trim()
+  if (!/^\d+$/.test(text)) return text
+  return text.padStart(4, '0')
 }
 
 function liveStreamLabel(liveStream) {
@@ -339,6 +341,7 @@ const devices = ref([])
 const folderTree = ref([])
 const loading = ref(false)
 const syncingCloud = ref(false)
+const syncingJizhi = ref(false)
 const error = ref('')
 const keyword = ref('')
 const selectedFolderId = ref(null)
@@ -446,6 +449,24 @@ async function loadDevices() {
     error.value = e.message || '加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function syncAllJizhi() {
+  if (!window.confirm('把全部设备同步到极知？不受当前目录和搜索筛选影响。')) return
+  syncingJizhi.value = true
+  error.value = ''
+  try {
+    const result = await syncAllDevicesToJizhi()
+    const total = result?.total ?? 0
+    const success = result?.success ?? 0
+    const failed = result?.failed ?? 0
+    const skipped = result?.skipped ?? 0
+    window.alert(`同步完成，共 ${total} 台，成功 ${success} 台，失败 ${failed} 台，跳过 ${skipped} 台`)
+  } catch (e) {
+    error.value = e.message || '同步全部设备失败'
+  } finally {
+    syncingJizhi.value = false
   }
 }
 
@@ -596,7 +617,8 @@ async function save() {
       payload.port = payload.cameraPort
       payload.username = payload.cameraUsername || null
     }
-    if (payload.deviceNo === '' || Number.isNaN(payload.deviceNo)) payload.deviceNo = null
+    if (payload.deviceNo == null || String(payload.deviceNo).trim() === '') payload.deviceNo = null
+    else payload.deviceNo = String(payload.deviceNo).trim()
     if (payload.deviceType === '' || Number.isNaN(payload.deviceType)) payload.deviceType = 0
     if (payload.deviceFeature === '' || Number.isNaN(payload.deviceFeature)) payload.deviceFeature = 1
     if (!payload.recordDeviceId) payload.recordDeviceId = null

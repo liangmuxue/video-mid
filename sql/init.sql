@@ -71,11 +71,10 @@ CREATE TABLE `record_device` (
 CREATE TABLE `device` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
   `device_id`     VARCHAR(64)  NOT NULL COMMENT '业务设备编码，全局唯一',
-  `device_no`     INT          DEFAULT NULL COMMENT '位置编号，如101表示一层第一个摄像头（展示可格式化为0101）',
+  `device_no`     VARCHAR(64)  DEFAULT NULL COMMENT '位置编号，纯数字如101，或楼栋编号如40-1-3-B2',
   `device_type`   INT          NOT NULL DEFAULT 0 COMMENT '摄像头类型：0云台 1天台 2楼梯 3电梯 4大厅 5地下室',
   `device_feature` INT         NOT NULL DEFAULT 1 COMMENT '设备能力：0抓拍 1视频流 2两者',
   `name`          VARCHAR(256) DEFAULT NULL COMMENT '设备名称',
-  `building_no`   VARCHAR(64)  DEFAULT NULL COMMENT '楼栋编号，由名称解析如 32-1-5-A',
   `camera_ip`     VARCHAR(128) DEFAULT NULL COMMENT '摄像头 IP',
   `camera_port`   INT          DEFAULT NULL COMMENT '摄像头端口',
   `camera_username` VARCHAR(64) DEFAULT NULL COMMENT '摄像头登录账号',
