@@ -162,6 +162,7 @@
             <option value="HIKVISION">海康</option>
             <option value="RTSP">直接拉流</option>
             <option value="GB28181">国标</option>
+            <option value="EAGLE_EYE">鹰眼</option>
           </select>
         </label>
         <p class="tip">一台设备只对接一个平台。海康尚未接入。直接拉流只保存对方给的 RTSP，有人播放才拉。国标可以先在这里编号，再去摄像机填写；也可以等摄像机注册后自动出现。宇视云设备请用「同步宇视云」，编号是序列号:通道号，IPC 通道号为 0。</p>
@@ -308,6 +309,7 @@ function vendorLabel(vendor) {
   if (vendor === 'HIKVISION') return '海康'
   if (vendor === 'RTSP') return '直接拉流'
   if (vendor === 'GB28181') return '国标'
+  if (vendor === 'EAGLE_EYE') return '鹰眼'
   return '模拟'
 }
 

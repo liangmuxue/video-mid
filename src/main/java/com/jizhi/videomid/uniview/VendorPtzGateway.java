@@ -5,6 +5,7 @@ import com.jizhi.videomid.device.Device;
 import com.jizhi.videomid.device.DevicePtzPresetService;
 import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.VendorDevices;
+import com.jizhi.videomid.eagleeye.EagleEyePtz;
 import com.jizhi.videomid.uniview.cloud.UniviewCloudPtz;
 import com.jizhi.videomid.uniview.live.LiveUniviewPtzAdapter;
 import org.springframework.context.annotation.Primary;
@@ -33,15 +34,18 @@ public class VendorPtzGateway implements UniviewPtzPort {
     private final DevicePtzPresetService presetService;
     private final LiveUniviewPtzAdapter livePtz;
     private final UniviewCloudPtz cloudPtz;
+    private final EagleEyePtz eagleEyePtz;
 
     public VendorPtzGateway(DeviceRepository deviceRepository,
                             DevicePtzPresetService presetService,
                             LiveUniviewPtzAdapter livePtz,
-                            UniviewCloudPtz cloudPtz) {
+                            UniviewCloudPtz cloudPtz,
+                            EagleEyePtz eagleEyePtz) {
         this.deviceRepository = deviceRepository;
         this.presetService = presetService;
         this.livePtz = livePtz;
         this.cloudPtz = cloudPtz;
+        this.eagleEyePtz = eagleEyePtz;
     }
 
     @Override
@@ -78,6 +82,16 @@ public class VendorPtzGateway implements UniviewPtzPort {
             }
             devices.add(item);
         }
+        for (Device device : deviceRepository.findAll()) {
+            if (VendorDevices.of(device) != AccessVendor.EAGLE_EYE) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("deviceId", device.getDeviceId());
+            item.put("name", device.getName());
+            item.put("presets", List.of());
+            devices.add(item);
+        }
         return devices;
     }
 
@@ -90,6 +104,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
             case UNIVIEW -> livePtz.listPresets(deviceId);
             case UNIVIEW_CLOUD -> cloudPtz.listPresets(deviceId);
             case MOCK -> presetService.listMaps(deviceId);
+            case EAGLE_EYE -> List.of();
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
             case RTSP, GB28181 -> throw new IllegalArgumentException(VendorDevices.RTSP_NO_PTZ);
         };
@@ -100,7 +115,8 @@ public class VendorPtzGateway implements UniviewPtzPort {
         int cmd = directionCmd(direction);
         return route(deviceId, () -> livePtz.move(deviceId, direction, speed),
                 () -> cloudPtz.move(deviceId, direction, speed),
-                () -> mockOk("move", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))));
+                () -> mockOk("move", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))),
+                () -> eagleEyePtz.move(deviceId, direction, speed));
     }
 
     @Override
@@ -108,7 +124,8 @@ public class VendorPtzGateway implements UniviewPtzPort {
         int cmd = zoomCmd(action);
         return route(deviceId, () -> livePtz.zoom(deviceId, action, speed),
                 () -> cloudPtz.zoom(deviceId, action, speed),
-                () -> mockOk("zoom", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))));
+                () -> mockOk("zoom", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))),
+                () -> eagleEyePtz.zoom(deviceId, action, speed));
     }
 
     @Override
@@ -116,14 +133,16 @@ public class VendorPtzGateway implements UniviewPtzPort {
         int cmd = focusCmd(action);
         return route(deviceId, () -> livePtz.focus(deviceId, action, speed),
                 () -> cloudPtz.focus(deviceId, action, speed),
-                () -> mockOk("focus", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))));
+                () -> mockOk("focus", deviceId, Map.of("ptzCmd", cmd, "speed", clampSpeed(speed))),
+                () -> eagleEyePtz.focus(deviceId, action, speed));
     }
 
     @Override
     public Map<String, Object> wideAngle(String deviceId) {
         return route(deviceId, () -> livePtz.wideAngle(deviceId),
                 () -> cloudPtz.wideAngle(deviceId),
-                () -> mockOk("wide-angle", deviceId, Map.of("ptzCmd", CMD_ZOOM_OUT, "speed", 4)));
+                () -> mockOk("wide-angle", deviceId, Map.of("ptzCmd", CMD_ZOOM_OUT, "speed", 4)),
+                EagleEyePtz::unsupported);
     }
 
     @Override
@@ -132,7 +151,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
                 () -> cloudPtz.gotoPreset(deviceId, presetIndex), () -> {
             presetService.require(deviceId, presetIndex);
             return mockOk("goto-preset", deviceId, Map.of("presetIndex", presetIndex));
-        });
+        }, EagleEyePtz::unsupported);
     }
 
     @Override
@@ -145,7 +164,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
                     "name", name,
                     "overwrite", overwrite
             ));
-        });
+        }, EagleEyePtz::unsupported);
     }
 
     @Override
@@ -153,18 +172,21 @@ public class VendorPtzGateway implements UniviewPtzPort {
         String channel = channelType == null || channelType.isBlank() ? "visible" : channelType;
         return route(deviceId, () -> livePtz.snapshot(deviceId, channel),
                 () -> cloudPtz.snapshot(deviceId, channel),
-                () -> mockOk("snapshot", deviceId, Map.of("channelType", channel)));
+                () -> mockOk("snapshot", deviceId, Map.of("channelType", channel)),
+                EagleEyePtz::unsupported);
     }
 
     private Map<String, Object> route(String deviceId, java.util.function.Supplier<Map<String, Object>> uniview,
                                       java.util.function.Supplier<Map<String, Object>> cloud,
-                                      java.util.function.Supplier<Map<String, Object>> mock) {
+                                      java.util.function.Supplier<Map<String, Object>> mock,
+                                      java.util.function.Supplier<Map<String, Object>> eagleEye) {
         Device device = deviceRepository.findByDeviceId(deviceId)
                 .orElseThrow(() -> new IllegalArgumentException("设备不存在: " + deviceId));
         return switch (VendorDevices.of(device)) {
             case UNIVIEW -> uniview.get();
             case UNIVIEW_CLOUD -> cloud.get();
             case MOCK -> mock.get();
+            case EAGLE_EYE -> eagleEye.get();
             case HIKVISION -> throw new IllegalArgumentException(VendorDevices.HIKVISION_UNSUPPORTED);
             case RTSP, GB28181 -> throw new IllegalArgumentException(VendorDevices.RTSP_NO_PTZ);
         };

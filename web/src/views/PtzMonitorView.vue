@@ -157,7 +157,7 @@ import {
 import { stopUniviewCloudLive } from '../api/univiewCloud'
 import { isEnabled, statusClass, statusLabel } from '../utils/deviceStatus'
 
-const PTZ_VENDORS = new Set(['MOCK', 'UNIVIEW', 'UNIVIEW_CLOUD'])
+const PTZ_VENDORS = new Set(['MOCK', 'UNIVIEW', 'UNIVIEW_CLOUD', 'EAGLE_EYE'])
 
 const loading = ref(true)
 const opening = ref(false)
@@ -212,6 +212,7 @@ function vendorLabel(vendor) {
     case 'GB28181': return '国标'
     case 'RTSP': return 'RTSP'
     case 'HIKVISION': return '海康'
+    case 'EAGLE_EYE': return '鹰眼'
     default: return ''
   }
 }

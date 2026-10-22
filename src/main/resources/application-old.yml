@@ -47,6 +47,9 @@ uniview-cloud:
   app-id: "920170595956555776"
   secret-key: "91e304c8d4382ac34708525c26bb840f"
   quality: 1
+  main-stream-names:
+    - 邻海街34号B3
+    - 邻海街40号2-B2
   protocol: 4
 
 # 国标 GB28181：前期 mock 模拟下级，live 接真实 SIP（不用 RTSP）
@@ -108,6 +111,13 @@ record:
 # 对外接口返回视频绝对地址时使用（可选；不配则按请求 host 自动生成）
 open-api:
   public-base-url: http://8.130.74.232:8090
+
+# 鹰眼子系统后台。对外控制仍走 /api/ptz。IP 未定，base-url 先留空。报警上报不接。
+eagle-eye:
+  enabled: true
+  base-url: ""
+  control-path: /api/control
+  terminals: []
 
 # 极知 AI：新增和修改都 POST {base-url}/aidemo/device/update
 jizhi-ai:

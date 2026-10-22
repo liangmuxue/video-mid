@@ -105,7 +105,8 @@ public class UniviewCloudPlayService {
                 stopCloud(current.liveId());
             }
             enableLive(target.serial());
-            String source = liveUrl(target);
+            Device device = deviceRepository.findByDeviceId(deviceId).orElse(null);
+            String source = liveUrl(target, device == null ? null : device.getName());
             JsonNode started = client.post("/openapi/live/video/start", Map.of("url", source));
             String liveId = started.path("liveId").asText("");
             String zlmStream = UniviewCloudDeviceIds.zlmStream(target.serial(), target.channelNo());
@@ -189,14 +190,17 @@ public class UniviewCloudPlayService {
         }
     }
 
-    private String liveUrl(UniviewCloudDeviceIds.Target target) {
+    private String liveUrl(UniviewCloudDeviceIds.Target target, String deviceName) {
+        int quality = properties.qualityFor(deviceName);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("deviceSerial", target.serial());
         body.put("channelNo", target.channelNo());
         body.put("expireTime", 3600);
         body.put("protocol", properties.getProtocol());
-        body.put("quality", properties.getQuality());
+        body.put("quality", quality);
         body.put("type", 1);
+        log.info("[宇视云] 取流 name={} serial={} channel={} quality={}",
+                deviceName, target.serial(), target.channelNo(), quality);
         JsonNode data = client.post("/openapi/live/video/get", body);
         String url = data.path("url").asText("");
         if (url.isBlank()) {

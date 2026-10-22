@@ -12,7 +12,9 @@ public enum AccessVendor {
     /** 地址已经给出，由本服务按该 RTSP 拉流。 */
     RTSP,
     /** 摄像机向本服务注册国标，按视频通道自动入库。 */
-    GB28181;
+    GB28181,
+    /** 鹰眼子系统。对外仍走统一云台接口，后台改调子系统控制协议。 */
+    EAGLE_EYE;
 
     public static AccessVendor from(String raw) {
         if (raw == null || raw.isBlank()) {

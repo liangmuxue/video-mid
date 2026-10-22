@@ -484,6 +484,7 @@ public class DeviceService {
             case MOCK -> startMockLive(deviceId);
             case GB28181 -> gb28181PlayService.startLive(deviceId)
                     .orElseThrow(() -> new IllegalArgumentException("国标点播未返回播放地址"));
+            case EAGLE_EYE -> throw new IllegalArgumentException("鹰眼设备不从这里取直播");
         };
     }
 
@@ -673,7 +674,7 @@ public class DeviceService {
             try {
                 return AccessVendor.from(raw);
             } catch (IllegalArgumentException ex) {
-                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、UNIVIEW_CLOUD、HIKVISION、RTSP、GB28181");
+                throw new IllegalArgumentException("平台只能是 MOCK、UNIVIEW、UNIVIEW_CLOUD、HIKVISION、RTSP、GB28181、EAGLE_EYE");
             }
         }
         if (d.getHost() != null || d.getLanIp() != null || d.getRecordDeviceId() != null) {
@@ -862,6 +863,9 @@ public class DeviceService {
                 continue;
             }
             if (AccessVendor.UNIVIEW_CLOUD.name().equals(d.getVendor())) {
+                continue;
+            }
+            if (AccessVendor.EAGLE_EYE.name().equals(d.getVendor())) {
                 continue;
             }
             if (AccessVendor.RTSP.name().equals(d.getVendor())) {
