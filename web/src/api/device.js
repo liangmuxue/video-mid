@@ -27,7 +27,7 @@ export const fetchBizDevices = (params = {}) => http.post('/api/biz/devices/list
 export const fetchBizDevice = (deviceId) =>
   http.post('/api/biz/devices/detail', { deviceId })
 export const startBizLive = (deviceId) =>
-  http.post('/api/biz/devices/live', { deviceId })
+  http.post('/api/biz/devices/live', { deviceId }, { timeout: 120000 })
 /** 录像列表/日历数据量大，单独放宽超时 */
 const recordingHttpOpts = { timeout: 60000 }
 

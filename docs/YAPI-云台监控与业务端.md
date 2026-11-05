@@ -73,11 +73,11 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 | success | boolean | 固定 `true` |
 | mock | boolean | 模拟设备为 `true`，宇视为 `false` |
 | live | boolean | 宇视为 `true`，模拟为 `false` |
-| action | string | 本次动作：`move` / `zoom` / `focus` / `wide-angle` / `goto-preset` / `set-preset` / `snapshot` |
+| action | string | 本次动作：`move` / `zoom` / `focus` / `wide-angle` / `goto-preset` / `set-preset` / `snapshot`，或扩展命令名 |
 | deviceId | string | 设备编码 |
 | response | string | 摄像机原始 JSON 字符串 |
 
-方向、变倍、对焦、广角另外返回 `ptzCmd`（下发的指令数值）和 `speed`（实际速度）。调用预置位另有 `presetIndex`。保存预置位另有 `presetIndex`、`name`、`overwrite`。抓拍另有 `channelType`。
+方向、变倍、对焦、广角另外返回 `ptzCmd`（下发的指令数值）和 `speed`（实际速度）。调用预置位另有 `presetIndex`。保存预置位另有 `presetIndex`、`name`、`overwrite`。抓拍另有 `channelType`。扩展命令另有 `params`。
 
 ---
 
@@ -261,6 +261,40 @@ YAPI 导入文件：`docs/yapi-ptz-biz-openapi.json`（OpenAPI 3.0）。项目 �
 | --- | --- | --- | --- |
 | deviceId | string | 是 | 设备编码 |
 | channelType | string | 否 | 默认 `visible` |
+
+---
+
+## 1.11 鹰眼扩展命令
+
+- **说明**：方向、停止、变倍、聚焦仍走上面的接口。这里只发之前没单独对接的鹰眼命令。只传 `deviceId`，服务按设备平台转发。平台为 `EAGLE_EYE` 时，向鹰眼子系统 `POST /api/control`，`command` 和 `params` 原样使用下表。除 `detectMode_switch` 外都是同步命令，子系统 HTTP 响应 `code=0` 即表示执行完成。`detectMode_switch` 只返回当场受理结果，执行完之后的上报还没接。宇视、宇视云、模拟返回：`不支持该控制`。
+- **POST** `/api/ptz/command`
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| deviceId | string | 是 | 设备编码，如 `YY01` |
+| command | string | 是 | 下表中的命令名 |
+| params | object | 是 | 随命令变化 |
+
+| command | params |
+| --- | --- |
+| `camera_autofocus` | `autoFocus`：`true` / `false` |
+| `autoScan_switch` | `switch`：`on` / `off` |
+| `autoScan_control` | `control`：`pause` / `continue` |
+| `regularTime_switch` | `switch`：`on` / `off` |
+| `regularTime_timeSet` | `beginTimeFirst`、`endTimeFirst`、`beginTimeSecond`、`endTimeSecond`，格式 `08_00_00` |
+| `regularTime_daySet` | `monday` 到 `sunday`，各一个布尔值 |
+| `specialScan_control` | `building` 字符串，`floor`、`repeatTimes` 整数 |
+| `detectMode_switch` | `switch`：`on` / `off` |
+
+```json
+{
+  "deviceId": "YY01",
+  "command": "specialScan_control",
+  "params": { "building": "32", "floor": 5, "repeatTimes": 2 }
+}
+```
+
+成功时 `data.action` 就是这条 `command`，`data.params` 是校验后的参数。
 
 ---
 

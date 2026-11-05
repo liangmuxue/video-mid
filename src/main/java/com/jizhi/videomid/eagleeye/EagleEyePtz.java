@@ -40,6 +40,21 @@ public class EagleEyePtz {
         return done("zoom", deviceId, level);
     }
 
+    /** 下发尚未单独开接口的鹰眼命令。detectMode_switch 只等子系统当场的 HTTP 结果。 */
+    public Map<String, Object> command(String deviceId, String command, Map<String, Object> params) {
+        Map<String, Object> body = EagleEyeCommands.params(command, params);
+        client.send(deviceId, command, body);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("success", true);
+        row.put("mock", false);
+        row.put("live", true);
+        row.put("action", command);
+        row.put("deviceId", deviceId);
+        row.put("params", body);
+        row.put("response", "");
+        return row;
+    }
+
     public static Map<String, Object> unsupported() {
         throw new IllegalArgumentException("鹰眼子系统不支持该控制");
     }

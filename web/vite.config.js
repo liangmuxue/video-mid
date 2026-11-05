@@ -5,6 +5,8 @@ function proxyBackend(path) {
   return {
     target: 'http://119.3.161.125:7093',
     changeOrigin: true,
+    timeout: 120000,
+    proxyTimeout: 120000,
     configure(proxy) {
       proxy.on('error', (_err, _req, res) => {
         if (!res || res.headersSent || typeof res.writeHead !== 'function') return

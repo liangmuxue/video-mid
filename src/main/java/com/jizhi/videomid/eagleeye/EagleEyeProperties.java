@@ -36,6 +36,35 @@ public class EagleEyeProperties {
         return deviceId;
     }
 
+    public String rtspBaseUrlOf(String deviceId) {
+        Terminal terminal = find(deviceId);
+        return terminal == null ? "" : blank(terminal.getRtspBaseUrl());
+    }
+
+    public String playBaseUrlOf(String deviceId) {
+        Terminal terminal = find(deviceId);
+        return terminal == null ? "" : blank(terminal.getPlayBaseUrl());
+    }
+
+    private Terminal find(String deviceId) {
+        if (deviceId == null || terminals == null) {
+            return null;
+        }
+        for (Terminal terminal : terminals) {
+            if (terminal == null || terminal.getDeviceId() == null) {
+                continue;
+            }
+            if (deviceId.equals(terminal.getDeviceId().trim())) {
+                return terminal;
+            }
+        }
+        return null;
+    }
+
+    private static String blank(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -71,6 +100,10 @@ public class EagleEyeProperties {
     public static class Terminal {
         private String terminalId;
         private String deviceId;
+        /** 这一台在设备列表里返回的 RTSP 前缀。空则用全局 zlm.rtsp-base-url。 */
+        private String rtspBaseUrl;
+        /** 这一台勾选播放返回的 HTTP 前缀。空则用全局 zlm.play-base-url。 */
+        private String playBaseUrl;
 
         public String getTerminalId() {
             return terminalId;
@@ -86,6 +119,22 @@ public class EagleEyeProperties {
 
         public void setDeviceId(String deviceId) {
             this.deviceId = deviceId;
+        }
+
+        public String getRtspBaseUrl() {
+            return rtspBaseUrl;
+        }
+
+        public void setRtspBaseUrl(String rtspBaseUrl) {
+            this.rtspBaseUrl = rtspBaseUrl;
+        }
+
+        public String getPlayBaseUrl() {
+            return playBaseUrl;
+        }
+
+        public void setPlayBaseUrl(String playBaseUrl) {
+            this.playBaseUrl = playBaseUrl;
         }
     }
 }

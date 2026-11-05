@@ -7,6 +7,7 @@ import com.jizhi.videomid.uniview.dto.PtzDeviceIdRequest;
 import com.jizhi.videomid.uniview.dto.PtzMoveRequest;
 import com.jizhi.videomid.uniview.dto.PtzPresetGotoRequest;
 import com.jizhi.videomid.uniview.dto.PtzPresetSaveRequest;
+import com.jizhi.videomid.uniview.dto.PtzCommandRequest;
 import com.jizhi.videomid.uniview.dto.PtzSnapshotRequest;
 import com.jizhi.videomid.uniview.live.UniviewLapiClient;
 import org.springframework.web.bind.annotation.*;
@@ -105,5 +106,10 @@ public class UniviewController {
     @PostMapping("/ptz/snapshot")
     public ApiResponse<Map<String, Object>> snapshot(@RequestBody PtzSnapshotRequest req) {
         return ApiResponse.ok(ptzActions.snapshot(req));
+    }
+
+    @PostMapping("/ptz/command")
+    public ApiResponse<Map<String, Object>> command(@RequestBody PtzCommandRequest req) {
+        return ApiResponse.ok(ptzActions.command(req));
     }
 }

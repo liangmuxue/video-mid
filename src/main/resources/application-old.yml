@@ -44,12 +44,16 @@ uniview:
 
 uniview-cloud:
   base-url: https://ezcloud.uniview.com
-  app-id: "920170595956555776"
-  secret-key: "91e304c8d4382ac34708525c26bb840f"
+  app-id: "920133775201927168"
+  secret-key: "a52bc63ff62d374b5da3c1e930c0aee9"
   quality: 1
   main-stream-names:
     - 邻海街34号B3
     - 邻海街40号2-B2
+    - 邻海街34号B2-B
+    - 邻海街34号B2-A
+    - 邻海街34号B1侧门
+    - 邻海街34号B1大堂
   protocol: 4
 
 # 国标 GB28181：前期 mock 模拟下级，live 接真实 SIP（不用 RTSP）

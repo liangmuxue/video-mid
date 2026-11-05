@@ -7,6 +7,7 @@ import com.jizhi.videomid.uniview.dto.PtzDeviceIdRequest;
 import com.jizhi.videomid.uniview.dto.PtzMoveRequest;
 import com.jizhi.videomid.uniview.dto.PtzPresetGotoRequest;
 import com.jizhi.videomid.uniview.dto.PtzPresetSaveRequest;
+import com.jizhi.videomid.uniview.dto.PtzCommandRequest;
 import com.jizhi.videomid.uniview.dto.PtzSnapshotRequest;
 import org.springframework.stereotype.Service;
 
@@ -96,6 +97,14 @@ public class PtzActions {
         boolean overwrite = Boolean.TRUE.equals(req.getOverwrite());
         return ptzPort.setPreset(requireText(req.getDeviceId(), "deviceId"),
                 req.getIndex(), requireText(req.getName(), "name"), overwrite);
+    }
+
+    public Map<String, Object> command(PtzCommandRequest req) {
+        if (req == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        return ptzPort.command(requireText(req.getDeviceId(), "deviceId"),
+                requireText(req.getCommand(), "command"), req.getParams());
     }
 
     public Map<String, Object> snapshot(PtzSnapshotRequest req) {

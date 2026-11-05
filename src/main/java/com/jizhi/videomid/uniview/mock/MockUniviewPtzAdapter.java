@@ -109,6 +109,11 @@ public class MockUniviewPtzAdapter implements UniviewPtzPort {
         ));
     }
 
+    @Override
+    public Map<String, Object> command(String deviceId, String command, Map<String, Object> params) {
+        throw new IllegalArgumentException("不支持该控制");
+    }
+
     private static Map<String, Object> ok(String action, Map<String, Object> data) {
         Map<String, Object> m = new HashMap<>(data);
         m.put("success", true);

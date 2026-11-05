@@ -20,11 +20,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-/** 把宇视云上的通道写入本地设备表。楼号挂在「园区」下，设备放进对应楼号。已有目录和已停用不改。 */
+/** 把宇视云上的通道写入本地设备表。楼号挂在「园区」下，设备放进对应楼号。已有目录和已停用不改。本次云端没有返回的宇视云设备改为已停用。 */
 @Service
 public class UniviewCloudSyncService {
 
@@ -65,8 +67,8 @@ public class UniviewCloudSyncService {
         }
         try {
             Map<String, Object> result = sync();
-            log.info("[宇视云] 启动同步完成 created={} updated={} skipped={}",
-                    result.get("created"), result.get("updated"), result.get("skipped"));
+            log.info("[宇视云] 启动同步完成 created={} updated={} skipped={} disabled={}",
+                    result.get("created"), result.get("updated"), result.get("skipped"), result.get("disabled"));
         } catch (Exception e) {
             log.warn("[宇视云] 启动同步失败: {}", e.getMessage());
         }
@@ -80,6 +82,8 @@ public class UniviewCloudSyncService {
         int created = 0;
         int updated = 0;
         int skipped = 0;
+        Set<String> seen = new HashSet<>();
+        Set<String> uncertainSerials = new HashSet<>();
         for (JsonNode device : pages("/openapi/device/list", "deviceList", Map.of())) {
             String serial = device.path("deviceSerial").asText("").trim();
             if (serial.isEmpty()) {
@@ -94,11 +98,12 @@ public class UniviewCloudSyncService {
                         Map.of("deviceSerial", serial));
             } catch (RuntimeException e) {
                 skipped++;
+                uncertainSerials.add(serial);
                 log.warn("[宇视云] 单台同步失败 serial={} err={}", serial, e.getMessage());
                 continue;
             }
             if (channels.isEmpty()) {
-                created += upsert(serial, 0, deviceName, model, deviceOnline, parkId, buildings) ? 1 : 0;
+                created += upsert(serial, 0, deviceName, model, deviceOnline, parkId, buildings, seen) ? 1 : 0;
                 continue;
             }
             for (JsonNode channel : channels) {
@@ -115,22 +120,26 @@ public class UniviewCloudSyncService {
                 Long folderId = buildingFolder(name, parkId, buildings);
                 if (existing.isEmpty()) {
                     insert(deviceId, name, model, online, folderId);
+                    seen.add(deviceId);
                     created++;
                 } else {
                     refresh(existing.get(), model, online, folderId);
+                    seen.add(deviceId);
                     updated++;
                 }
             }
         }
+        int disabled = disableMissing(seen, uncertainSerials);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("created", created);
         result.put("updated", updated);
         result.put("skipped", skipped);
+        result.put("disabled", disabled);
         return result;
     }
 
     private boolean upsert(String serial, int channelNo, String name, String model, int online,
-                           Long parkId, Map<String, Long> buildings) {
+                           Long parkId, Map<String, Long> buildings, Set<String> seen) {
         String deviceId = UniviewCloudDeviceIds.id(serial, channelNo);
         var existing = deviceRepository.findByDeviceId(deviceId);
         if (existing.isPresent() && !AccessVendor.UNIVIEW_CLOUD.name().equals(existing.get().getVendor())) {
@@ -140,10 +149,50 @@ public class UniviewCloudSyncService {
         Long folderId = buildingFolder(name, parkId, buildings);
         if (existing.isEmpty()) {
             insert(deviceId, name, model, online, folderId);
+            seen.add(deviceId);
             return true;
         }
         refresh(existing.get(), model, online, folderId);
+        seen.add(deviceId);
         return false;
+    }
+
+    /**
+     * 新账号拉不到的宇视云设备改为已停用。其他平台的设备不动。
+     * 通道列表查询失败的序列号先留着，避免一次请求失败把还能用的设备停掉。
+     * 云端一台都没返回时也不停用，避免接口异常把全部云设备停掉。
+     */
+    private int disableMissing(Set<String> seen, Set<String> uncertainSerials) {
+        if (seen.isEmpty()) {
+            log.warn("[宇视云] 本次没有拉到任何设备，不把本地设备改为已停用");
+            return 0;
+        }
+        int disabled = 0;
+        for (Device device : deviceRepository.findAll()) {
+            if (!AccessVendor.UNIVIEW_CLOUD.name().equals(device.getVendor())) {
+                continue;
+            }
+            String deviceId = device.getDeviceId();
+            if (deviceId == null || deviceId.isBlank() || seen.contains(deviceId)) {
+                continue;
+            }
+            if (uncertainSerial(deviceId, uncertainSerials)) {
+                continue;
+            }
+            if (DeviceStatus.isDisabled(DeviceStatus.normalize(device.getStatus()))) {
+                continue;
+            }
+            deviceRepository.updateStatus(device.getId(), DeviceStatus.DISABLED);
+            disabled++;
+            log.info("[宇视云] 新账号未返回，标记已停用 deviceId={} name={}", deviceId, device.getName());
+        }
+        return disabled;
+    }
+
+    private static boolean uncertainSerial(String deviceId, Set<String> uncertainSerials) {
+        int colon = deviceId.lastIndexOf(':');
+        String serial = colon <= 0 ? deviceId : deviceId.substring(0, colon);
+        return uncertainSerials.contains(serial);
     }
 
     private void insert(String deviceId, String name, String model, int online, Long folderId) {

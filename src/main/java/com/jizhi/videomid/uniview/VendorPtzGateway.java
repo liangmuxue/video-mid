@@ -75,11 +75,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("deviceId", device.getDeviceId());
             item.put("name", device.getName());
-            try {
-                item.put("presets", cloudPtz.listPresets(device.getDeviceId()));
-            } catch (RuntimeException e) {
-                item.put("presets", List.of());
-            }
+            item.put("presets", List.of());
             devices.add(item);
         }
         for (Device device : deviceRepository.findAll()) {
@@ -95,7 +91,7 @@ public class VendorPtzGateway implements UniviewPtzPort {
         return devices;
     }
 
-    /** 只查这一台的预置位。设备列表接口仍一次返回全部，避免改对外结构。 */
+    /** 只查这一台的预置位。列表里的宇视云预置位不在这里逐台查询。 */
     @Override
     public List<Map<String, Object>> listPresets(String deviceId) {
         Device device = deviceRepository.findByDeviceId(deviceId)
@@ -174,6 +170,18 @@ public class VendorPtzGateway implements UniviewPtzPort {
                 () -> cloudPtz.snapshot(deviceId, channel),
                 () -> mockOk("snapshot", deviceId, Map.of("channelType", channel)),
                 EagleEyePtz::unsupported);
+    }
+
+    @Override
+    public Map<String, Object> command(String deviceId, String command, Map<String, Object> params) {
+        return route(deviceId, VendorPtzGateway::unsupported,
+                VendorPtzGateway::unsupported,
+                VendorPtzGateway::unsupported,
+                () -> eagleEyePtz.command(deviceId, command, params));
+    }
+
+    private static Map<String, Object> unsupported() {
+        throw new IllegalArgumentException("不支持该控制");
     }
 
     private Map<String, Object> route(String deviceId, java.util.function.Supplier<Map<String, Object>> uniview,

@@ -94,33 +94,59 @@ public class UniviewCloudPlayService {
 
     public Map<String, Object> startLive(String deviceId) {
         UniviewCloudDeviceIds.Target target = UniviewCloudDeviceIds.parse(deviceId);
+        Session current = activeSession(deviceId);
+        if (current != null) {
+            return view(deviceId, current);
+        }
+        enableLive(target.serial());
+        Device device = deviceRepository.findByDeviceId(deviceId).orElse(null);
+        String source = liveUrl(target, device == null ? null : device.getName());
+        JsonNode started = client.post("/openapi/live/video/start", Map.of("url", source));
+        String liveId = started.path("liveId").asText("");
+        String zlmStream = UniviewCloudDeviceIds.zlmStream(target.serial(), target.channelNo());
+        boolean pulled = zlmClient.addDirectPullProxy(UniviewCloudSyncService.APP, zlmStream, source);
+        if (!pulled) {
+            stopCloud(liveId);
+            throw new IllegalArgumentException("宇视云拉流失败");
+        }
+        String playUrl = playUrl(zlmStream);
+        Session session = new Session(liveId, zlmStream, playUrl);
+        Session kept = keepSession(deviceId, session);
+        if (kept != session) {
+            stopCloud(liveId);
+            return view(deviceId, kept);
+        }
+        remember(deviceId, zlmStream, playUrl);
+        log.info("[宇视云] 实况已打开 deviceId={} liveId={}", deviceId, liveId);
+        return view(deviceId, session);
+    }
+
+    /** 已有可播放会话就直接用。过期会话的关闭放到锁外面，避免和流媒体回调互相卡住。 */
+    private Session activeSession(String deviceId) {
+        Session stale;
         synchronized (sessions) {
             Session current = sessions.get(deviceId);
             if (current != null && stillOnline(current)) {
-                return view(deviceId, current);
+                return current;
             }
+            stale = current == null ? null : sessions.remove(deviceId);
+        }
+        if (stale != null) {
+            zlmClient.delStreamProxy(UniviewCloudSyncService.APP, stale.zlmStream());
+            stopCloud(stale.liveId());
+        }
+        return null;
+    }
+
+    /** 同一台设备只保留一路。后来的调用关掉自己刚向云端开的那一路。 */
+    private Session keepSession(String deviceId, Session session) {
+        synchronized (sessions) {
+            Session current = sessions.get(deviceId);
             if (current != null) {
-                sessions.remove(deviceId);
-                zlmClient.delStreamProxy(UniviewCloudSyncService.APP, current.zlmStream());
-                stopCloud(current.liveId());
+                return current;
             }
-            enableLive(target.serial());
-            Device device = deviceRepository.findByDeviceId(deviceId).orElse(null);
-            String source = liveUrl(target, device == null ? null : device.getName());
-            JsonNode started = client.post("/openapi/live/video/start", Map.of("url", source));
-            String liveId = started.path("liveId").asText("");
-            String zlmStream = UniviewCloudDeviceIds.zlmStream(target.serial(), target.channelNo());
-            boolean pulled = zlmClient.addDirectPullProxy(UniviewCloudSyncService.APP, zlmStream, source);
-            if (!pulled) {
-                stopCloud(liveId);
-                throw new IllegalArgumentException("宇视云拉流失败");
-            }
-            String playUrl = playUrl(zlmStream);
-            Session session = new Session(liveId, zlmStream, playUrl);
             sessions.put(deviceId, session);
-            remember(deviceId, zlmStream, playUrl);
-            log.info("[宇视云] 实况已打开 deviceId={} liveId={}", deviceId, liveId);
-            return view(deviceId, session);
+            return session;
         }
     }
 

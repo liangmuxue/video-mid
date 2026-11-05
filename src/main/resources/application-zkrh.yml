@@ -46,14 +46,18 @@ uniview:
 # 宇视云开放平台。和上面的本机 LAPI 分开，一台设备只走其中一个。
 uniview-cloud:
   base-url: https://ezcloud.uniview.com
-  app-id: "920170595956555776"
-  secret-key: "91e304c8d4382ac34708525c26bb840f"
+  app-id: "920133775201927168"
+  secret-key: "a52bc63ff62d374b5da3c1e930c0aee9"
   # 1=辅码流。主码流在这条公网链路上容易把播放器撑断。
   quality: 1
   # 名单里的设备改走主码流，其余仍用上面的辅码流。
   main-stream-names:
     - 邻海街34号B3
     - 邻海街40号2-B2
+    - 邻海街34号B2-B
+    - 邻海街34号B2-A
+    - 邻海街34号B1侧门
+    - 邻海街34号B1大堂
   # 4=FLV，交给 ZLM 再转给浏览器。
   protocol: 4
 
@@ -117,12 +121,16 @@ record:
 open-api:
   public-base-url: http://119.3.161.125:7093
 
-# 鹰眼子系统后台。对外控制仍走 /api/ptz。IP 未定，base-url 先留空。报警上报不接。
+# 鹰眼子系统后台。对外控制仍走 /api/ptz，实际请求发到 base-url + control-path。报警上报不接。
 eagle-eye:
   enabled: true
-  base-url: ""
+  base-url: http://192.168.10.242:8080
   control-path: /api/control
-  terminals: []
+  terminals:
+    - device-id: YY01
+      terminal-id: YY01
+      rtsp-base-url: rtsp://192.168.10.190:554
+      play-base-url: http://192.168.10.190:8080
 
 # 极知 AI：新增和修改都 POST {base-url}/aidemo/device/update
 jizhi-ai:

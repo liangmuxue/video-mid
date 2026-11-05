@@ -1,5 +1,6 @@
 package com.jizhi.videomid.device;
 
+import com.jizhi.videomid.eagleeye.EagleEyePlayService;
 import com.jizhi.videomid.device.dto.DeviceRequest;
 import com.jizhi.videomid.device.dto.StreamRegisterRequest;
 import com.jizhi.videomid.gb28181.Gb28181Ids;
@@ -40,6 +41,7 @@ public class DeviceService {
     private final JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient;
     private final RtspPullService rtspPullService;
     private final UniviewCloudPlayService univiewCloudPlayService;
+    private final EagleEyePlayService eagleEyePlayService;
 
     public DeviceService(DeviceRepository deviceRepository,
                          DeviceStreamRepository streamRepository,
@@ -52,7 +54,8 @@ public class DeviceService {
                          LiveStreamRtspResolver liveStreamRtspResolver,
                          JizhiAiDeviceSyncClient jizhiAiDeviceSyncClient,
                          RtspPullService rtspPullService,
-                         UniviewCloudPlayService univiewCloudPlayService) {
+                         UniviewCloudPlayService univiewCloudPlayService,
+                         EagleEyePlayService eagleEyePlayService) {
         this.deviceRepository = deviceRepository;
         this.streamRepository = streamRepository;
         this.previewService = previewService;
@@ -65,6 +68,7 @@ public class DeviceService {
         this.jizhiAiDeviceSyncClient = jizhiAiDeviceSyncClient;
         this.rtspPullService = rtspPullService;
         this.univiewCloudPlayService = univiewCloudPlayService;
+        this.eagleEyePlayService = eagleEyePlayService;
     }
 
     public Map<String, Object> getDevice(Long id) {
@@ -180,6 +184,12 @@ public class DeviceService {
             Map<String, Object> view = new LinkedHashMap<>();
             view.put("streamType", "main");
             view.put("streamUrl", univiewCloudPlayService.listedPlayUrl(device.getDeviceId()));
+            return view;
+        }
+        if (VendorDevices.of(device) == AccessVendor.EAGLE_EYE && DeviceStatus.isEnabled(device.getStatus())) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("streamType", "main");
+            view.put("streamUrl", eagleEyePlayService.listedPlayUrl(device.getDeviceId()));
             return view;
         }
         return storedLiveStream(streams);
@@ -446,6 +456,14 @@ public class DeviceService {
      * 业务直播流摘要（streamType + streamUrl），与业务端设备详情 {@code liveStream} 一致；未配置时为 null。
      */
     public Map<String, Object> liveStreamForDevice(String deviceId) {
+        Device device = deviceRepository.findByDeviceId(deviceId).orElse(null);
+        if (device != null && VendorDevices.of(device) == AccessVendor.EAGLE_EYE
+                && DeviceStatus.isEnabled(device.getStatus())) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("streamType", "main");
+            view.put("streamUrl", eagleEyePlayService.listedPlayUrl(deviceId));
+            return view;
+        }
         return resolveLiveStream(deviceId).map(live -> toLiveStreamSummary(deviceId, live)).orElse(null);
     }
 
@@ -484,7 +502,7 @@ public class DeviceService {
             case MOCK -> startMockLive(deviceId);
             case GB28181 -> gb28181PlayService.startLive(deviceId)
                     .orElseThrow(() -> new IllegalArgumentException("国标点播未返回播放地址"));
-            case EAGLE_EYE -> throw new IllegalArgumentException("鹰眼设备不从这里取直播");
+            case EAGLE_EYE -> eagleEyePlayService.startLive(deviceId);
         };
     }
 

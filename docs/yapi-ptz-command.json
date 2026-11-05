@@ -1,0 +1,180 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "视频中台 - 云台鹰眼扩展命令",
+    "description": "POST /api/ptz/command。8 条鹰眼扩展命令共用这一个接口。每条命令的参数说明、传参实例和返回实例写在接口备注里。Body 的 params 不展开子字段。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://119.3.161.125:7093",
+      "description": "当前环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "云台监控",
+      "description": "路径 /api/ptz。只传 deviceId。"
+    }
+  ],
+  "paths": {
+    "/api/ptz/command": {
+      "post": {
+        "tags": [
+          "云台监控"
+        ],
+        "summary": "云台-鹰眼扩展命令",
+        "description": "<p>只传 deviceId、command、params。服务按这台设备的平台转发，只有鹰眼会下发到子系统。宇视、宇视云、模拟返回「不支持该控制」。</p>\n<p>方向、停止、变倍、聚焦不要用本接口，请走 POST /api/ptz/move、/api/ptz/zoom、/api/ptz/focus。</p>\n<p>第 1 到第 7 条是同步命令。子系统 HTTP 返回 code=0，本接口就返回成功，表示命令已经执行完。</p>\n<p>第 8 条 detectMode_switch 是异步命令。本接口返回成功只表示子系统已经受理，不表示侦察模式已经切换完成。</p>\n<p>params 里一次只放当前命令的字段。下面每条命令分开写参数说明、传参实例和返回实例。</p>\n<hr/>\n<h3>1. camera_autofocus</h3>\n<p>同步。开启或关闭自动聚焦。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>autoFocus</code></td><td>boolean</td><td>是</td><td>true 开启自动聚焦，false 关闭。必须是布尔值，不要传字符串 true / false。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"camera_autofocus\",\n  \"params\": {\n    \"autoFocus\": true\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"camera_autofocus\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"autoFocus\": true\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>2. autoScan_switch</h3>\n<p>同步。开启或关闭自动扫描。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>switch</code></td><td>string</td><td>是</td><td>on 开启自动扫描，off 关闭。大小写不敏感，下发前会转成小写。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"autoScan_switch\",\n  \"params\": {\n    \"switch\": \"on\"\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"autoScan_switch\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"switch\": \"on\"\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>3. autoScan_control</h3>\n<p>同步。暂停或继续当前自动扫描。打开或关闭自动扫描功能请用 autoScan_switch。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>control</code></td><td>string</td><td>是</td><td>pause 暂停，continue 继续。大小写不敏感，下发前会转成小写。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"autoScan_control\",\n  \"params\": {\n    \"control\": \"pause\"\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"autoScan_control\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"control\": \"pause\"\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>4. regularTime_switch</h3>\n<p>同步。打开或关闭定时启停。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>switch</code></td><td>string</td><td>是</td><td>on 打开定时启停，off 关闭。大小写不敏感，下发前会转成小写。字段名和自动扫描、侦察模式相同，含义以本命令为准。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"regularTime_switch\",\n  \"params\": {\n    \"switch\": \"on\"\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"regularTime_switch\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"switch\": \"on\"\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>5. regularTime_timeSet</h3>\n<p>同步。设置定时启停的两段时间。四个时间都要传。时间是 24 小时制，两位数字，下划线分隔，格式 HH_mm_ss。例如 08_00_00 表示 8 点整。时为 00 到 23，分和秒为 00 到 59。08:00:00 和 8_00_00 都会失败。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>beginTimeFirst</code></td><td>string</td><td>是</td><td>第一时段开始时间。例如 08_00_00。</td></tr><tr><td><code>endTimeFirst</code></td><td>string</td><td>是</td><td>第一时段结束时间。例如 12_00_00。</td></tr><tr><td><code>beginTimeSecond</code></td><td>string</td><td>是</td><td>第二时段开始时间。例如 13_00_00。</td></tr><tr><td><code>endTimeSecond</code></td><td>string</td><td>是</td><td>第二时段结束时间。例如 20_00_00。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"regularTime_timeSet\",\n  \"params\": {\n    \"beginTimeFirst\": \"08_00_00\",\n    \"endTimeFirst\": \"12_00_00\",\n    \"beginTimeSecond\": \"13_00_00\",\n    \"endTimeSecond\": \"20_00_00\"\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"regularTime_timeSet\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"beginTimeFirst\": \"08_00_00\",\n      \"endTimeFirst\": \"12_00_00\",\n      \"beginTimeSecond\": \"13_00_00\",\n      \"endTimeSecond\": \"20_00_00\"\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>6. regularTime_daySet</h3>\n<p>同步。设置定时启停在星期几生效。周一到周日 7 个字段都要传，必须是布尔值，不要传 0、1 或字符串。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>monday</code></td><td>boolean</td><td>是</td><td>周一。true 生效，false 不生效。</td></tr><tr><td><code>tuesday</code></td><td>boolean</td><td>是</td><td>周二。true 生效，false 不生效。</td></tr><tr><td><code>wednesday</code></td><td>boolean</td><td>是</td><td>周三。true 生效，false 不生效。</td></tr><tr><td><code>thursday</code></td><td>boolean</td><td>是</td><td>周四。true 生效，false 不生效。</td></tr><tr><td><code>friday</code></td><td>boolean</td><td>是</td><td>周五。true 生效，false 不生效。</td></tr><tr><td><code>saturday</code></td><td>boolean</td><td>是</td><td>周六。true 生效，false 不生效。</td></tr><tr><td><code>sunday</code></td><td>boolean</td><td>是</td><td>周日。true 生效，false 不生效。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"regularTime_daySet\",\n  \"params\": {\n    \"monday\": true,\n    \"tuesday\": true,\n    \"wednesday\": true,\n    \"thursday\": true,\n    \"friday\": true,\n    \"saturday\": false,\n    \"sunday\": false\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"regularTime_daySet\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"monday\": true,\n      \"tuesday\": true,\n      \"wednesday\": true,\n      \"thursday\": true,\n      \"friday\": true,\n      \"saturday\": false,\n      \"sunday\": false\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>7. specialScan_control</h3>\n<p>同步。启动特殊巡检扫描。原来的 /api/ptz/special-scan 已去掉，用本命令。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>building</code></td><td>string</td><td>是</td><td>需要特殊扫描的目标楼栋。不能为空白。例如 32。</td></tr><tr><td><code>floor</code></td><td>integer</td><td>是</td><td>需要特殊扫描的目标楼层。必须是整数，不要传小数或字符串。</td></tr><tr><td><code>repeatTimes</code></td><td>integer</td><td>是</td><td>特殊扫描循环次数。必须是整数。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"specialScan_control\",\n  \"params\": {\n    \"building\": \"32\",\n    \"floor\": 5,\n    \"repeatTimes\": 2\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"specialScan_control\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"building\": \"32\",\n      \"floor\": 5,\n      \"repeatTimes\": 2\n    },\n    \"response\": \"\"\n  }\n}</pre>\n\n<hr/>\n<h3>8. detectMode_switch</h3>\n<p>异步。开启或关闭侦察模式。</p>\n<p><b>参数说明</b></p>\n<table border=\"1\" cellspacing=\"0\" cellpadding=\"8\">\n<thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>\n<tbody><tr><td><code>switch</code></td><td>string</td><td>是</td><td>on 开启侦察模式，off 关闭。大小写不敏感，下发前会转成小写。</td></tr></tbody>\n</table>\n<p><b>传参实例</b></p>\n<pre>{\n  \"deviceId\": \"YY01\",\n  \"command\": \"detectMode_switch\",\n  \"params\": {\n    \"switch\": \"on\"\n  }\n}</pre>\n<p><b>返回实例</b></p>\n<pre>{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"success\": true,\n    \"mock\": false,\n    \"live\": true,\n    \"action\": \"detectMode_switch\",\n    \"deviceId\": \"YY01\",\n    \"params\": {\n      \"switch\": \"on\"\n    },\n    \"response\": \"\"\n  }\n}</pre>\n<p>返回实例里的 code=0 只表示子系统已经受理。侦察模式是否切换完成，要等后续结果上报，目前还没接。</p>\n<hr/>\n<h3>失败时</h3>\n<p>HTTP 多为 400。code 为 -1，message 为原因，data 为 null。</p>\n<ul>\n<li>设备不存在</li>\n<li>不支持该控制：设备不是鹰眼</li>\n<li>不支持的鹰眼命令：command 不在上面 8 个里面，或误传了方向、变倍、聚焦</li>\n<li>字段不合法。例如：autoFocus 必须是 true 或 false；switch 只能是 on / off；control 只能是 pause / continue；beginTimeFirst 格式必须是 HH_mm_ss，例如 08_00_00；monday 必须是 true 或 false；floor 必须是整数</li>\n<li>鹰眼子系统地址未配置</li>\n<li>鹰眼子系统执行失败，或子系统返回的失败原因</li>\n</ul>",
+        "operationId": "ptzCommand",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PtzCommandRequest"
+              },
+              "example": {
+                "deviceId": "YY01",
+                "command": "specialScan_control",
+                "params": {
+                  "building": "32",
+                  "floor": 5,
+                  "repeatTimes": 2
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功时 code=0。失败时 HTTP 多为 400，code=-1，message 为原因，data 为 null。每条命令的返回实例见接口备注。detectMode_switch 成功只表示已受理。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespPtzCommand"
+                },
+                "example": {
+                  "code": 0,
+                  "message": "success",
+                  "data": {
+                    "success": true,
+                    "mock": false,
+                    "live": true,
+                    "action": "specialScan_control",
+                    "deviceId": "YY01",
+                    "params": {
+                      "building": "32",
+                      "floor": 5,
+                      "repeatTimes": 2
+                    },
+                    "response": ""
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PtzCommandRequest": {
+        "type": "object",
+        "description": "deviceId、command、params 都必填。params 的字段见接口备注，按命令只传对应字段。",
+        "required": [
+          "deviceId",
+          "command",
+          "params"
+        ],
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "设备编码。只有鹰眼设备会下发，例如 YY01。",
+            "example": "YY01"
+          },
+          "command": {
+            "type": "string",
+            "description": "命令名。8 个取值的参数说明、传参实例和返回实例见接口备注。",
+            "enum": [
+              "camera_autofocus",
+              "autoScan_switch",
+              "autoScan_control",
+              "regularTime_switch",
+              "regularTime_timeSet",
+              "regularTime_daySet",
+              "specialScan_control",
+              "detectMode_switch"
+            ],
+            "example": "specialScan_control"
+          },
+          "params": {
+            "type": "object",
+            "description": "当前命令的参数对象。子字段不在这里展开，见接口备注里对应命令的参数说明。"
+          }
+        }
+      },
+      "RespPtzCommand": {
+        "type": "object",
+        "description": "统一响应。成功 code=0。失败 code=-1，data 为 null。",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "0 成功，非 0 失败",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "成功为 success，失败为原因",
+            "example": "success"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "description": "成功时的结果。失败时为 null。字段含义见各命令的返回实例。",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "固定 true",
+                "example": true
+              },
+              "mock": {
+                "type": "boolean",
+                "description": "固定 false",
+                "example": false
+              },
+              "live": {
+                "type": "boolean",
+                "description": "固定 true",
+                "example": true
+              },
+              "action": {
+                "type": "string",
+                "description": "本次命令名",
+                "example": "specialScan_control"
+              },
+              "deviceId": {
+                "type": "string",
+                "description": "设备编码",
+                "example": "YY01"
+              },
+              "params": {
+                "type": "object",
+                "description": "实际下发的参数，与该命令的传参一致"
+              },
+              "response": {
+                "type": "string",
+                "description": "固定空字符串",
+                "example": ""
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

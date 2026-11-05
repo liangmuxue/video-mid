@@ -406,7 +406,7 @@ const PtzResult = obj(
     success: prop("boolean", "指令是否已受理", true),
     mock: prop("boolean", "是否模拟模式；live 时为 false 或不出现", true),
     live: prop("boolean", "是否真实宇视；mock 时不出现", undefined, true),
-    action: prop("string", "动作标识：move / zoom / focus / wide-angle / goto-preset / set-preset / snapshot", "move"),
+    action: prop("string", "动作标识：move / zoom / focus / wide-angle / goto-preset / set-preset / snapshot，或扩展命令名", "move"),
     deviceId: prop("string", "设备编码", PTZ_DEV),
     ptzCmd: prop("integer", "方向/变倍/对焦下发给宇视的 PTZCmd 数值", 1026, true),
     speed: prop("integer", "实际速度，live 会夹到 1~8", 4, true),
@@ -414,6 +414,12 @@ const PtzResult = obj(
     overwrite: prop("boolean", "保存预置位时是否覆盖", false, true),
     name: prop("string", "保存后的预置位名称", "门口", true),
     channelType: prop("string", "抓拍通道类型，默认 visible", "visible", true),
+    params: {
+      type: "object",
+      nullable: true,
+      description: "鹰眼扩展命令校验后的参数。仅 POST /api/ptz/command 返回",
+      additionalProperties: true,
+    },
     response: prop("string", "宇视 LAPI 原始 JSON 字符串", "{\"Response\":{\"ResponseCode\":0}}", true),
   },
   "云台控制结果。live=true 表示已发到该设备自己的摄像机"
@@ -503,6 +509,37 @@ const schemas = {
     },
     ["deviceId"],
     "抓拍请求"
+  ),
+  PtzCommandRequest: obj(
+    {
+      deviceId: prop("string", "【必填】设备编码。只有平台为 EAGLE_EYE 的设备可以执行", "YY01"),
+      command: prop(
+        "string",
+        "【必填】camera_autofocus / autoScan_switch / autoScan_control / regularTime_switch / regularTime_timeSet / regularTime_daySet / specialScan_control / detectMode_switch",
+        "specialScan_control",
+        false,
+        undefined,
+        [
+          "camera_autofocus",
+          "autoScan_switch",
+          "autoScan_control",
+          "regularTime_switch",
+          "regularTime_timeSet",
+          "regularTime_daySet",
+          "specialScan_control",
+          "detectMode_switch",
+        ]
+      ),
+      params: {
+        type: "object",
+        description:
+          "【必填】随 command 变化。camera_autofocus: autoFocus true/false。autoScan_switch、regularTime_switch、detectMode_switch: switch 为 on/off。autoScan_control: control 为 pause/continue。regularTime_timeSet: beginTimeFirst、endTimeFirst、beginTimeSecond、endTimeSecond，格式 08_00_00。regularTime_daySet: monday 到 sunday 各一个布尔值。specialScan_control: building 字符串，floor、repeatTimes 整数。",
+        additionalProperties: true,
+        example: { building: "32", floor: 5, repeatTimes: 2 },
+      },
+    },
+    ["deviceId", "command", "params"],
+    "鹰眼扩展控制请求"
   ),
   BizDeviceListRequest: obj(
     {
@@ -764,6 +801,28 @@ const doc = {
           action: "snapshot",
           deviceId: PTZ_DEV,
           channelType: "visible",
+        }),
+      },
+    },
+    "/api/ptz/command": {
+      post: {
+        tags: ["云台监控"],
+        summary: "云台-鹰眼扩展命令",
+        description:
+          "下发尚未单独对接的鹰眼命令。只传 deviceId，服务按设备平台转发。平台为 EAGLE_EYE 时，向鹰眼子系统 POST /api/control。除 detectMode_switch 外，子系统 HTTP 响应 code=0 即表示执行完成。detectMode_switch 只返回当场受理结果。宇视、宇视云、模拟返回：不支持该控制。方向、停止、变倍、聚焦仍走 /move、/zoom、/focus。",
+        operationId: "ptzCommand",
+        requestBody: jsonBody(ref("PtzCommandRequest"), {
+          deviceId: "YY01",
+          command: "specialScan_control",
+          params: { building: "32", floor: 5, repeatTimes: 2 },
+        }),
+        responses: ok(ref("RespPtz"), {
+          success: true,
+          mock: false,
+          live: true,
+          action: "specialScan_control",
+          deviceId: "YY01",
+          params: { building: "32", floor: 5, repeatTimes: 2 },
         }),
       },
     },

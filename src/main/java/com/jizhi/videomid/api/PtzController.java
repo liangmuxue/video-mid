@@ -6,6 +6,7 @@ import com.jizhi.videomid.uniview.dto.PtzDeviceIdRequest;
 import com.jizhi.videomid.uniview.dto.PtzMoveRequest;
 import com.jizhi.videomid.uniview.dto.PtzPresetGotoRequest;
 import com.jizhi.videomid.uniview.dto.PtzPresetSaveRequest;
+import com.jizhi.videomid.uniview.dto.PtzCommandRequest;
 import com.jizhi.videomid.uniview.dto.PtzSnapshotRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -83,5 +84,10 @@ public class PtzController {
     @PostMapping("/snapshot")
     public ApiResponse<Map<String, Object>> snapshot(@RequestBody PtzSnapshotRequest req) {
         return ApiResponse.ok(actions.snapshot(req));
+    }
+
+    @PostMapping("/command")
+    public ApiResponse<Map<String, Object>> command(@RequestBody PtzCommandRequest req) {
+        return ApiResponse.ok(actions.command(req));
     }
 }

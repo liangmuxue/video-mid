@@ -25,4 +25,7 @@ public interface UniviewPtzPort {
     Map<String, Object> setPreset(String deviceId, int presetIndex, String name, boolean overwrite);
 
     Map<String, Object> snapshot(String deviceId, String channelType);
+
+    /** 鹰眼扩展命令。其它平台不支持。 */
+    Map<String, Object> command(String deviceId, String command, Map<String, Object> params);
 }

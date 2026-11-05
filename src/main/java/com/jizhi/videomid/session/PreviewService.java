@@ -6,6 +6,7 @@ import com.jizhi.videomid.device.DeviceRepository;
 import com.jizhi.videomid.device.VendorDevices;
 import com.jizhi.videomid.device.DeviceStream;
 import com.jizhi.videomid.device.DeviceStreamRepository;
+import com.jizhi.videomid.eagleeye.EagleEyePlayService;
 import com.jizhi.videomid.media.ZlmClient;
 import com.jizhi.videomid.rtsp.RtspPullService;
 import com.jizhi.videomid.uniview.cloud.UniviewCloudPlayService;
@@ -40,6 +41,7 @@ public class PreviewService {
     private final UniviewStreamKeeper univiewStreamKeeper;
     private final RtspPullService rtspPullService;
     private final UniviewCloudPlayService univiewCloudPlayService;
+    private final EagleEyePlayService eagleEyePlayService;
 
     public PreviewService(DeviceStreamRepository streamRepository,
                           DeviceRepository deviceRepository,
@@ -47,7 +49,8 @@ public class PreviewService {
                           ZlmClient zlmClient,
                           UniviewStreamKeeper univiewStreamKeeper,
                           RtspPullService rtspPullService,
-                          UniviewCloudPlayService univiewCloudPlayService) {
+                          UniviewCloudPlayService univiewCloudPlayService,
+                          EagleEyePlayService eagleEyePlayService) {
         this.streamRepository = streamRepository;
         this.deviceRepository = deviceRepository;
         this.redis = redis;
@@ -55,6 +58,7 @@ public class PreviewService {
         this.univiewStreamKeeper = univiewStreamKeeper;
         this.rtspPullService = rtspPullService;
         this.univiewCloudPlayService = univiewCloudPlayService;
+        this.eagleEyePlayService = eagleEyePlayService;
     }
 
     public Map<String, Object> start(String deviceId, String streamType) {
@@ -70,6 +74,9 @@ public class PreviewService {
         }
         if (vendor == AccessVendor.UNIVIEW_CLOUD) {
             return univiewCloudPlayService.startLive(deviceId);
+        }
+        if (vendor == AccessVendor.EAGLE_EYE) {
+            return eagleEyePlayService.startLive(deviceId);
         }
         DeviceStream stream = streamRepository.findByDeviceIdAndType(deviceId, type)
                 .orElseThrow(() -> new IllegalArgumentException("码流未注册: " + deviceId + "/" + type));

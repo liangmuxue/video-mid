@@ -220,6 +220,11 @@ public class LiveUniviewPtzAdapter implements UniviewPtzPort {
         };
     }
 
+    @Override
+    public Map<String, Object> command(String deviceId, String command, Map<String, Object> params) {
+        throw new IllegalArgumentException("不支持该控制");
+    }
+
     private static int zoomCmd(String action) {
         return switch (action == null ? "" : action.toLowerCase()) {
             case "in", "zoom_in", "tele" -> CMD_ZOOM_IN;
